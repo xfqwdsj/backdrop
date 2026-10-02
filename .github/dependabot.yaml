@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    commit-message:
+      prefix: chore
+    schedule:
+      interval: daily
+      timezone: Asia/Shanghai
+  - package-ecosystem: github-actions
+    directory: .github/workflows
+    commit-message:
+      prefix: ci
+    schedule:
+      interval: daily
+      timezone: Asia/Shanghai

@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.4.20"
-agp = "9.1.1"
+agp = "9.4.1"
 compose = "1.12.1"
 annotations = "26.1.0"
 spotless = "8.10.3"

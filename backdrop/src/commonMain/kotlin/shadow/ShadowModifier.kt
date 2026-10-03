@@ -21,13 +21,14 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
 import top.ltfan.backdrop.LocalBackdropRenderEpoch
+import top.ltfan.backdrop.LocalBackdropStyle
 import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.blur
 import top.ltfan.backdrop.internal.setHdrColor
 
 internal class ShadowElement(
     val shapeProvider: ShapeProvider,
-    val shadow: () -> Shadow?,
+    val shadow: (() -> Shadow)?,
 ) : ModifierNodeElement<ShadowNode>() {
 
     override fun create(): ShadowNode {
@@ -65,7 +66,7 @@ internal class ShadowElement(
 
 internal class ShadowNode(
     var shapeProvider: ShapeProvider,
-    var shadow: () -> Shadow?,
+    var shadow: (() -> Shadow)?,
 ) : DrawModifierNode, CompositionLocalConsumerModifierNode, Modifier.Node() {
 
     override val shouldAutoInvalidate: Boolean = false
@@ -76,19 +77,22 @@ internal class ShadowNode(
     private val paint = Paint()
 
     override fun ContentDrawScope.draw() {
+        val shadow = (shadow ?: currentValueOf(LocalBackdropStyle).shadow)()
+        if (shadow !is Shadow.Config) {
+            releaseDrawingLayer()
+            return drawContent()
+        }
         val epoch = currentValueOf(LocalBackdropRenderEpoch)
         if (epoch != renderEpoch) {
             renderEpoch = epoch
-            val context = requireGraphicsContext()
-            val previous = shadowLayer
+            releaseDrawingLayer()
+        }
+        if (shadowLayer == null) {
             shadowLayer =
-                context.createGraphicsLayer().apply {
+                requireGraphicsContext().createGraphicsLayer().apply {
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
-            previous?.let(context::releaseGraphicsLayer)
         }
-        val shadow = shadow() ?: return drawContent()
-
         val shadowLayer = shadowLayer
         if (shadowLayer != null) {
             val size = size
@@ -129,22 +133,18 @@ internal class ShadowNode(
 
     override fun onAttach() {
         renderEpoch = currentValueOf(LocalBackdropRenderEpoch)
-        val graphicsContext = requireGraphicsContext()
-        shadowLayer =
-            graphicsContext.createGraphicsLayer().apply {
-                compositingStrategy = CompositingStrategy.Offscreen
-            }
     }
 
     override fun onDetach() {
-        val graphicsContext = requireGraphicsContext()
-        shadowLayer?.let { layer ->
-            graphicsContext.releaseGraphicsLayer(layer)
-            shadowLayer = null
-        }
+        releaseDrawingLayer()
     }
 
-    private fun DrawScope.configurePaint(shadow: Shadow) {
+    private fun releaseDrawingLayer() {
+        shadowLayer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
+        shadowLayer = null
+    }
+
+    private fun DrawScope.configurePaint(shadow: Shadow.Config) {
         paint.setHdrColor(shadow.color)
         paint.blur(shadow.radius.toPx())
     }

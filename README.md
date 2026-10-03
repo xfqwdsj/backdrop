@@ -44,6 +44,55 @@ dependencyResolutionManagement {
 }
 ```
 
+## Visual defaults
+
+`drawBackdrop` inherits its effects, highlight, shadow, and inner shadow from
+`LocalBackdropStyle` at the modifier's position in the UI tree. The root style uses an empty effect
+chain, `Highlight.Default`, `Shadow.Default`, and `InnerShadow.None`. Shape and drawing callbacks
+are supplied at the call site. `drawPlainBackdrop` inherits only effects.
+
+```kotlin
+ProvideBackdropStyle(
+    effects = { blur(8.dp.toPx()) },
+    highlight = { Highlight(style = HighlightStyle.Ambient()) },
+) {
+    Box(Modifier.drawBackdrop(backdrop, shape = { RoundedCornerShape(24.dp) }))
+}
+```
+
+Omitted provider fields inherit their parent's producers. To provide a complete style, use
+`ProvideBackdropStyle(style = myStyle)` or `CompositionLocalProvider(LocalBackdropStyle provides myStyle)`.
+Use `LocalBackdropStyle.current.copy(...)` to retain selected fields when constructing a style.
+
+Modifier parameters set to `null` inherit their corresponding producer. Explicit producers replace
+that default. Disable a decoration with `{ Highlight.None }`, `{ Shadow.None }`, or
+`{ InnerShadow.None }`; select an empty effect chain with `BackdropStyle.NoEffects`.
+
+```kotlin
+Modifier.drawBackdrop(
+    backdrop = backdrop,
+    shape = { RoundedCornerShape(24.dp) },
+    effects = BackdropStyle.NoEffects,
+    shadow = { Shadow.None },
+    innerShadow = { if (pressed) InnerShadow.Default else InnerShadow.None },
+)
+```
+
+Producers run during drawing or effect observation. Read animated snapshot state inside a producer
+to update rendering without recomposing the component. A producer can switch between `None` and a
+configuration; `None` releases the decoration's drawing layer. Configurations remain configurations
+at zero alpha.
+
+`Highlight(...)`, `Shadow(...)`, and `InnerShadow(...)` create their respective `Config` data classes.
+The `Config` constructors and preset values support `copy`; `InnerShadow.lerp` interpolates two
+`InnerShadow.Config` values.
+
+Highlight styles share `color` and `blendMode`; `Default` and `Ambient` also expose `angle` in degrees
+and non-negative `falloff`. Color alpha controls highlight strength, and `Highlight.Config.alpha`
+controls the drawing layer's opacity. Extended-range RGB preserves HDR on supported drawing paths.
+`Ambient` draws a single-sided sheen and defaults to white with alpha 0.38, SrcOver, 45 degrees, and
+falloff 1. `Default` draws a two-sided highlight, and `Plain` draws a uniform outline.
+
 ## HDR
 
 Backdrop keeps extended-range colors on the paths it owns: shader color uniforms, paint colors, and

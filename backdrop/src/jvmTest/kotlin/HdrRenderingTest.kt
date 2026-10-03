@@ -1,14 +1,19 @@
 package top.ltfan.backdrop
 
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.skiaImageFilter
 import androidx.compose.ui.graphics.skiaPaint
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
@@ -30,6 +35,7 @@ import org.jetbrains.skia.Shader
 import org.jetbrains.skia.Surface
 import top.ltfan.backdrop.effects.colorFilter
 import top.ltfan.backdrop.effects.vibrancy
+import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.internal.AmbientHighlightShaderString
 import top.ltfan.backdrop.internal.LightingShaderString
 import top.ltfan.backdrop.internal.TintShaderString
@@ -209,6 +215,42 @@ class HdrRenderingTest {
         val builder = runtime.asSkikoRuntimeShader()
         builder.child("content", constantShader(floatArrayOf(0f, 0f, 0f, 0f)))
         assertPixel(floatArrayOf(2f, 2f, 2f, 1f), renderShader(builder.makeShader()))
+    }
+
+    @Test
+    fun ambientStyleFeedsColorAngleAndFalloffToTheShader() {
+        val color = Color(2f, 2f, 2f, 0.2f, ColorSpaces.ExtendedSrgb)
+        val style = HighlightStyle.Ambient(color = color, blendMode = BlendMode.Plus, angle = 45f)
+        assertEquals(color, style.color)
+        assertEquals(BlendMode.Plus, style.blendMode)
+        assertPixel(floatArrayOf(2f, 2f, 2f, 1f), renderAmbientStyle(style))
+        assertPixel(floatArrayOf(0f, 0f, 0f, 1f), renderAmbientStyle(style.copy(angle = 225f)))
+        assertPixel(
+            floatArrayOf(1f, 1f, 1f, 0.5f),
+            renderAmbientStyle(style.copy(angle = 0f, falloff = 2f)),
+        )
+        assertPixel(
+            renderAmbientStyle(
+                HighlightStyle.Ambient(Color.White.copy(alpha = 0.38f), BlendMode.SrcOver, 45f, 1f)
+            ),
+            renderAmbientStyle(HighlightStyle.Ambient()),
+        )
+    }
+
+    private fun renderAmbientStyle(style: HighlightStyle.Ambient): FloatArray {
+        val cache = RuntimeShaderCacheImpl()
+        var shader: RuntimeShader? = null
+        Surface.makeRasterN32Premul(4, 4).use { surface ->
+            CanvasDrawScope().draw(
+                Density(1f),
+                LayoutDirection.Ltr,
+                surface.canvas.asComposeCanvas(),
+                Size(4f, 4f),
+            ) {
+                shader = with(style) { createShader(RectangleShape, cache) }
+            }
+        }
+        return renderShader(requireNotNull(shader).asSkikoRuntimeShader().makeShader())
     }
 
     @Test

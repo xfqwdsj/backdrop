@@ -88,7 +88,8 @@ test counts — belong in the code, and this file points to the source instead o
 - Before considering a change done: `:backdrop:spotlessCheck`, the IDE lint at warning severity on the files you touched,
   and `:backdrop:assemble :backdrop:jvmTest --no-build-cache --rerun-tasks`.
 - Some lint findings here are intentional and must not be "fixed": the `RuntimeShaderEffect`/`ColorFilterEffect` factory
-  names mirror Compose's own `Paint()`/`RuntimeShader()` naming, and weak warnings about inlining a local alias are noise.
+  names mirror Compose's own `Paint()`/`RuntimeShader()` naming. Decoration factories follow the same type-name
+  convention. Weak warnings about inlining a local alias are noise.
 
 ## Deliberate decisions (do not "fix")
 
@@ -105,3 +106,19 @@ test counts — belong in the code, and this file points to the source instead o
 - The package prefix is this project's own, not upstream's, so the two libraries cannot collide on a classpath with
   different ABIs under the same names.
 - The README carries no images.
+
+## Visual style contracts
+
+- `BackdropStyle` stores delayed producers. Provider parameters inherit omitted producers; explicit
+  modifier producers replace individual defaults. Modifier `null` means inherit, decoration `None`
+  means disabled, and `BackdropStyle.NoEffects` selects an empty effect chain.
+- Decoration types have a `Config` data class and a separate `None` branch. Zero-alpha configurations
+  remain configurations. Drawing nodes retain observation while disabled and allocate layers only
+  for active drawing; disable and detach release layers and reset layer-dependent caches.
+- Read visual producers in drawing or effect observation, so snapshot-driven animations invalidate
+  rendering without requiring recomposition. Resolve locals at the modifier's use position.
+- `drawPlainBackdrop` consumes only the style's effects. Shape, source, drawing callbacks and layer
+  control belong to the call site.
+- Highlight color alpha controls strength; the enclosing highlight alpha controls layer opacity.
+  Ambient and Default share color, blend mode, angle and falloff parameters, while retaining their
+  single-sided and two-sided shader behavior.

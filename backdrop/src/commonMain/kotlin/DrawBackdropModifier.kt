@@ -48,14 +48,17 @@ import top.ltfan.backdrop.shadow.ShadowElement
 /** Invalidates Backdrop-owned rendering resources without replacing composition. */
 internal val LocalBackdropRenderEpoch: ProvidableCompositionLocal<Int> = compositionLocalOf { 0 }
 
-private val DefaultHighlight = { Highlight.Default }
-private val DefaultShadow = { Shadow.Default }
 private val DefaultOnDrawBackdrop: DrawScope.(DrawScope.() -> Unit) -> Unit = { it() }
 
+/**
+ * Draws the backdrop through [effects], inheriting [LocalBackdropStyle]'s effect chain when null.
+ * [BackdropStyle.NoEffects] explicitly selects an empty chain. Decorative styles are drawn by
+ * [drawBackdrop].
+ */
 public fun Modifier.drawPlainBackdrop(
     backdrop: Backdrop,
     shape: () -> Shape,
-    effects: BackdropEffectScope.() -> Unit,
+    effects: (BackdropEffectScope.() -> Unit)? = null,
     layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
     exportedBackdrop: LayerBackdrop? = null,
     onDrawBehind: (DrawScope.() -> Unit)? = null,
@@ -86,13 +89,20 @@ public fun Modifier.drawPlainBackdrop(
         )
 }
 
+/**
+ * Draws a backdrop with visual defaults from [LocalBackdropStyle] at this modifier's UI position.
+ * Null producers inherit their corresponding default. Explicit producers replace that default;
+ * return [Highlight.None], [Shadow.None], or [InnerShadow.None] to disable a decoration, and use
+ * [BackdropStyle.NoEffects] for an empty effect chain. Producers read snapshot state during drawing
+ * or effect observation.
+ */
 public fun Modifier.drawBackdrop(
     backdrop: Backdrop,
     shape: () -> Shape,
-    effects: BackdropEffectScope.() -> Unit,
-    highlight: (() -> Highlight?)? = DefaultHighlight,
-    shadow: (() -> Shadow?)? = DefaultShadow,
-    innerShadow: (() -> InnerShadow?)? = null,
+    effects: (BackdropEffectScope.() -> Unit)? = null,
+    highlight: (() -> Highlight)? = null,
+    shadow: (() -> Shadow)? = null,
+    innerShadow: (() -> InnerShadow)? = null,
     layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
     exportedBackdrop: LayerBackdrop? = null,
     onDrawBehind: (DrawScope.() -> Unit)? = null,
@@ -108,36 +118,9 @@ public fun Modifier.drawBackdrop(
                 Modifier
             }
         )
-        .then(
-            if (innerShadow != null) {
-                InnerShadowElement(
-                    shapeProvider = shapeProvider,
-                    shadow = innerShadow,
-                )
-            } else {
-                Modifier
-            }
-        )
-        .then(
-            if (shadow != null) {
-                ShadowElement(
-                    shapeProvider = shapeProvider,
-                    shadow = shadow,
-                )
-            } else {
-                Modifier
-            }
-        )
-        .then(
-            if (highlight != null) {
-                HighlightElement(
-                    shapeProvider = shapeProvider,
-                    highlight = highlight,
-                )
-            } else {
-                Modifier
-            }
-        )
+        .then(InnerShadowElement(shapeProvider = shapeProvider, shadow = innerShadow))
+        .then(ShadowElement(shapeProvider = shapeProvider, shadow = shadow))
+        .then(HighlightElement(shapeProvider = shapeProvider, highlight = highlight))
         .then(
             DrawBackdropElement(
                 backdrop = backdrop,
@@ -156,7 +139,7 @@ public fun Modifier.drawBackdrop(
 private class DrawBackdropElement(
     val backdrop: Backdrop,
     val shapeProvider: ShapeProvider,
-    val effects: BackdropEffectScope.() -> Unit,
+    val effects: (BackdropEffectScope.() -> Unit)?,
     val layerBlock: (GraphicsLayerScope.() -> Unit)?,
     val exportedBackdrop: LayerBackdrop?,
     val onDrawBehind: (DrawScope.() -> Unit)?,
@@ -242,7 +225,7 @@ private class DrawBackdropElement(
 private class DrawBackdropNode(
     var backdrop: Backdrop,
     var shapeProvider: ShapeProvider,
-    var effects: BackdropEffectScope.() -> Unit,
+    var effects: (BackdropEffectScope.() -> Unit)?,
     var layerBlock: (GraphicsLayerScope.() -> Unit)?,
     var exportedBackdrop: LayerBackdrop?,
     var onDrawBehind: (DrawScope.() -> Unit)?,
@@ -397,7 +380,7 @@ private class DrawBackdropNode(
     private fun updateEffects() {
         if (!isRenderEffectSupported()) return
 
-        effectScope.apply(effects)
+        effectScope.apply(effects ?: currentValueOf(LocalBackdropStyle).effects)
         graphicsLayer?.renderEffect = effectScope.renderEffect
         padding = effectScope.padding
     }

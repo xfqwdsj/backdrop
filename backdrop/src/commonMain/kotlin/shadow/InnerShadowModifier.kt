@@ -21,6 +21,7 @@ import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Density
 import top.ltfan.backdrop.LocalBackdropRenderEpoch
+import top.ltfan.backdrop.LocalBackdropStyle
 import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.internal.setHdrColor
@@ -28,7 +29,7 @@ import top.ltfan.backdrop.isRenderEffectSupported
 
 internal class InnerShadowElement(
     val shapeProvider: ShapeProvider,
-    val shadow: () -> InnerShadow?,
+    val shadow: (() -> InnerShadow)?,
 ) : ModifierNodeElement<InnerShadowNode>() {
 
     override fun create(): InnerShadowNode {
@@ -66,7 +67,7 @@ internal class InnerShadowElement(
 
 internal class InnerShadowNode(
     var shapeProvider: ShapeProvider,
-    var shadow: () -> InnerShadow?,
+    var shadow: (() -> InnerShadow)?,
 ) : DrawModifierNode, CompositionLocalConsumerModifierNode, Modifier.Node() {
 
     override val shouldAutoInvalidate: Boolean = false
@@ -80,25 +81,24 @@ internal class InnerShadowNode(
     private var prevRadius = Float.NaN
 
     override fun ContentDrawScope.draw() {
+        val shadow = (shadow ?: currentValueOf(LocalBackdropStyle).innerShadow)()
+        if (shadow !is InnerShadow.Config) {
+            releaseDrawingLayer()
+            return drawContent()
+        }
+        drawContent()
+        if (!isRenderEffectSupported()) return
         val epoch = currentValueOf(LocalBackdropRenderEpoch)
         if (epoch != renderEpoch) {
             renderEpoch = epoch
-            val context = requireGraphicsContext()
-            val previous = shadowLayer
+            releaseDrawingLayer()
+        }
+        if (shadowLayer == null) {
             shadowLayer =
-                context.createGraphicsLayer().apply {
+                requireGraphicsContext().createGraphicsLayer().apply {
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
-            previous?.let(context::releaseGraphicsLayer)
-            // A replacement layer carries no render effect, so the radius cache is reset.
-            prevRadius = Float.NaN
         }
-        drawContent()
-
-        if (!isRenderEffectSupported()) return
-
-        val shadow = shadow() ?: return
-
         val shadowLayer = shadowLayer
         if (shadowLayer != null) {
             val size = size
@@ -151,22 +151,20 @@ internal class InnerShadowNode(
 
     override fun onAttach() {
         renderEpoch = currentValueOf(LocalBackdropRenderEpoch)
-        val graphicsContext = requireGraphicsContext()
-        shadowLayer =
-            graphicsContext.createGraphicsLayer().apply {
-                compositingStrategy = CompositingStrategy.Offscreen
-            }
     }
 
     override fun onDetach() {
-        val graphicsContext = requireGraphicsContext()
-        shadowLayer?.let { layer ->
-            graphicsContext.releaseGraphicsLayer(layer)
-            shadowLayer = null
-        }
+        releaseDrawingLayer()
+        clipPath = null
     }
 
-    private fun configurePaint(shadow: InnerShadow) {
+    private fun releaseDrawingLayer() {
+        shadowLayer?.let { requireGraphicsContext().releaseGraphicsLayer(it) }
+        shadowLayer = null
+        prevRadius = Float.NaN
+    }
+
+    private fun configurePaint(shadow: InnerShadow.Config) {
         paint.setHdrColor(shadow.color)
     }
 }

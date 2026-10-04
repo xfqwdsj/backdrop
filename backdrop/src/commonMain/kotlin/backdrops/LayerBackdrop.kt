@@ -6,8 +6,10 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -60,6 +62,12 @@ internal constructor(
 
     internal var layerCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
+    /**
+     * Where the surface's origin sits inside [graphicsLayer], which covers the surface plus the
+     * insets it resolved. Sampling adds it so a consumer's coordinates meet the layer's pixels.
+     */
+    internal var layerOffset: Offset by mutableStateOf(Offset.Zero, neverEqualPolicy())
+
     private var inverseLayerScope: InverseLayerScope? = null
 
     override fun DrawScope.drawBackdrop(
@@ -80,7 +88,7 @@ internal constructor(
                     // TODO: outer transformations lead to wrong position calculation
                     coordinates.positionInWindow() - layerCoordinates.positionInWindow()
                 }
-            translate(-offset.x, -offset.y)
+            translate(-offset.x - layerOffset.x, -offset.y - layerOffset.y)
         }) {
             drawLayer(graphicsLayer)
         }

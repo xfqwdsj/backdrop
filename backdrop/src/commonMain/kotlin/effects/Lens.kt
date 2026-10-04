@@ -42,7 +42,7 @@ public fun BackdropEffectScope.lens(
                 }
             shader.apply {
                 setFloatUniform("size", size.width, size.height)
-                setFloatUniform("offset", -padding, -padding)
+                setFloatUniform("offset", -extension.left, -extension.top)
                 setFloatUniform("cornerRadii", cornerRadii)
                 setFloatUniform("refractionHeight", refractionHeight)
                 setFloatUniform("refractionAmount", -refractionAmount)

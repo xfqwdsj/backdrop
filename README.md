@@ -51,6 +51,20 @@ dependencyResolutionManagement {
 chain, `Highlight.Default`, `Shadow.Default`, and `InnerShadow.None`. Shape and drawing callbacks
 are supplied at the call site. `drawPlainBackdrop` inherits only effects.
 
+Both surface modifiers composite offscreen. Their compositing bounds include the resolved effect
+extension and outer shadow, while their layout size and content shape stay unchanged. Explicit
+`layerBlock` transforms and larger outsets are retained; an explicit clip still clips the layer.
+Skiko requests the complete extended surface input for shaders that sample neighboring pixels.
+
+`BackdropRamp` anchors place the curve's ends inside or outside the surface. Effect insets extend
+or contract the drawing region; blur and mask keep those anchors aligned in that region. Sampled
+surfaces and direct-background masks share the extended shape: rounded corners retain their radius,
+and custom shapes resolve their outline against the extended size.
+
+`BackdropMask` takes either a brush or a color constructor. A color becomes a `SolidColor` fill;
+mask strength multiplies the fill's own opacity. `drawBackdropMask` has separate color and brush
+overloads, and both retain the fill in flat and progressive modes.
+
 ```kotlin
 ProvideBackdropStyle(
     effects = { blur(8.dp.toPx()) },

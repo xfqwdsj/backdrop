@@ -21,6 +21,13 @@ public data class BackdropStyle(
     public val highlight: () -> Highlight = DefaultHighlight,
     public val shadow: () -> Shadow = DefaultShadow,
     public val innerShadow: () -> InnerShadow = DefaultInnerShadow,
+    /**
+     * How far effects and the drawing callbacks may run outside the surface. The resolved region is
+     * this request plus effect coverage and sampling room. Positive values extend a side and
+     * negative values contract it. Reading a snapshot value here animates the region without
+     * recomposing.
+     */
+    public val insets: () -> BackdropInsets = DefaultInsets,
 ) {
     public companion object {
         /** An empty effect chain, suitable for explicitly disabling inherited effects. */
@@ -31,6 +38,7 @@ public data class BackdropStyle(
     }
 }
 
+private val DefaultInsets: () -> BackdropInsets = { BackdropInsets.None }
 private val DefaultHighlight: () -> Highlight = { Highlight.Default }
 private val DefaultShadow: () -> Shadow = { Shadow.Default }
 private val DefaultInnerShadow: () -> InnerShadow = { InnerShadow.None }
@@ -58,7 +66,8 @@ public fun ProvideBackdropStyle(
     highlight: () -> Highlight = LocalBackdropStyle.current.highlight,
     shadow: () -> Shadow = LocalBackdropStyle.current.shadow,
     innerShadow: () -> InnerShadow = LocalBackdropStyle.current.innerShadow,
+    insets: () -> BackdropInsets = LocalBackdropStyle.current.insets,
     content: @Composable () -> Unit,
 ) {
-    ProvideBackdropStyle(BackdropStyle(effects, highlight, shadow, innerShadow), content)
+    ProvideBackdropStyle(BackdropStyle(effects, highlight, shadow, innerShadow, insets), content)
 }

@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.ColorMatrixColorFilter
 import androidx.compose.ui.graphics.LightingColorFilter
 import top.ltfan.backdrop.BackdropEffectScope
 import top.ltfan.backdrop.BackdropEffectScopeImpl
+import top.ltfan.backdrop.BackdropSampling
+import top.ltfan.backdrop.addEffect
 import top.ltfan.backdrop.internal.ColorFilterEffect
 import top.ltfan.backdrop.internal.LightingShaderString
 import top.ltfan.backdrop.internal.TintShaderString
@@ -32,6 +34,7 @@ public fun BackdropEffectScope.colorFilter(colorFilter: ColorFilter) {
                 key = (this as BackdropEffectScopeImpl).nextTintEffectKey(),
                 shaderString = TintShaderString,
                 uniformShaderName = "content",
+                sampling = BackdropSampling.Identity,
             ) {
                 setColorUniform("color", colorFilter.color)
                 setIntUniform("mode", mode)
@@ -44,6 +47,7 @@ public fun BackdropEffectScope.colorFilter(colorFilter: ColorFilter) {
             key = (this as BackdropEffectScopeImpl).nextLightingEffectKey(),
             shaderString = LightingShaderString,
             uniformShaderName = "content",
+            sampling = BackdropSampling.Identity,
         ) {
             setColorUniform("multiplyColor", colorFilter.multiply)
             setColorUniform("addColor", colorFilter.add)
@@ -53,7 +57,7 @@ public fun BackdropEffectScope.colorFilter(colorFilter: ColorFilter) {
 
     // Color matrices and every other filter without a runtime-shader path keep their platform
     // semantics here. Android 12/12L has RenderEffect but no RuntimeShader.
-    renderEffect = ColorFilterEffect(renderEffect, colorFilter)
+    addEffect(BackdropSampling.Identity) { ColorFilterEffect(null, colorFilter) }
 }
 
 public fun BackdropEffectScope.opacity(@FloatRange(from = 0.0, to = 1.0) alpha: Float) {

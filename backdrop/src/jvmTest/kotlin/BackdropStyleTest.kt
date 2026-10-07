@@ -286,18 +286,18 @@ class BackdropStyleTest {
         waitForIdle()
         val baseline = compositions
         assertNull(scope.renderEffect)
-        assertEquals(0f, scope.padding)
+        assertEquals(BackdropExtension.None, scope.extension)
         val blank = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
         enabled.value = true
         waitForIdle()
         assertNotNull(scope.renderEffect)
-        assertEquals(3f, scope.padding)
+        assertEquals(7f, scope.extension.left)
         val blurred = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
         assertTrue(blurred.alpha < blank.alpha - 0.1f)
         enabled.value = false
         waitForIdle()
         assertNull(scope.renderEffect)
-        assertEquals(0f, scope.padding)
+        assertEquals(BackdropExtension.None, scope.extension)
         assertColor(blank, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
         assertEquals(baseline, compositions)
     }

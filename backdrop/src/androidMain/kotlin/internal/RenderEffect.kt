@@ -2,6 +2,7 @@ package top.ltfan.backdrop.internal
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asAndroidColorFilter
@@ -26,6 +27,7 @@ internal actual fun RenderEffect?.chain(other: RenderEffect): RenderEffect {
 internal actual fun RuntimeShaderEffect(
     runtimeShader: RuntimeShader,
     uniformShaderName: String,
+    inputBounds: Rect?,
 ): RenderEffect {
     return android.graphics.RenderEffect.createRuntimeShaderEffect(
             runtimeShader.asAndroidRuntimeShader(),

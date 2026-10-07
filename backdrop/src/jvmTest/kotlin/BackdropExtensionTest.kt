@@ -101,7 +101,7 @@ class BackdropExtensionTest {
                             backdrop = SolidBackdrop,
                             shape = { RectangleShape },
                             effects = {
-                                // A blur reads past the edge it blurs, so it asks for its radius.
+                                // A blur reads its finite Gaussian kernel past each output edge.
                                 blur(16f, TileMode.Decal)
                             },
                             insets = { BackdropInsets.all(4.dp) },
@@ -115,14 +115,14 @@ class BackdropExtensionTest {
         }
         waitForIdle()
 
-        // The blur's 16 is sampling headroom and adds to the requested 4 on every side, and the
+        // The blur's 30-pixel support adds to the requested 4 on every side, and the
         // room reports the surface's own size even though the layer is larger.
         assertEquals(Size(100f, 100f), resolved.size)
-        assertEquals(20f, resolved.extension.left)
-        assertEquals(20f, resolved.extension.top)
-        assertEquals(20f, resolved.extension.right)
-        assertEquals(20f, resolved.extension.bottom)
-        assertEquals(Offset(-20f, -20f), resolved.extension.originInNode)
+        assertEquals(34f, resolved.extension.left)
+        assertEquals(34f, resolved.extension.top)
+        assertEquals(34f, resolved.extension.right)
+        assertEquals(34f, resolved.extension.bottom)
+        assertEquals(Offset(-34f, -34f), resolved.extension.originInNode)
     }
 
     @Test

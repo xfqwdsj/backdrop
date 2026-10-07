@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.OffsetEffect
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.translate
@@ -27,6 +29,7 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.coverRamp
+import top.ltfan.backdrop.effects.effect
 import top.ltfan.backdrop.effects.progressiveBlur
 
 @OptIn(ExperimentalTestApi::class)
@@ -82,11 +85,34 @@ class BackdropRampRenderingTest {
                                             inspection.density = density
                                             inspection.fontScale = fontScale
                                             inspection.layoutDirection = layoutDirection
-                                            inspection.extension = extension
-                                            inspection.progressiveBlur(16.dp.toPx(), edge, ramp)
-                                            cover = inspection.cover
-                                            renderEffect = inspection.renderEffect
-                                            padding = 12f
+                                            inspection.resolveEffects(
+                                                effects = {
+                                                    progressiveBlur(16.dp.toPx(), edge, ramp)
+                                                    effect(
+                                                        OffsetEffect(0f, 0f),
+                                                        BackdropSampling.outsets(
+                                                            12f,
+                                                            12f,
+                                                            12f,
+                                                            12f,
+                                                        ),
+                                                    )
+                                                },
+                                                requested = BackdropInsets(top = inset.dp),
+                                            )
+                                            cover(inspection.cover)
+                                            val room = inspection.extension
+                                            effect(
+                                                requireNotNull(inspection.renderEffect),
+                                                sampling = {
+                                                    Rect(
+                                                        -room.left,
+                                                        -room.top,
+                                                        size.width + room.right,
+                                                        size.height + room.bottom,
+                                                    )
+                                                },
+                                            )
                                         }
                                     },
                                     onDrawSurface = { room ->

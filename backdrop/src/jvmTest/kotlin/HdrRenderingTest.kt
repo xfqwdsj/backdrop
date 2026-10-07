@@ -286,10 +286,12 @@ class HdrRenderingTest {
             object : BackdropEffectScopeImpl() {
                 override val shape: Shape = RectangleShape
             }
-        scope.apply(effects)
+        scope.size = Size(16f, 16f)
+        scope.resolveEffects(effects)
         var shader = constantShader(input)
-        for ((key, source) in shaders) {
-            val builder = scope.obtainRuntimeShader(key, source).asSkikoRuntimeShader()
+        for ((index, entry) in shaders.withIndex()) {
+            val (key, source) = entry
+            val builder = scope.obtainRuntimeShader("$key#$index", source).asSkikoRuntimeShader()
             builder.child("content", shader)
             shader = builder.makeShader()
         }
@@ -315,7 +317,8 @@ class HdrRenderingTest {
             object : BackdropEffectScopeImpl() {
                 override val shape: Shape = RectangleShape
             }
-        scope.apply(effects)
+        scope.size = Size(16f, 16f)
+        scope.resolveEffects(effects)
         val shader =
             RuntimeShaderBuilder(
                     RuntimeEffect.makeForShader(

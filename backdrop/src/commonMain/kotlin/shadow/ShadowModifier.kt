@@ -30,6 +30,7 @@ import top.ltfan.backdrop.LocalBackdropStyle
 import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.SurfaceBounds
 import top.ltfan.backdrop.internal.blur
+import top.ltfan.backdrop.internal.maskBlurSupport
 import top.ltfan.backdrop.internal.setHdrColor
 
 internal class ShadowElement(
@@ -92,14 +93,14 @@ internal class ShadowNode(
             surfaceBounds.shadow =
                 with(requireDensity()) {
                     if (config is Shadow.Config) {
-                        val radius = config.radius.toPx() * 2f
+                        val support = maskBlurSupport(config.radius.toPx())
                         val x = config.offset.x.toPx()
                         val y = config.offset.y.toPx()
                         BackdropExtension(
-                            radius + max(-x, 0f),
-                            radius + max(-y, 0f),
-                            radius + max(x, 0f),
-                            radius + max(y, 0f),
+                            support + max(-x, 0f),
+                            support + max(-y, 0f),
+                            support + max(x, 0f),
+                            support + max(y, 0f),
                         )
                     } else BackdropExtension.None
                 }
@@ -137,10 +138,11 @@ internal class ShadowNode(
             val radius = shadow.radius.toPx()
             val offsetX = shadow.offset.x.toPx()
             val offsetY = shadow.offset.y.toPx()
-            val left = radius * 2f + max(-offsetX, 0f)
-            val top = radius * 2f + max(-offsetY, 0f)
-            val right = radius * 2f + max(offsetX, 0f)
-            val bottom = radius * 2f + max(offsetY, 0f)
+            val support = maskBlurSupport(radius)
+            val left = support + max(-offsetX, 0f)
+            val top = support + max(-offsetY, 0f)
+            val right = support + max(offsetX, 0f)
+            val bottom = support + max(offsetY, 0f)
             val shadowSize =
                 IntSize(
                     ceil(size.width + left + right).toInt(),

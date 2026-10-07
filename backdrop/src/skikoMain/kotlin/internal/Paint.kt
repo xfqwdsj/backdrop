@@ -2,6 +2,7 @@ package top.ltfan.backdrop.internal
 
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.skiaPaint
+import kotlin.math.ceil
 import org.jetbrains.skia.FilterBlurMode
 import org.jetbrains.skia.MaskFilter
 import top.ltfan.backdrop.RuntimeShader
@@ -9,7 +10,13 @@ import top.ltfan.backdrop.asSkikoRuntimeShader
 
 internal actual fun Paint.blur(radius: Float) {
     this.skiaPaint.maskFilter =
-        if (radius > 0f) MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius) else null
+        if (radius.isFinite() && radius > 0f) MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius)
+        else null
+}
+
+internal actual fun maskBlurSupport(radius: Float): Float {
+    val sigma = if (radius.isFinite() && radius > 0f) radius else 0f
+    return ceil(3f * sigma + 0.5f)
 }
 
 internal actual fun Paint.setRuntimeShader(runtimeShader: RuntimeShader?) {

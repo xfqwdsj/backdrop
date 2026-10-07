@@ -50,6 +50,13 @@ test counts — belong in the code, and this file points to the source instead o
 - Keep the public surface honest when adding a type: prefer a shape the compiler can infer (immutable `val`s), and
   annotate anything public that it cannot. Choose `@Stable` when an implementation has mutable or state-backed properties
   and `@Immutable` only when no public property ever changes; a false contract breaks recomposition silently.
+- Every effect stage declares its full input footprint with `BackdropSampling`. Coordinates are pixel coordinates in
+  surface space, independent of the expanded layer origin, and declarations include interpolation neighbors such as
+  bilinear texels. Resolve the chain backwards: serial sampling requirements accumulate, while all intermediate
+  rectangles are unioned to produce recording bounds. Do not replace this with a maximum of per-effect padding values.
+  Keep effect construction deferred until the final extension is known; runtime shader setup can then use that resolved
+  extension. External effects must supply a deterministic, finite, non-inverted sampling contract that covers every
+  coordinate they read.
 - `explicitApi()` is enabled: public declarations need an explicit `public`.
 - Sources declare `package top.ltfan.backdrop[.sub]` but live flat under `backdrop/src/<sourceSet>/kotlin/`: the
   `top/ltfan/backdrop` prefix is dropped from the directory path, and subpackages keep their last segment as a directory

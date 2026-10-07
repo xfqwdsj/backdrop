@@ -97,6 +97,40 @@ to update rendering without recomposing the component. A producer can switch bet
 configuration; `None` releases the decoration's drawing layer. Configurations remain configurations
 at zero alpha.
 
+### Custom effects and sampling
+
+Custom `RenderEffect`s and runtime shaders declare their sampling behavior with
+`BackdropSampling`. The declaration returns the complete input rectangle needed for an output
+rectangle, in pixels relative to the surface's top-left. Include every sampled texel, including
+neighbors used by bilinear interpolation. `Identity` declares same-coordinate reads;
+`outsets(left, top, right, bottom)` declares a fixed footprint; `translated(dx, dy)` describes a
+translated lookup. The library checks that returned rectangles are finite and non-inverted, but the
+effect author is responsible for declaring a rectangle that covers the shader or filter's actual
+reads.
+
+Every external effect must provide this contract:
+
+```kotlin
+effects = {
+    effect(customEffect, sampling = BackdropSampling.outsets(8f, 8f, 8f, 8f))
+    runtimeShaderEffect(
+        key = "my-effect",
+        shaderString = shaderSource,
+        uniformShaderName = "content",
+        sampling = BackdropSampling.translated(dx = 2f, dy = 0f),
+    ) {
+        setFloatUniform("amount", amount)
+    }
+}
+```
+
+The effect chain is analyzed from its last stage to its first. Sampling needs from serial stages
+therefore accumulate; independent input regions are combined by their bounding union. The library
+includes the visible output and all intermediate input rectangles when computing the recording
+extension. The effects producer runs once per resolution. The library builds deferred effect stages
+and invokes runtime shader uniform blocks after calculating the final extension, so setup can use the
+resolved bounds.
+
 `Highlight(...)`, `Shadow(...)`, and `InnerShadow(...)` create their respective `Config` data classes.
 The `Config` constructors and preset values support `copy`; `InnerShadow.lerp` interpolates two
 `InnerShadow.Config` values.

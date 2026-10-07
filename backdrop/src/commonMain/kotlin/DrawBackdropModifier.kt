@@ -404,7 +404,7 @@ private class DrawBackdropNode(
 
     override fun ContentDrawScope.draw() {
         if (effectScope.update(this)) {
-            updateEffects()
+            observeEffects()
         }
 
         val extension = extension
@@ -477,46 +477,16 @@ private class DrawBackdropNode(
     }
 
     private fun updateEffects() {
+        if (!effectScope.size.width.isFinite() || !effectScope.size.height.isFinite()) return
         val style = currentValueOf(LocalBackdropStyle)
         val requested = (insets ?: style.insets)()
 
-        effectScope.padding = 0f
-        effectScope.cover = BackdropInsets.None
-        // The effects are handed the room they draw in before they run: an effect that maps
-        // coordinates sets its shader uniforms from it, and a stale value would place its ramp in
-        // the area the surface covered before it extended.
+        effectScope.resolveEffects(effects ?: style.effects, requested)
         resolveExtension(requested)
-        if (isRenderEffectSupported()) {
-            effectScope.apply(effects ?: style.effects)
-            graphicsLayer?.renderEffect = effectScope.renderEffect
-            // The chain may have asked for more room to sample; fold that in for the layer and its
-            // clipping, then let the chain place its coordinates again: that room stays invisible,
-            // but an effect that maps positions has to see it to land where it draws.
-            if (effectScope.padding > 0f || effectScope.cover != BackdropInsets.None) {
-                resolveExtension(requested)
-                effectScope.apply(effects ?: style.effects)
-                graphicsLayer?.renderEffect = effectScope.renderEffect
-            }
-        }
+        graphicsLayer?.renderEffect = effectScope.renderEffect
     }
 
-    /**
-     * The room the effects asked for, in whole pixels: a layer is placed at an integer offset, so
-     * the pixels it holds have to start on one. A fractional start would shift the surface's own
-     * drawing against the backdrop it was sampled from, which shows as a line where the two meet.
-     */
-    private fun roundToPixels(extension: BackdropExtension): BackdropExtension =
-        BackdropExtension(
-            left = ceil(extension.left),
-            top = ceil(extension.top),
-            right = ceil(extension.right),
-            bottom = ceil(extension.bottom),
-        )
-
     private fun resolveExtension(insets: BackdropInsets) {
-        val padding = effectScope.padding
-        // What the caller asks for and what the effects cover past it both belong to the area the
-        // surface is drawn into; sampling room then extends the layer beyond that.
         val cover = effectScope.cover
         val requested =
             BackdropExtension(
@@ -525,21 +495,9 @@ private class DrawBackdropNode(
                 right = sideOf(insets.right) + sideOf(cover.right),
                 bottom = sideOf(insets.bottom) + sideOf(cover.bottom),
             )
-        // Sampling room adds to what the caller asked for, so an effect reading past its own area
-        // still gets that room beyond the area the caller covers.
-        val resolved =
-            roundToPixels(
-                BackdropExtension(
-                    left = requested.left + padding,
-                    top = requested.top + padding,
-                    right = requested.right + padding,
-                    bottom = requested.bottom + padding,
-                )
-            )
         visible = requested
-        extension = resolved
-        effectScope.extension = resolved
-        surfaceBounds.effects = resolved
+        extension = effectScope.extension
+        surfaceBounds.effects = effectScope.extension
     }
 
     private fun sideOf(inset: Dp): Float = with(effectScope) { inset.toPx() }
@@ -547,8 +505,8 @@ private class DrawBackdropNode(
     private fun layerSize(extension: BackdropExtension): IntSize {
         val size = effectScope.size
         return IntSize(
-            (size.width + extension.left + extension.right).toInt(),
-            (size.height + extension.top + extension.bottom).toInt(),
+            ceil(size.width + extension.left + extension.right).toInt(),
+            ceil(size.height + extension.top + extension.bottom).toInt(),
         )
     }
 

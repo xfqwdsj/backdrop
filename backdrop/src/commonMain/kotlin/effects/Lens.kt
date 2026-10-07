@@ -9,7 +9,7 @@ import androidx.compose.ui.util.fastCoerceAtMost
 import top.ltfan.backdrop.BackdropEffectScope
 import top.ltfan.backdrop.internal.RoundedRectRefractionShaderString
 import top.ltfan.backdrop.internal.RoundedRectRefractionWithDispersionShaderString
-import top.ltfan.backdrop.internal.RuntimeShaderEffect
+import top.ltfan.backdrop.internal.lensSampling
 import top.ltfan.backdrop.isRuntimeShaderSupported
 
 public fun BackdropEffectScope.lens(
@@ -18,44 +18,44 @@ public fun BackdropEffectScope.lens(
     depthEffect: Boolean = false,
     chromaticAberration: Boolean = false,
 ) {
+    require(refractionHeight.isFinite() && refractionHeight >= 0f) {
+        "refractionHeight must be finite and non-negative."
+    }
+    require(refractionAmount.isFinite() && refractionAmount >= 0f) {
+        "refractionAmount must be finite and non-negative."
+    }
     if (!isRuntimeShaderSupported()) return
     if (refractionHeight <= 0f || refractionAmount <= 0f) return
 
-    if (padding > 0f) {
-        padding = (padding - refractionHeight).fastCoerceAtLeast(0f)
-    }
-
-    val cornerRadii = cornerRadii
-    val effect =
-        if (cornerRadii != null) {
-            val shader =
-                if (!chromaticAberration) {
-                    obtainRuntimeShader(
-                        "Refraction",
-                        RoundedRectRefractionShaderString,
-                    )
-                } else {
-                    obtainRuntimeShader(
-                        "RefractionWithDispersion",
-                        RoundedRectRefractionWithDispersionShaderString,
-                    )
-                }
-            shader.apply {
-                setFloatUniform("size", size.width, size.height)
-                setFloatUniform("offset", -extension.left, -extension.top)
-                setFloatUniform("cornerRadii", cornerRadii)
-                setFloatUniform("refractionHeight", refractionHeight)
-                setFloatUniform("refractionAmount", -refractionAmount)
-                setFloatUniform("depthEffect", if (depthEffect) 1f else 0f)
-                if (chromaticAberration) {
-                    setFloatUniform("chromaticAberration", 1f)
-                }
-            }
-            RuntimeShaderEffect(shader, "content")
-        } else {
-            throwUnsupportedSDFException()
+    val scope = this
+    val effectSize = size
+    val cornerRadii = cornerRadii ?: throwUnsupportedSDFException()
+    val shaderString =
+        if (!chromaticAberration) RoundedRectRefractionShaderString
+        else RoundedRectRefractionWithDispersionShaderString
+    runtimeShaderEffect(
+        key = if (!chromaticAberration) "LensRefraction" else "LensRefractionWithDispersion",
+        shaderString = shaderString,
+        uniformShaderName = "content",
+        sampling =
+            lensSampling(
+                effectSize,
+                cornerRadii,
+                refractionHeight,
+                refractionAmount,
+                chromaticAberration,
+            ),
+    ) {
+        setFloatUniform("size", effectSize.width, effectSize.height)
+        setFloatUniform("offset", -scope.extension.left, -scope.extension.top)
+        setFloatUniform("cornerRadii", cornerRadii)
+        setFloatUniform("refractionHeight", refractionHeight)
+        setFloatUniform("refractionAmount", -refractionAmount)
+        setFloatUniform("depthEffect", if (depthEffect) 1f else 0f)
+        if (chromaticAberration) {
+            setFloatUniform("chromaticAberration", 1f)
         }
-    effect(effect)
+    }
 }
 
 private val BackdropEffectScope.cornerRadii: FloatArray?
@@ -64,15 +64,15 @@ private val BackdropEffectScope.cornerRadii: FloatArray?
             is AbsoluteRoundedCornerShape -> {
                 val size = size
                 val maxRadius = size.minDimension / 2f
-                val topLeft = shape.topStart.toPx(size, this)
-                val topRight = shape.topEnd.toPx(size, this)
-                val bottomRight = shape.bottomEnd.toPx(size, this)
-                val bottomLeft = shape.bottomStart.toPx(size, this)
+                val topLeft = normalizedRadius(shape.topStart.toPx(size, this), maxRadius)
+                val topRight = normalizedRadius(shape.topEnd.toPx(size, this), maxRadius)
+                val bottomRight = normalizedRadius(shape.bottomEnd.toPx(size, this), maxRadius)
+                val bottomLeft = normalizedRadius(shape.bottomStart.toPx(size, this), maxRadius)
                 floatArrayOf(
-                    topLeft.fastCoerceAtMost(maxRadius),
-                    topRight.fastCoerceAtMost(maxRadius),
-                    bottomRight.fastCoerceAtMost(maxRadius),
-                    bottomLeft.fastCoerceAtMost(maxRadius),
+                    topLeft,
+                    topRight,
+                    bottomRight,
+                    bottomLeft,
                 )
             }
 
@@ -81,25 +81,44 @@ private val BackdropEffectScope.cornerRadii: FloatArray?
                 val maxRadius = size.minDimension / 2f
                 val isLtr = layoutDirection == LayoutDirection.Ltr
                 val topLeft =
-                    if (isLtr) shape.topStart.toPx(size, this) else shape.topEnd.toPx(size, this)
+                    normalizedRadius(
+                        if (isLtr) shape.topStart.toPx(size, this)
+                        else shape.topEnd.toPx(size, this),
+                        maxRadius,
+                    )
                 val topRight =
-                    if (isLtr) shape.topEnd.toPx(size, this) else shape.topStart.toPx(size, this)
+                    normalizedRadius(
+                        if (isLtr) shape.topEnd.toPx(size, this)
+                        else shape.topStart.toPx(size, this),
+                        maxRadius,
+                    )
                 val bottomRight =
-                    if (isLtr) shape.bottomEnd.toPx(size, this)
-                    else shape.bottomStart.toPx(size, this)
+                    normalizedRadius(
+                        if (isLtr) shape.bottomEnd.toPx(size, this)
+                        else shape.bottomStart.toPx(size, this),
+                        maxRadius,
+                    )
                 val bottomLeft =
-                    if (isLtr) shape.bottomStart.toPx(size, this)
-                    else shape.bottomEnd.toPx(size, this)
+                    normalizedRadius(
+                        if (isLtr) shape.bottomStart.toPx(size, this)
+                        else shape.bottomEnd.toPx(size, this),
+                        maxRadius,
+                    )
                 floatArrayOf(
-                    topLeft.fastCoerceAtMost(maxRadius),
-                    topRight.fastCoerceAtMost(maxRadius),
-                    bottomRight.fastCoerceAtMost(maxRadius),
-                    bottomLeft.fastCoerceAtMost(maxRadius),
+                    topLeft,
+                    topRight,
+                    bottomRight,
+                    bottomLeft,
                 )
             }
 
             else -> null
         }
+
+private fun normalizedRadius(radius: Float, maximum: Float): Float {
+    require(radius.isFinite()) { "Corner radii must be finite." }
+    return radius.fastCoerceAtLeast(0f).fastCoerceAtMost(maximum)
+}
 
 private fun throwUnsupportedSDFException(): Nothing {
     throw UnsupportedOperationException("Only CornerBasedShape is supported in lens effects.")

@@ -38,12 +38,14 @@ import top.ltfan.backdrop.LocalBackdropStyle
 import top.ltfan.backdrop.RuntimeShaderCacheImpl
 import top.ltfan.backdrop.internal.BackdropSourceRenderer
 import top.ltfan.backdrop.internal.EnvironmentHighlightShaderString
+import top.ltfan.backdrop.internal.GenericEnvironmentGeometry
 import top.ltfan.backdrop.internal.RuntimeShaderEffect
 import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.SurfaceBounds
 import top.ltfan.backdrop.internal.blur
 import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.internal.environmentHighlightSamplingOutset
+import top.ltfan.backdrop.internal.genericEnvironmentHighlightShader
 import top.ltfan.backdrop.internal.setHdrColor
 import top.ltfan.backdrop.internal.setRuntimeShader
 import top.ltfan.backdrop.isRuntimeShaderSupported
@@ -117,6 +119,9 @@ internal class HighlightNode(
     private var highlightLayer: GraphicsLayer? = null
     private val sourceRenderer = BackdropSourceRenderer { requireGraphicsContext() }
     private var environmentLayer: GraphicsLayer? = null
+    private var environmentOutline: Outline? = null
+    private var environmentGeometry: GenericEnvironmentGeometry? = null
+    private val environmentClipPath = Path()
     private val environmentShaderCache = RuntimeShaderCacheImpl()
     private var coordinates: LayoutCoordinates? = null
     private var surfaceSize = Size.Zero
@@ -236,6 +241,9 @@ internal class HighlightNode(
         }
         environmentLayer = null
         environmentShaderCache.clear()
+        environmentOutline = null
+        environmentGeometry = null
+        environmentClipPath.rewind()
     }
 
     private fun releaseStaticLayer() {
@@ -260,50 +268,48 @@ internal class HighlightNode(
             releaseEnvironmentLayer()
             return
         }
-        val bounds: Rect
-        val radii: FloatArray
-        when (outline) {
-            is Outline.Rectangle -> {
-                bounds = outline.rect
-                radii = floatArrayOf(0f, 0f, 0f, 0f)
-            }
-            is Outline.Rounded -> {
-                val rounded = outline.roundRect
-                val corners =
-                    listOf(
-                        rounded.topLeftCornerRadius,
-                        rounded.topRightCornerRadius,
-                        rounded.bottomRightCornerRadius,
-                        rounded.bottomLeftCornerRadius,
-                    )
-                require(corners.all { it.x == it.y && it.x.isFinite() && it.x >= 0f }) {
-                    "EnvironmentHighlight requires circular rounded-rectangle corners"
-                }
-                bounds = Rect(rounded.left, rounded.top, rounded.right, rounded.bottom)
-                radii = FloatArray(4) { corners[it].x }
-                require(
-                    radii[0] + radii[1] <= bounds.width &&
-                        radii[3] + radii[2] <= bounds.width &&
-                        radii[0] + radii[3] <= bounds.height &&
-                        radii[1] + radii[2] <= bounds.height
-                ) {
-                    "EnvironmentHighlight requires normalized rounded-rectangle corners"
-                }
-            }
-            is Outline.Generic ->
-                error(
-                    "EnvironmentHighlight requires a rectangular or circular rounded-rectangle outline"
-                )
+        val bounds = outline.bounds
+        val rounded = (outline as? Outline.Rounded)?.roundRect
+        val corners = rounded?.let {
+            listOf(
+                it.topLeftCornerRadius,
+                it.topRightCornerRadius,
+                it.bottomRightCornerRadius,
+                it.bottomLeftCornerRadius,
+            )
         }
-        require(
-            bounds.width > 0f &&
-                bounds.height > 0f &&
-                bounds.left >= 0f &&
-                bounds.top >= 0f &&
-                bounds.right <= size.width &&
-                bounds.bottom <= size.height
-        ) {
-            "EnvironmentHighlight requires a non-empty outline inside the surface bounds"
+        val radii = corners?.let { FloatArray(4) { index -> it[index].x } }
+        val analytic =
+            outline is Outline.Rectangle ||
+                (corners != null &&
+                    corners.all { it.x == it.y && it.x.isFinite() && it.x >= 0f } &&
+                    radii!![0] + radii[1] <= bounds.width &&
+                    radii[3] + radii[2] <= bounds.width &&
+                    radii[0] + radii[3] <= bounds.height &&
+                    radii[1] + radii[2] <= bounds.height)
+        val geometry =
+            if (analytic) null
+            else {
+                if (environmentOutline !== outline) {
+                    val path =
+                        when (outline) {
+                            is Outline.Generic -> outline.path
+                            is Outline.Rounded -> Path().apply { addRoundRect(outline.roundRect) }
+                            is Outline.Rectangle ->
+                                error("Rectangle uses analytic boundary geometry")
+                        }
+                    val nextGeometry = GenericEnvironmentGeometry(path)
+                    if (nextGeometry.segmentCount != environmentGeometry?.segmentCount) {
+                        environmentShaderCache.clear()
+                    }
+                    environmentGeometry = nextGeometry
+                    environmentOutline = outline
+                }
+                environmentGeometry!!
+            }
+        if (bounds.isEmpty || geometry?.segmentCount == 0) {
+            releaseEnvironmentLayer()
+            return
         }
         val width = ceil(highlight.width.toPx().fastCoerceAtMost(size.minDimension / 2f))
         val distance = environment.sampleDistance.toPx()
@@ -311,13 +317,29 @@ internal class HighlightNode(
         val layerSize =
             IntSize(ceil(size.width + room * 2f).toInt(), ceil(size.height + room * 2f).toInt())
         val shader =
-            environmentShaderCache.obtainRuntimeShader(
-                "EnvironmentHighlight",
-                EnvironmentHighlightShaderString,
-            )
-        shader.setFloatUniform("size", bounds.width, bounds.height)
-        shader.setFloatUniform("origin", room + bounds.left, room + bounds.top)
-        shader.setFloatUniform("cornerRadii", radii)
+            if (geometry == null) {
+                environmentShaderCache
+                    .obtainRuntimeShader(
+                        "EnvironmentHighlight",
+                        EnvironmentHighlightShaderString,
+                    )
+                    .also {
+                        it.setFloatUniform("size", bounds.width, bounds.height)
+                        it.setFloatUniform("origin", room + bounds.left, room + bounds.top)
+                        it.setFloatUniform("cornerRadii", radii ?: floatArrayOf(0f, 0f, 0f, 0f))
+                    }
+            } else {
+                environmentShaderCache
+                    .obtainRuntimeShader(
+                        "GenericEnvironmentHighlight",
+                        genericEnvironmentHighlightShader(geometry.segmentCount),
+                    )
+                    .also {
+                        it.setFloatUniform("origin", room, room)
+                        it.setFloatUniform("segments", geometry.segments)
+                        it.setFloatUniform("geometryScale", geometry.coordinateScale)
+                    }
+            }
         shader.setFloatUniform("width", width)
         shader.setFloatUniform("sampleDistance", distance)
         shader.setFloatUniform("strength", environment.strength)
@@ -357,7 +379,11 @@ internal class HighlightNode(
         } finally {
             sourceRenderer.endFrame()
         }
+        val canvas = drawContext.canvas
+        canvas.save()
+        canvas.clipOutline(outline, environmentClipPath)
         translate(-room, -room) { drawLayer(layer) }
+        canvas.restore()
     }
 
     private fun DrawScope.configurePaint(highlight: Highlight.Config) {

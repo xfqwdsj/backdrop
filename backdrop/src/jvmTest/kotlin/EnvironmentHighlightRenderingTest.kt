@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
@@ -413,24 +412,10 @@ class EnvironmentHighlightRenderingTest {
     }
 
     @Test
-    fun environmentHighlightRejectsUnsupportedAndUnnormalizedOutlines() {
-        val genericFailure = assertFails { renderEnvironmentShape(GenericTriangleShape) }
-        assertTrue(
-            genericFailure.causesContain("rectangular or circular rounded-rectangle"),
-            "Generic outlines should report the supported shape contract",
-        )
-
-        val ellipticalFailure = assertFails { renderEnvironmentShape(EllipticalCornerShape) }
-        assertTrue(
-            ellipticalFailure.causesContain("circular rounded-rectangle corners"),
-            "elliptical corners should report the supported shape contract",
-        )
-
-        val oversizedFailure = assertFails { renderEnvironmentShape(OversizedCornerShape) }
-        assertTrue(
-            oversizedFailure.causesContain("normalized rounded-rectangle corners"),
-            "corner radii that exceed their bounds should be rejected",
-        )
+    fun environmentHighlightSupportsGenericAndEllipticalOutlines() {
+        renderEnvironmentShape(GenericTriangleShape)
+        renderEnvironmentShape(EllipticalCornerShape)
+        renderEnvironmentShape(OversizedCornerShape)
     }
 
     private fun renderEnvironmentShape(shape: Shape) = runComposeUiTest {
@@ -536,6 +521,3 @@ private object OversizedCornerShape : Shape {
             )
         )
 }
-
-private fun Throwable.causesContain(text: String): Boolean =
-    generateSequence(this) { it.cause }.any { it.message?.contains(text) == true }

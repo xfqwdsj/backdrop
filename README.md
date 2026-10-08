@@ -195,8 +195,10 @@ The shader retains extended-range source RGB and uses the source's radiance. App
 the HDR window and any explicitly configured static highlight colors. Actual HDR rendering follows
 the platform's Compose support.
 Brightness is evaluated in the shader's working color space; it is not a measurement of physical HDR
-luminance. Rectangles and rounded rectangles with circular corners are supported. Generic and
-elliptical outlines throw when the environment pass is active and runtime shaders are supported.
+luminance. All outline types are supported, including Generic paths and elliptical corners.
+Rectangles and normalized circular rounded rectangles use analytic boundaries; other shapes use
+a cached adaptive curve approximation (about 0.1 pixel) for edge distance and direction. The
+original outline clips the light, preserving concavities, holes and the path fill rule.
 Platforms without runtime shaders draw the configured static style. An explicit `Default` or `Ambient` angle overrides its 90-degree default; `Default` lights the
 top and bottom edges, while `Ambient` lights the lower edge. Snapshot state read by the highlight
 producer updates drawing without recomposition.

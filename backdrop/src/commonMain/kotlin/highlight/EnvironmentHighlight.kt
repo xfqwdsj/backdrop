@@ -16,9 +16,10 @@ import androidx.compose.ui.unit.dp
  * opacity. [Highlight.Config.blurRadius] affects the static style. Static color alpha and
  * [strength] control their respective contributions independently.
  *
- * Rectangular and normalized rounded-rectangle outlines with circular corners are supported. Other
- * outlines fail when this pass is active. Platforms without runtime shaders retain the static
- * style.
+ * All outline types are supported. Rectangles and normalized circular rounded rectangles use
+ * analytic boundaries. Other outlines use a cached, adaptive path approximation in pixel units for
+ * edge distance and direction, while the original outline clips the emitted light. Platforms
+ * without runtime shaders retain the static style.
  */
 @Immutable
 public data class EnvironmentHighlight(

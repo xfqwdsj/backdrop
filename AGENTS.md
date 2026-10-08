@@ -136,9 +136,10 @@ test counts — belong in the code, and this file points to the source instead o
   single-sided and two-sided shader behavior.
 - `EnvironmentHighlight` is opt-in and augments the static highlight after it is drawn.
   `HighlightStyle.None` disables only the static pass; `Highlight.None` disables both. It samples
-  the raw backdrop through its own layer, independent of the blur and lens effect chain; rectangles
-  and rounded outlines with circular corners are supported. Generic and elliptical outlines fail
-  when the environment pass is active and runtime shaders are supported. Preserve sampled
+  the raw backdrop through its own layer, independent of the blur and lens effect chain. All outline
+  types are supported. Rectangles and normalized circular rounded rectangles use analytic boundaries;
+  other outlines use cached adaptive path geometry for edge distance and direction, with the original
+  outline clipping emitted light. Preserve sampled
   premultiplied alpha and extended-range RGB through brightness extraction and blending. Display
   headroom is a refresh signal; it never supplies an automatic radiance multiplier or RGB limit.
   Shader working-space brightness is not physical HDR luminance. Environment light shares the

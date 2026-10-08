@@ -14,15 +14,26 @@ import top.ltfan.backdrop.BackdropExtension
 /** Pixel bounds shared by the surface's effect and decoration nodes. */
 internal class SurfaceBounds {
     var effects: BackdropExtension by mutableStateOf(BackdropExtension.None)
+    var environment: BackdropExtension by mutableStateOf(BackdropExtension.None)
     var shadow: BackdropExtension by mutableStateOf(BackdropExtension.None)
 
     fun outsets(requested: LayerOutsets, density: Density): LayerOutsets =
         with(density) {
             LayerOutsets(
-                max(requested.left.toPx(), ceil(max(effects.left, shadow.left))).toDp(),
-                max(requested.top.toPx(), ceil(max(effects.top, shadow.top))).toDp(),
-                max(requested.right.toPx(), ceil(max(effects.right, shadow.right))).toDp(),
-                max(requested.bottom.toPx(), ceil(max(effects.bottom, shadow.bottom))).toDp(),
+                max(requested.left.toPx(), ceil(maxOf(effects.left, shadow.left, environment.left)))
+                    .toDp(),
+                max(requested.top.toPx(), ceil(maxOf(effects.top, shadow.top, environment.top)))
+                    .toDp(),
+                max(
+                        requested.right.toPx(),
+                        ceil(maxOf(effects.right, shadow.right, environment.right)),
+                    )
+                    .toDp(),
+                max(
+                        requested.bottom.toPx(),
+                        ceil(maxOf(effects.bottom, shadow.bottom, environment.bottom)),
+                    )
+                    .toDp(),
             )
         }
 }

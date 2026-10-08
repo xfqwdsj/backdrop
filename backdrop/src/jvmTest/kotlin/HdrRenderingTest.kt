@@ -37,6 +37,7 @@ import top.ltfan.backdrop.effects.colorFilter
 import top.ltfan.backdrop.effects.vibrancy
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.internal.AmbientHighlightShaderString
+import top.ltfan.backdrop.internal.EnvironmentHighlightShaderString
 import top.ltfan.backdrop.internal.LightingShaderString
 import top.ltfan.backdrop.internal.TintShaderString
 import top.ltfan.backdrop.internal.colorUniformComponents
@@ -218,6 +219,36 @@ class HdrRenderingTest {
     }
 
     @Test
+    fun environmentHighlightPreservesHdrAndSourceAlpha() {
+        assertPixel(
+            floatArrayOf(2f, 1f, 0.5f, 0.5f),
+            renderEnvironmentHighlight(floatArrayOf(4f, 2f, 1f, 1f)),
+        )
+        assertPixel(
+            floatArrayOf(1f, 0.5f, 0.25f, 0.25f),
+            renderEnvironmentHighlight(floatArrayOf(2f, 1f, 0.5f, 0.5f)),
+        )
+        assertPixel(
+            floatArrayOf(0f, 0f, 0f, 0f),
+            renderEnvironmentHighlight(floatArrayOf(0f, 0f, 0f, 0f)),
+        )
+    }
+
+    private fun renderEnvironmentHighlight(input: FloatArray): FloatArray {
+        val runtime = RuntimeShader(EnvironmentHighlightShaderString)
+        runtime.setFloatUniform("size", 16f, 16f)
+        runtime.setFloatUniform("origin", 0f, 0f)
+        runtime.setFloatUniform("cornerRadii", floatArrayOf(0f, 0f, 0f, 0f))
+        runtime.setFloatUniform("width", 15f)
+        runtime.setFloatUniform("sampleDistance", 3f)
+        runtime.setFloatUniform("strength", 1f)
+        runtime.setFloatUniform("threshold", 0.2f)
+        val builder = runtime.asSkikoRuntimeShader()
+        builder.child("content", constantShader(input))
+        return renderShader(builder.makeShader())
+    }
+
+    @Test
     fun ambientStyleFeedsColorAngleAndFalloffToTheShader() {
         val color = Color(2f, 2f, 2f, 0.2f, ColorSpaces.ExtendedSrgb)
         val style = HighlightStyle.Ambient(color = color, blendMode = BlendMode.Plus, angle = 45f)
@@ -231,10 +262,37 @@ class HdrRenderingTest {
         )
         assertPixel(
             renderAmbientStyle(
-                HighlightStyle.Ambient(Color.White.copy(alpha = 0.38f), BlendMode.SrcOver, 45f, 1f)
+                HighlightStyle.Ambient(Color.White.copy(alpha = 0.38f), BlendMode.SrcOver, 90f, 1f)
             ),
             renderAmbientStyle(HighlightStyle.Ambient()),
         )
+    }
+
+    @Test
+    fun defaultHighlightStylesUseVerticalIncidence() {
+        assertEquals(90f, HighlightStyle.Default().angle)
+        assertEquals(90f, HighlightStyle.Ambient().angle)
+        assertPixel(floatArrayOf(1f, 1f, 1f, 1f), renderDefaultStyle(HighlightStyle.Default()))
+        assertPixel(
+            floatArrayOf(0f, 0f, 0f, 0f),
+            renderDefaultStyle(HighlightStyle.Default(angle = 0f)),
+        )
+    }
+
+    private fun renderDefaultStyle(style: HighlightStyle.Default): FloatArray {
+        val cache = RuntimeShaderCacheImpl()
+        var shader: RuntimeShader? = null
+        Surface.makeRasterN32Premul(16, 14).use { surface ->
+            CanvasDrawScope().draw(
+                Density(1f),
+                LayoutDirection.Ltr,
+                surface.canvas.asComposeCanvas(),
+                Size(16f, 14f),
+            ) {
+                shader = with(style) { createShader(RectangleShape, cache) }
+            }
+        }
+        return renderShader(requireNotNull(shader).asSkikoRuntimeShader().makeShader())
     }
 
     private fun renderAmbientStyle(style: HighlightStyle.Ambient): FloatArray {

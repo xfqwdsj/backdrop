@@ -129,3 +129,16 @@ test counts — belong in the code, and this file points to the source instead o
 - Highlight color alpha controls strength; the enclosing highlight alpha controls layer opacity.
   Ambient and Default share color, blend mode, angle and falloff parameters, while retaining their
   single-sided and two-sided shader behavior.
+- `EnvironmentHighlight` is opt-in and augments the static highlight after it is drawn.
+  `HighlightStyle.None` disables only the static pass; `Highlight.None` disables both. It samples
+  the raw backdrop through its own layer, independent of the blur and lens effect chain; rectangles
+  and rounded outlines with circular corners are supported. Generic and elliptical outlines fail
+  when the environment pass is active and runtime shaders are supported. Preserve sampled
+  premultiplied alpha and extended-range RGB through brightness extraction and blending. Display
+  headroom is a refresh signal; it never supplies an automatic radiance multiplier or RGB limit.
+  Shader working-space brightness is not physical HDR luminance. Environment light shares the
+  highlight width, while blur radius affects only the static style. The enclosing alpha controls
+  both passes; static color alpha and environment strength remain independent. Default and Ambient
+  use 90-degree angles, lighting top/bottom and the lower edge respectively; explicit angles take
+  precedence. Snapshot-driven producers update drawing
+  without recomposition, and unsupported runtime shaders leave the static highlight visible.

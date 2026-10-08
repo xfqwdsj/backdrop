@@ -29,6 +29,18 @@ public interface HighlightStyle {
         runtimeShaderCache: RuntimeShaderCache,
     ): RuntimeShader?
 
+    /** Disables the static style while retaining an optional environment pass. */
+    @Immutable
+    public data object None : HighlightStyle {
+        override val color: Color = Color.Transparent
+        override val blendMode: BlendMode = BlendMode.SrcOver
+
+        override fun DrawScope.createShader(
+            shape: Shape,
+            runtimeShaderCache: RuntimeShaderCache,
+        ): RuntimeShader? = null
+    }
+
     @Immutable
     public data class Plain(
         override val color: Color = Color.White.copy(alpha = 0.38f),
@@ -45,7 +57,8 @@ public interface HighlightStyle {
     public data class Default(
         override val color: Color = Color.White.copy(alpha = 0.5f),
         override val blendMode: BlendMode = BlendMode.Plus,
-        val angle: Float = 45f,
+        /** Direction of the highlight normal in degrees from the positive x axis. */
+        val angle: Float = 90f,
         @param:FloatRange(from = 0.0) val falloff: Float = 1f,
     ) : HighlightStyle {
 
@@ -77,7 +90,8 @@ public interface HighlightStyle {
         /** Sheen color. Its alpha is the strength; extended-range RGB keeps the sheen HDR. */
         override val color: Color = Color.White.copy(alpha = 0.38f),
         override val blendMode: BlendMode = DrawScope.DefaultBlendMode,
-        val angle: Float = 45f,
+        /** Direction of the highlight normal in degrees from the positive x axis. */
+        val angle: Float = 90f,
         @param:FloatRange(from = 0.0) val falloff: Float = 1f,
     ) : HighlightStyle {
 

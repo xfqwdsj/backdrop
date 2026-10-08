@@ -20,6 +20,8 @@ public sealed interface Highlight {
         public val blurRadius: Dp = width / 2f,
         @param:FloatRange(from = 0.0, to = 1.0) public val alpha: Float = 1f,
         public val style: HighlightStyle = HighlightStyle.Default,
+        /** Optional raw-backdrop edge light drawn over [style]. */
+        public val environment: EnvironmentHighlight? = null,
     ) : Highlight
 
     public companion object {
@@ -39,10 +41,12 @@ public fun Highlight(
     blurRadius: Dp = width / 2f,
     @FloatRange(from = 0.0, to = 1.0) alpha: Float = 1f,
     style: HighlightStyle = HighlightStyle.Default,
+    environment: EnvironmentHighlight? = null,
 ): Highlight.Config =
     Highlight.Config(
         width = width,
         blurRadius = blurRadius,
         alpha = alpha,
         style = style,
+        environment = environment,
     )

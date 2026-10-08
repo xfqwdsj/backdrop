@@ -150,7 +150,15 @@ public fun Modifier.drawBackdrop(
                 surfaceBounds = surfaceBounds,
             )
         )
-        .then(HighlightElement(shapeProvider = shapeProvider, highlight = highlight))
+        .then(
+            HighlightElement(
+                shapeProvider = shapeProvider,
+                highlight = highlight,
+                backdrop = backdrop,
+                layerBlock = layerBlock,
+                surfaceBounds = surfaceBounds,
+            )
+        )
         .then(
             DrawBackdropElement(
                 backdrop = backdrop,

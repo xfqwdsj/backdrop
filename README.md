@@ -138,8 +138,42 @@ The `Config` constructors and preset values support `copy`; `InnerShadow.lerp` i
 Highlight styles share `color` and `blendMode`; `Default` and `Ambient` also expose `angle` in degrees
 and non-negative `falloff`. Color alpha controls highlight strength, and `Highlight.Config.alpha`
 controls the drawing layer's opacity. Extended-range RGB preserves HDR on supported drawing paths.
-`Ambient` draws a single-sided sheen and defaults to white with alpha 0.38, SrcOver, 45 degrees, and
-falloff 1. `Default` draws a two-sided highlight, and `Plain` draws a uniform outline.
+`Ambient` draws a single-sided sheen and defaults to white with alpha 0.38, SrcOver, 90 degrees, and
+falloff 1; that direction lights the lower edge. `Default` draws a two-sided highlight at the top and
+bottom edges by default. `Plain` draws a uniform outline.
+
+`EnvironmentHighlight` adds light sampled from the backdrop to a configured highlight. It is opt-in;
+the default `Highlight` keeps the existing static style. The environment pass draws after that style
+and samples the raw backdrop through its own layer, independently of the blur or lens effect chain.
+Its defaults sample 16.dp from the edge, use strength 0.5, brightness threshold 0.2, and combine with
+`BlendMode.Plus`:
+
+```kotlin
+Highlight(
+    style = HighlightStyle.Default,
+    environment = EnvironmentHighlight(
+        sampleDistance = 16.dp,
+        strength = 0.5f,
+        threshold = 0.2f,
+        blendMode = BlendMode.Plus,
+    ),
+)
+```
+
+The environment light shares `Highlight.Config.width`; `blurRadius` applies to the static style only.
+`Highlight.Config.alpha` controls the opacity of both passes. The static style's color alpha controls
+its own strength, independently of `EnvironmentHighlight.strength`. The sampled RGB is unpremultiplied
+for brightness extraction, then its original alpha is preserved when the light is composited.
+Set `style = HighlightStyle.None` for an environment-only rim; `Highlight.None` disables both passes.
+The shader retains extended-range source RGB and uses the source's radiance. Applications control
+the HDR window and any explicitly configured static highlight colors. Actual HDR rendering follows
+the platform's Compose support.
+Brightness is evaluated in the shader's working color space; it is not a measurement of physical HDR
+luminance. Rectangles and rounded rectangles with circular corners are supported. Generic and
+elliptical outlines throw when the environment pass is active and runtime shaders are supported.
+Platforms without runtime shaders draw the configured static style. An explicit `Default` or `Ambient` angle overrides its 90-degree default; `Default` lights the
+top and bottom edges, while `Ambient` lights the lower edge. Snapshot state read by the highlight
+producer updates drawing without recomposition.
 
 ## HDR
 

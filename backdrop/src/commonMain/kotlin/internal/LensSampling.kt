@@ -3,6 +3,8 @@ package top.ltfan.backdrop.internal
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import top.ltfan.backdrop.BackdropSampling
+import kotlin.math.abs
+import kotlin.math.sqrt
 
 private const val BILINEAR_TEXEL_RADIUS = 0.5f
 
@@ -26,7 +28,7 @@ internal fun lensSampling(
         // values at the corners of the output rectangle clipped to that quadrant.
         if (maximumSdf <= -height) return@BackdropSampling output
         val t = 1f + maximumSdf / height
-        val activeAmount = amount * (1f - kotlin.math.sqrt(1f - t * t))
+        val activeAmount = amount * (1f - sqrt(1f - t * t))
         return@BackdropSampling bounds(output, size, activeAmount, dispersion)
     }
 
@@ -42,8 +44,8 @@ private fun bounds(output: Rect, size: Size, amount: Float, dispersion: Boolean)
     val centeredRight = output.right - halfWidth
     val centeredTop = output.top - halfHeight
     val centeredBottom = output.bottom - halfHeight
-    val maxX = maxOf(kotlin.math.abs(centeredLeft), kotlin.math.abs(centeredRight)) / halfWidth
-    val maxY = maxOf(kotlin.math.abs(centeredTop), kotlin.math.abs(centeredBottom)) / halfHeight
+    val maxX = maxOf(abs(centeredLeft), abs(centeredRight)) / halfWidth
+    val maxY = maxOf(abs(centeredTop), abs(centeredBottom)) / halfHeight
     val maxIntensity = if (dispersion) maxX * maxY else 0f
     val inward = amount * (1f + maxIntensity)
     val outward = amount * maxOf(0f, maxIntensity - 1f)
@@ -104,11 +106,11 @@ private fun roundedRectSdf(
 ): Float {
     val centeredX = x - halfWidth
     val centeredY = y - halfHeight
-    val cornerX = kotlin.math.abs(centeredX) - (halfWidth - radius)
-    val cornerY = kotlin.math.abs(centeredY) - (halfHeight - radius)
+    val cornerX = abs(centeredX) - (halfWidth - radius)
+    val cornerY = abs(centeredY) - (halfHeight - radius)
     val outsideX = maxOf(cornerX, 0f)
     val outsideY = maxOf(cornerY, 0f)
-    return kotlin.math.sqrt(outsideX * outsideX + outsideY * outsideY) - radius +
+    return sqrt(outsideX * outsideX + outsideY * outsideY) - radius +
         minOf(maxOf(cornerX, cornerY), 0f)
 }
 

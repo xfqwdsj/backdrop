@@ -335,7 +335,7 @@ private val TestBackdrop =
     object : Backdrop {
         override val isCoordinatesDependent: Boolean = false
 
-        override fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBackdrop(
+        override fun BackdropDrawScope.drawBackdrop(
             density: androidx.compose.ui.unit.Density,
             coordinates: androidx.compose.ui.layout.LayoutCoordinates?,
             layerBlock: (androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit)?,

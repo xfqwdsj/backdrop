@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.testTag
@@ -356,7 +355,7 @@ private val SolidBackdrop =
     object : Backdrop {
         override val isCoordinatesDependent: Boolean = false
 
-        override fun DrawScope.drawBackdrop(
+        override fun BackdropDrawScope.drawBackdrop(
             density: Density,
             coordinates: LayoutCoordinates?,
             layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -375,7 +374,7 @@ private val MarkerBackdrop =
     object : Backdrop {
         override val isCoordinatesDependent: Boolean = false
 
-        override fun DrawScope.drawBackdrop(
+        override fun BackdropDrawScope.drawBackdrop(
             density: Density,
             coordinates: LayoutCoordinates?,
             layerBlock: (GraphicsLayerScope.() -> Unit)?,

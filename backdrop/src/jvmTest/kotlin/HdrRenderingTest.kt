@@ -39,6 +39,7 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.internal.AmbientHighlightShaderString
 import top.ltfan.backdrop.internal.EnvironmentHighlightShaderString
 import top.ltfan.backdrop.internal.LightingShaderString
+import top.ltfan.backdrop.internal.SourceBoundaryShader
 import top.ltfan.backdrop.internal.TintShaderString
 import top.ltfan.backdrop.internal.colorUniformComponents
 import top.ltfan.backdrop.internal.setHdrColor
@@ -47,6 +48,18 @@ class HdrRenderingTest {
     @Test
     fun floatSurfacePreservesHdrBaseline() {
         assertPixel(floatArrayOf(2f, 2f, 2f, 1f), render(floatArrayOf(2f, 2f, 2f, 1f)) {})
+    }
+
+    @Test
+    fun sourceBoundaryShaderPreservesExtendedPremultipliedChannels() {
+        val shader = RuntimeShader(SourceBoundaryShader)
+        shader.setFloatUniform("sourceBounds", 0f, 0f, 4f, 4f)
+        shader.setFloatUniform("origin", -8f, -8f)
+        shader.setIntUniform("tileMode", 0)
+        val input = floatArrayOf(2f, 1.25f, -0.25f, 0.375f)
+        val builder = shader.asSkikoRuntimeShader()
+        builder.child("content", constantShader(input))
+        assertPixel(input, renderShader(builder.makeShader()))
     }
 
     @Test

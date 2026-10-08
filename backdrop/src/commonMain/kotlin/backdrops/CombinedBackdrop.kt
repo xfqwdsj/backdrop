@@ -4,10 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.GraphicsLayerScope
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import top.ltfan.backdrop.Backdrop
+import top.ltfan.backdrop.BackdropDrawScope
 
 @Composable
 public fun rememberCombinedBackdrop(
@@ -46,7 +46,7 @@ private class Combined2Backdrops(
     override val isCoordinatesDependent: Boolean =
         backdrop1.isCoordinatesDependent || backdrop2.isCoordinatesDependent
 
-    override fun DrawScope.drawBackdrop(
+    override fun BackdropDrawScope.drawBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -68,7 +68,7 @@ private class Combined3Backdrops(
             backdrop2.isCoordinatesDependent ||
             backdrop3.isCoordinatesDependent
 
-    override fun DrawScope.drawBackdrop(
+    override fun BackdropDrawScope.drawBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -84,7 +84,7 @@ private class CombinedBackdrops(vararg val backdrops: Backdrop) : Backdrop {
 
     override val isCoordinatesDependent: Boolean = backdrops.any { it.isCoordinatesDependent }
 
-    override fun DrawScope.drawBackdrop(
+    override fun BackdropDrawScope.drawBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,

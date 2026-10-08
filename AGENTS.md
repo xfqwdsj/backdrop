@@ -58,6 +58,11 @@ test counts — belong in the code, and this file points to the source instead o
   extension. External effects must supply a deterministic, finite, non-inverted sampling contract that covers every
   coordinate they read.
 - `explicitApi()` is enabled: public declarations need an explicit `public`.
+- Source domains and effect footprints are separate contracts. `BackdropDrawScope` carries the
+  current sampling request; finite sources declare pixel-aligned bounds and a `TileMode` before
+  effects run. Layer sources default to Clamp, preserving boundary alpha and extended-range RGB.
+  Exported source domains exclude unused sampling padding. Boundary resources belong to each
+  consuming modifier, so combined and shared sources retain independent boundary policies.
 - Sources declare `package top.ltfan.backdrop[.sub]` but live flat under `backdrop/src/<sourceSet>/kotlin/`: the
   `top/ltfan/backdrop` prefix is dropped from the directory path, and subpackages keep their last segment as a directory
   (`effects/Lens.kt` declares `top.ltfan.backdrop.effects`). An IDE hint about the package not matching the directory is

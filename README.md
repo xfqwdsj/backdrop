@@ -97,6 +97,32 @@ to update rendering without recomposing the component. A producer can switch bet
 configuration; `None` releases the decoration's drawing layer. Configurations remain configurations
 at zero alpha.
 
+### Source boundaries
+
+Effect sampling bounds describe required pixels; the source defines how those pixels are supplied.
+`rememberLayerBackdrop(tileMode = TileMode.Clamp)` extends its recorded boundary texels before
+effects run, preserving their alpha and extended-range RGB. Use `TileMode.Decal` for transparent
+exterior pixels, or `Repeated` and `Mirror` for tiled sources. Each source in a combined backdrop
+applies its own boundary policy. Exported surfaces expose their drawn region, excluding unused
+effect sampling padding.
+
+Canvas and custom backdrops draw through `BackdropDrawScope`. A procedural source can fill the
+complete request:
+
+```kotlin
+val backdrop = rememberCanvasBackdrop {
+    drawRect(color, topLeft = samplingBounds.topLeft, size = samplingBounds.size)
+}
+```
+
+For a finite source, call `drawSource(bounds, tileMode)` with a non-empty, finite, pixel-aligned
+rectangle. Its callback uses the declared source coordinates and source size and is clipped to
+that rectangle. Apply coordinate transforms through the scope's `withTransform(matrix) { ... }`
+or the `drawSource` transform parameter; both map the request with an invertible two-dimensional
+affine matrix. Custom sources must cover their requested coordinates or explicitly declare a
+finite domain. Boundary extension uses runtime shaders; unsupported platforms draw finite sources
+with transparent exterior pixels. Interior transparency remains part of the source on every path.
+
 ### Custom effects and sampling
 
 Custom `RenderEffect`s and runtime shaders declare their sampling behavior with

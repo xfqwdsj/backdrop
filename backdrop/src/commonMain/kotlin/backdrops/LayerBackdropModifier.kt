@@ -1,6 +1,7 @@
 package top.ltfan.backdrop.backdrops
 
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.node.DrawModifierNode
@@ -23,6 +24,7 @@ private class LayerBackdropElement(val backdrop: LayerBackdrop) :
     override fun update(node: LayerBackdropNode) {
         if (node.backdrop != backdrop) {
             node.backdrop.layerCoordinates = null
+            node.backdrop.sourceBounds = null
             node.backdrop = backdrop
         }
         node.invalidateDraw()
@@ -53,6 +55,8 @@ private class LayerBackdropNode(var backdrop: LayerBackdrop) :
     override fun ContentDrawScope.draw() {
         drawContent()
         recordLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }
+        val recorded = backdrop.graphicsLayer.size
+        backdrop.sourceBounds = Rect(0f, 0f, recorded.width.toFloat(), recorded.height.toFloat())
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
@@ -63,5 +67,6 @@ private class LayerBackdropNode(var backdrop: LayerBackdrop) :
 
     override fun onDetach() {
         backdrop.layerCoordinates = null
+        backdrop.sourceBounds = null
     }
 }

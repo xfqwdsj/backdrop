@@ -8,7 +8,9 @@ import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Path
@@ -40,14 +42,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
+import kotlin.math.floor
 import top.ltfan.backdrop.backdrops.LayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightElement
+import top.ltfan.backdrop.internal.BackdropSourceRenderer
 import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.SurfaceBounds
+import top.ltfan.backdrop.internal.SurfaceIsolationElement
 import top.ltfan.backdrop.internal.clipToExtendedShape
 import top.ltfan.backdrop.internal.recordLayer
-import top.ltfan.backdrop.internal.surfaceRenderEffect
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.InnerShadowElement
 import top.ltfan.backdrop.shadow.Shadow
@@ -91,10 +95,16 @@ public fun Modifier.drawPlainBackdrop(
     val surfaceBounds = SurfaceBounds()
     return this.graphicsLayer {
             layerBlock?.invoke(this)
-            compositingStrategy = CompositingStrategy.Offscreen
+            val groupAlpha = alpha
+            alpha = if (groupAlpha == 0f) 0f else 1f
+            blendMode = BlendMode.SrcOver
+            colorFilter = null
+            renderEffect = null
+            shadowElevation = 0f
+            compositingStrategy = CompositingStrategy.Auto
             outsets = surfaceBounds.outsets(outsets, this)
-            renderEffect = surfaceRenderEffect(renderEffect, size, outsets, this)
         }
+        .then(SurfaceIsolationElement(surfaceBounds, layerBlock))
         .then(
             DrawBackdropElement(
                 backdrop = backdrop,
@@ -138,10 +148,16 @@ public fun Modifier.drawBackdrop(
     val surfaceBounds = SurfaceBounds()
     return this.graphicsLayer {
             layerBlock?.invoke(this)
-            compositingStrategy = CompositingStrategy.Offscreen
+            val groupAlpha = alpha
+            alpha = if (groupAlpha == 0f) 0f else 1f
+            blendMode = BlendMode.SrcOver
+            colorFilter = null
+            renderEffect = null
+            shadowElevation = 0f
+            compositingStrategy = CompositingStrategy.Auto
             outsets = surfaceBounds.outsets(outsets, this)
-            renderEffect = surfaceRenderEffect(renderEffect, size, outsets, this)
         }
+        .then(SurfaceIsolationElement(surfaceBounds, layerBlock))
         .then(InnerShadowElement(shapeProvider = shapeProvider, shadow = innerShadow))
         .then(
             ShadowElement(
@@ -299,6 +315,7 @@ private class DrawBackdropNode(
         }
 
     private var graphicsLayer: GraphicsLayer? = null
+    private val sourceRenderer = BackdropSourceRenderer { requireGraphicsContext() }
 
     /** Reused across draws for rounded surface shapes, so clipping allocates nothing. */
     private val surfaceClipPath = Path()
@@ -335,12 +352,23 @@ private class DrawBackdropNode(
         }
         onDrawBackdrop(
             {
-                with(backdrop) {
-                    drawBackdrop(
-                        density = effectScope,
-                        coordinates = layoutCoordinates,
-                        layerBlock = layerBlock,
-                    )
+                sourceRenderer.draw(
+                    this,
+                    effectScope.size,
+                    Rect(
+                        -extension.left,
+                        -extension.top,
+                        effectScope.size.width + extension.right,
+                        effectScope.size.height + extension.bottom,
+                    ),
+                ) {
+                    with(backdrop) {
+                        drawBackdrop(
+                            density = effectScope,
+                            coordinates = layoutCoordinates,
+                            layerBlock = layerBlock,
+                        )
+                    }
                 }
             },
             room,
@@ -411,37 +439,51 @@ private class DrawBackdropNode(
     }
 
     override fun ContentDrawScope.draw() {
-        if (effectScope.update(this)) {
-            observeEffects()
-        }
+        sourceRenderer.beginFrame()
+        try {
+            if (effectScope.update(this)) {
+                observeEffects()
+            }
 
-        val extension = extension
-        val visible = visible
-        val layerTopLeft = IntOffset(-extension.left.toInt(), -extension.top.toInt())
+            val extension = extension
+            val visible = visible
+            val layerTopLeft = IntOffset(-extension.left.toInt(), -extension.top.toInt())
 
-        // The canvas already sits at the surface's origin here, which is the space callbacks get.
-        val room = BackdropRoom(effectScope.size, extension)
-        clipToSurfaceRegion(visible) {
-            onDrawBehind?.invoke(this, room)
-            drawBackdropLayer(layerTopLeft)
-            onDrawSurface?.invoke(this, room)
-        }
-        clipToSurfaceShape(effectScope.size) { this@draw.drawContent() }
-        clipToSurfaceRegion(visible) { onDrawFront?.invoke(this, room) }
+            // The canvas already sits at the surface's origin here, which is the space callbacks
+            // get.
+            val room = BackdropRoom(effectScope.size, extension)
+            clipToSurfaceRegion(visible) {
+                onDrawBehind?.invoke(this, room)
+                drawBackdropLayer(layerTopLeft)
+                onDrawSurface?.invoke(this, room)
+            }
+            clipToSurfaceShape(effectScope.size) { this@draw.drawContent() }
+            clipToSurfaceRegion(visible) { onDrawFront?.invoke(this, room) }
 
-        exportedBackdrop?.let { exported ->
-            exported.layerOffset = Offset(extension.left, extension.top)
-            recordLayer(exported.graphicsLayer, size = layerSize(extension)) {
-                // The layer starts where the extension does, so draw in the surface's own space.
-                inNodeSpace {
-                    clipToSurfaceRegion(visible) {
-                        onDrawBehind?.invoke(this, room)
-                        drawBackdropLayer(layerTopLeft)
-                        onDrawSurface?.invoke(this, room)
-                        onDrawFront?.invoke(this, room)
+            exportedBackdrop?.let { exported ->
+                exported.layerOffset = Offset(extension.left, extension.top)
+                exported.sourceBounds =
+                    Rect(
+                        floor(extension.left - visible.left),
+                        floor(extension.top - visible.top),
+                        ceil(extension.left + effectScope.size.width + visible.right),
+                        ceil(extension.top + effectScope.size.height + visible.bottom),
+                    )
+                recordLayer(exported.graphicsLayer, size = layerSize(extension)) {
+                    // The layer starts where the extension does, so draw in the surface's own
+                    // space.
+                    inNodeSpace {
+                        clipToSurfaceRegion(visible) {
+                            onDrawBehind?.invoke(this, room)
+                            drawBackdropLayer(layerTopLeft)
+                            onDrawSurface?.invoke(this, room)
+                            onDrawFront?.invoke(this, room)
+                        }
                     }
                 }
             }
+        } finally {
+            sourceRenderer.endFrame()
         }
     }
 
@@ -530,6 +572,7 @@ private class DrawBackdropNode(
      * requests a re-measure and a redraw.
      */
     private fun replaceRenderingLayers() {
+        sourceRenderer.release()
         val context = requireGraphicsContext()
         val oldEffect = graphicsLayer
         graphicsLayer = context.createGraphicsLayer()
@@ -538,6 +581,7 @@ private class DrawBackdropNode(
     }
 
     override fun onDetach() {
+        sourceRenderer.release()
         val graphicsContext = requireGraphicsContext()
         graphicsLayer?.let { layer ->
             graphicsContext.releaseGraphicsLayer(layer)
@@ -550,5 +594,6 @@ private class DrawBackdropNode(
         layoutCoordinates = null
         exportedBackdrop?.layerCoordinates = null
         exportedBackdrop?.layerOffset = Offset.Zero
+        exportedBackdrop?.sourceBounds = null
     }
 }

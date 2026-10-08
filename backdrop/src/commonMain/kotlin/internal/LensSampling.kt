@@ -2,9 +2,9 @@ package top.ltfan.backdrop.internal
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import top.ltfan.backdrop.BackdropSampling
 import kotlin.math.abs
 import kotlin.math.sqrt
+import top.ltfan.backdrop.BackdropSampling
 
 private const val BILINEAR_TEXEL_RADIUS = 0.5f
 

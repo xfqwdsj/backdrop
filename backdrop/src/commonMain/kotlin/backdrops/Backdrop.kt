@@ -4,15 +4,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.GraphicsLayerScope
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import top.ltfan.backdrop.Backdrop
+import top.ltfan.backdrop.BackdropDrawScope
 
 @Composable
 public fun rememberBackdrop(
     backdrop: Backdrop,
-    onDraw: DrawScope.(drawBackdrop: DrawScope.() -> Unit) -> Unit,
+    onDraw: BackdropDrawScope.(drawBackdrop: BackdropDrawScope.() -> Unit) -> Unit,
 ): Backdrop {
     return remember(backdrop, onDraw) {
         Backdrop(backdrop, onDraw)
@@ -22,12 +22,12 @@ public fun rememberBackdrop(
 @Immutable
 private class Backdrop(
     val backdrop: Backdrop,
-    val onDraw: DrawScope.(drawBackdrop: DrawScope.() -> Unit) -> Unit,
+    val onDraw: BackdropDrawScope.(drawBackdrop: BackdropDrawScope.() -> Unit) -> Unit,
 ) : Backdrop {
 
     override val isCoordinatesDependent: Boolean = backdrop.isCoordinatesDependent
 
-    override fun DrawScope.drawBackdrop(
+    override fun BackdropDrawScope.drawBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,

@@ -36,6 +36,7 @@ import top.ltfan.backdrop.BackdropExtension
 import top.ltfan.backdrop.LocalBackdropRenderEpoch
 import top.ltfan.backdrop.LocalBackdropStyle
 import top.ltfan.backdrop.RuntimeShaderCacheImpl
+import top.ltfan.backdrop.internal.BackdropSourceRenderer
 import top.ltfan.backdrop.internal.EnvironmentHighlightShaderString
 import top.ltfan.backdrop.internal.RuntimeShaderEffect
 import top.ltfan.backdrop.internal.ShapeProvider
@@ -114,6 +115,7 @@ internal class HighlightNode(
     override val shouldAutoInvalidate: Boolean = false
 
     private var highlightLayer: GraphicsLayer? = null
+    private val sourceRenderer = BackdropSourceRenderer { requireGraphicsContext() }
     private var environmentLayer: GraphicsLayer? = null
     private val environmentShaderCache = RuntimeShaderCacheImpl()
     private var coordinates: LayoutCoordinates? = null
@@ -227,6 +229,7 @@ internal class HighlightNode(
     }
 
     private fun releaseEnvironmentLayer() {
+        sourceRenderer.release()
         environmentLayer?.let {
             it.renderEffect = null
             requireGraphicsContext().releaseGraphicsLayer(it)
@@ -337,10 +340,22 @@ internal class HighlightNode(
             )
         val density: Density = this
         val sourceCoordinates = if (backdrop.isCoordinatesDependent) coordinates else null
-        layer.record(layerSize) {
-            translate(room, room) {
-                with(backdrop) { drawBackdrop(density, sourceCoordinates, layerBlock) }
+        val sourceSize = size
+        sourceRenderer.beginFrame()
+        try {
+            layer.record(layerSize) {
+                translate(room, room) {
+                    sourceRenderer.draw(
+                        this,
+                        sourceSize,
+                        Rect(-room, -room, sourceSize.width + room, sourceSize.height + room),
+                    ) {
+                        with(backdrop) { drawBackdrop(density, sourceCoordinates, layerBlock) }
+                    }
+                }
             }
+        } finally {
+            sourceRenderer.endFrame()
         }
         translate(-room, -room) { drawLayer(layer) }
     }

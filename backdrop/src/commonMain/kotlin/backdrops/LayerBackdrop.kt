@@ -19,12 +19,10 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
 import top.ltfan.backdrop.Backdrop
 import top.ltfan.backdrop.BackdropDrawScope
 import top.ltfan.backdrop.LocalBackdropRenderEpoch
-import top.ltfan.backdrop.internal.InverseLayerScope
 
 private val DefaultOnDraw: ContentDrawScope.() -> Unit = { drawContent() }
 
@@ -81,8 +79,6 @@ internal constructor(
     /** Recorded source domain in layer pixels, independent of unused sampling padding. */
     internal var sourceBounds: Rect? by mutableStateOf(null, neverEqualPolicy())
 
-    private var inverseLayerScope: InverseLayerScope? = null
-
     override fun BackdropDrawScope.drawBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
@@ -90,18 +86,40 @@ internal constructor(
     ) {
         val coordinates = coordinates ?: return
         val layerCoordinates = layerCoordinates ?: return
-        val offset =
-            try {
-                layerCoordinates.localPositionOf(coordinates)
-            } catch (_: Exception) {
-                // TODO: outer transformations lead to wrong position calculation
-                coordinates.positionInWindow() - layerCoordinates.positionInWindow()
+        if (!coordinates.isAttached || !layerCoordinates.isAttached) return
+
+        val transform = Matrix()
+        try {
+            // The relative transform includes ancestor and modifier layer geometry, including its
+            // pivot.
+            coordinates.transformFrom(layerCoordinates, transform)
+        } catch (_: IllegalArgumentException) {
+            transformFromWindow(layerCoordinates, coordinates, transform)
+        } catch (_: UnsupportedOperationException) {
+            transformFromWindow(layerCoordinates, coordinates, transform)
+        }
+        require(transform.values.all { it.isFinite() }) {
+            "Coordinate transform must be finite"
+        }
+        val homogeneousScale = transform[3, 3]
+        require(homogeneousScale.isFinite() && homogeneousScale != 0f) {
+            "Coordinate transform must have a finite, non-zero homogeneous scale"
+        }
+        // Normalize the z=0 plane mapping so floating-point inverse noise in unused z terms does
+        // not change its two-dimensional coordinates. Preserve x/y perspective for validation.
+        val normalizedTransform =
+            Matrix().apply {
+                this[0, 0] = transform[0, 0] / homogeneousScale
+                this[0, 1] = transform[0, 1] / homogeneousScale
+                this[0, 3] = transform[0, 3] / homogeneousScale
+                this[1, 0] = transform[1, 0] / homogeneousScale
+                this[1, 1] = transform[1, 1] / homogeneousScale
+                this[1, 3] = transform[1, 3] / homogeneousScale
+                this[3, 0] = transform[3, 0] / homogeneousScale
+                this[3, 1] = transform[3, 1] / homogeneousScale
             }
-        val transform =
-            if (layerBlock != null)
-                obtainInverseLayerScope().inverseTransform(density, size, layerBlock)
-            else Matrix()
-        transform.translate(-offset.x - layerOffset.x, -offset.y - layerOffset.y)
+        // Recorded pixels begin at the surface's expanded-layer offset, before coordinate mapping.
+        normalizedTransform.translate(-layerOffset.x, -layerOffset.y)
         val sourceSize = graphicsLayer.size
         if (sourceSize.width <= 0 || sourceSize.height <= 0) return
         val bounds =
@@ -110,14 +128,26 @@ internal constructor(
         drawSource(
             bounds,
             tileMode,
-            transform,
+            normalizedTransform,
         ) {
             drawLayer(graphicsLayer)
         }
     }
 
-    private fun obtainInverseLayerScope(): InverseLayerScope {
-        return inverseLayerScope?.apply { reset() }
-            ?: InverseLayerScope().also { inverseLayerScope = it }
+    private fun transformFromWindow(
+        source: LayoutCoordinates,
+        target: LayoutCoordinates,
+        matrix: Matrix,
+    ) {
+        val origin = target.windowToLocal(source.localToWindow(Offset.Zero))
+        val x = target.windowToLocal(source.localToWindow(Offset(1f, 0f)))
+        val y = target.windowToLocal(source.localToWindow(Offset(0f, 1f)))
+        matrix.reset()
+        matrix[0, 0] = x.x - origin.x
+        matrix[0, 1] = x.y - origin.y
+        matrix[1, 0] = y.x - origin.x
+        matrix[1, 1] = y.y - origin.y
+        matrix[3, 0] = origin.x
+        matrix[3, 1] = origin.y
     }
 }

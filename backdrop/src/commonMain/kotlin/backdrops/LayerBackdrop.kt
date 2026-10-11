@@ -84,8 +84,18 @@ internal constructor(
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
     ) {
+        // Read the recorded state before the early returns below. A surface that samples a layer
+        // which is detached or still empty has to observe the next recording, so that it draws the
+        // content as soon as the layer has any: the recorded size of a graphics layer is not
+        // observable, so a surface that returns before reading these stays empty until something
+        // else invalidates it.
+        val recorded = sourceBounds
+        val offset = layerOffset
+        val recordedLayer = graphicsLayer
+        val recordedCoordinates = layerCoordinates
+
         val coordinates = coordinates ?: return
-        val layerCoordinates = layerCoordinates ?: return
+        val layerCoordinates = recordedCoordinates ?: return
         if (!coordinates.isAttached || !layerCoordinates.isAttached) return
 
         val transform = Matrix()
@@ -119,18 +129,19 @@ internal constructor(
                 this[3, 1] = transform[3, 1] / homogeneousScale
             }
         // Recorded pixels begin at the surface's expanded-layer offset, before coordinate mapping.
-        normalizedTransform.translate(-layerOffset.x, -layerOffset.y)
-        val sourceSize = graphicsLayer.size
-        if (sourceSize.width <= 0 || sourceSize.height <= 0) return
+        normalizedTransform.translate(-offset.x, -offset.y)
+        val sourceSize = recordedLayer.size
+        // Retained bounds let consumers reference a replacement layer before its producer records
+        // it.
         val bounds =
-            sourceBounds ?: Rect(0f, 0f, sourceSize.width.toFloat(), sourceSize.height.toFloat())
+            recorded ?: Rect(0f, 0f, sourceSize.width.toFloat(), sourceSize.height.toFloat())
         if (bounds.isEmpty) return
         drawSource(
             bounds,
             tileMode,
             normalizedTransform,
         ) {
-            drawLayer(graphicsLayer)
+            drawLayer(recordedLayer)
         }
     }
 

@@ -1,94 +1,78 @@
 package top.ltfan.backdrop.internal
 
-/** Builds a runtime shader specialized to the number of line segments in a flattened outline. */
-internal fun genericEnvironmentHighlightShader(segmentCount: Int): String {
+import top.ltfan.backdrop.BackdropCurveShader
+import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
+import top.ltfan.backdrop.highlight.exclusionShader
+
+/** Environment lighting uses the same flattened boundary functions as static highlights. */
+internal fun genericEnvironmentHighlightShader(segmentCount: Int, exclusionCount: Int = 0): String {
     require(segmentCount > 0)
+    return genericEnvironmentHighlightShader(
+        genericBoundaryShaderFunctions(segmentCount),
+        exclusionCount,
+    )
+}
+
+internal fun genericEnvironmentHighlightShader(
+    geometry: HighlightBoundaryGeometry,
+    exclusionCount: Int = 0,
+): String = genericEnvironmentHighlightShader(geometry.shaderFunctions(), exclusionCount)
+
+private fun genericEnvironmentHighlightShader(geometry: String, exclusionCount: Int): String {
     return """
-uniform shader content;
-uniform float2 origin;
-uniform float geometryScale;
+$geometry
+$BackdropCurveShader
 uniform float width;
+uniform float angle;
+uniform float4 widthCurve;
+uniform float4 depthCurve;
+uniform float directional;
+uniform float staticEnabled;
+uniform shader content;
 uniform float sampleDistance;
-uniform float strength;
-uniform float threshold;
-uniform float4 segments[$segmentCount];
-
-bool containsPoint(float2 p) {
-    bool inside = false;
-    for (int i = 0; i < $segmentCount; ++i) {
-        float4 segment = segments[i];
-        float2 a = segment.xy;
-        float2 b = segment.zw;
-        bool crosses = (a.y > p.y) != (b.y > p.y);
-        if (crosses && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)) {
-            inside = !inside;
-        }
-    }
-    return inside;
-}
-
-float3 nearestBoundary(float2 p) {
-    float bestDistance = 3.402823466e+38;
-    float selectedDistance = 3.402823466e+38;
-    float2 bestDelta = float2(0.0);
-    float2 bestTangent = float2(1.0, 0.0);
-    bool hasBest = false;
-    float coordinateScale = max(geometryScale, max(abs(p.x), abs(p.y)));
-    float tolerance = 9.5367432e-7 * coordinateScale;
-    for (int i = 0; i < $segmentCount; ++i) {
-        float4 segment = segments[i];
-        float2 a = segment.xy;
-        float2 b = segment.zw;
-        float2 ab = b - a;
-        float denominator = dot(ab, ab);
-        float t = denominator > 0.0 ? clamp(dot(p - a, ab) / denominator, 0.0, 1.0) : 0.0;
-        float2 delta = a + t * ab - p;
-        float distance = length(delta);
-        bestDistance = min(bestDistance, distance);
-        if (!hasBest || distance < selectedDistance - tolerance) {
-            selectedDistance = distance;
-            bestDelta = delta;
-            bestTangent = ab;
-            hasBest = true;
-        }
-    }
-    float2 outward;
-    if (selectedDistance > 0.0) {
-        outward = bestDelta / selectedDistance;
-    } else {
-        float tangentLength = length(bestTangent);
-        float2 normal = tangentLength > 0.0
-            ? float2(bestTangent.y, -bestTangent.x) / tangentLength
-            : float2(0.0, -1.0);
-        float probeDistance = max(0.0001, tolerance * 4.0);
-        outward = containsPoint(p + normal * probeDistance) ? -normal : normal;
-    }
-    return float3(bestDistance, outward);
-}
+uniform float brightnessStrength;
+uniform float brightnessThreshold;
+uniform float tintStrength;
+uniform float tintThreshold;
+uniform float thicknessWidth;
+uniform float thicknessThreshold;
+${exclusionShader(exclusionCount)}
 
 float brightness(float3 color) {
-    return dot(color, float3(0.2126, 0.7152, 0.0722));
+  return dot(color, float3(0.2126, 0.7152, 0.0722));
 }
-
+float extraction(float value, float threshold) {
+  return smoothstep(threshold, threshold + max(threshold * 0.25, 0.0001), value);
+}
 half4 main(float2 coord) {
-    float2 localCoord = coord - origin;
-    float3 boundary = nearestBoundary(localCoord);
-    float insideDistance = boundary.x;
-    if (insideDistance >= width || width <= 0.0) return half4(0.0);
-    float2 outward = boundary.yz;
-
-    float stepDistance = sampleDistance / 3.0;
-    float4 a = content.eval(coord + outward * (insideDistance + stepDistance));
-    float4 b = content.eval(coord + outward * (insideDistance + 2.0 * stepDistance));
-    float4 c = content.eval(coord + outward * (insideDistance + sampleDistance));
-    float4 sampleColor = (a + b + c) / 3.0;
-    if (!(sampleColor.a > 0.0)) return half4(0.0);
-
-    float light = brightness(sampleColor.rgb / sampleColor.a);
-    float extraction = smoothstep(threshold, threshold + max(threshold * 0.25, 0.0001), light);
-    float edge = 1.0 - smoothstep(0.0, width, insideDistance);
-    float alpha = sampleColor.a * extraction * edge * strength;
-    return half4(sampleColor.rgb * extraction * edge * strength, alpha);
+  float2 p = coord - origin;
+  if (!containsPoint(p)) return half4(0.0);
+  float3 boundary = nearestBoundary(p);
+  float distance = boundary.x;
+  float2 outward = boundary.yz;
+  float projection = abs(dot(outward, float2(cos(angle), sin(angle))));
+  float baseWidth = staticEnabled < 0.5 ? 0.0 : (directional > 0.5 ? width * backdropCurve(projection, widthCurve) : width);
+  float stepDistance = sampleDistance / 3.0;
+  float4 a = content.eval(coord + outward * (distance + stepDistance));
+  float4 b = content.eval(coord + outward * (distance + 2.0 * stepDistance));
+  float4 c = content.eval(coord + outward * (distance + sampleDistance));
+  float4 sampled = (a + b + c) / 3.0;
+  if (!(sampled.a > 0.0)) return half4(0.0);
+  float3 straight = sampled.rgb / sampled.a;
+  float luminance = brightness(straight);
+  float thicknessResponse = extraction(luminance, thicknessThreshold);
+  float addedWidth = thicknessWidth * thicknessResponse;
+  float totalWidth = baseWidth + addedWidth;
+  float brightnessCoverage = highlightBandProfile(distance, totalWidth, depthCurve);
+  float tintWidth = min(totalWidth, width);
+  float tintCoverage = highlightBandProfile(distance, tintWidth, depthCurve);
+  float bright = extraction(luminance, brightnessThreshold) * brightnessStrength * brightnessCoverage;
+  float tint = extraction(luminance, tintThreshold) * tintStrength * tintCoverage;
+  float weight = exclusionWeight(outward);
+  float alphaCoverage = max(bright, tint) * weight;
+  float alpha = min(sampled.a, sampled.a * alphaCoverage);
+  float3 rgb = sampled.a * (float3(luminance) * bright + straight * tint) * weight;
+  return half4(rgb, alpha);
 }
 """
         .trimIndent()

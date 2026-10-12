@@ -17,6 +17,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.LayerBackdrop
@@ -88,9 +89,9 @@ class BackdropSourceScopeTest {
                     pixels[x + output.layerOffset.x.toInt(), 1 + output.layerOffset.y.toInt()]
                 val wanted = expected[index][point]
                 assertTrue(
-                    kotlin.math.abs(actual.alpha - wanted.alpha) < 0.01f &&
-                        kotlin.math.abs(actual.red - wanted.red) < 0.01f &&
-                        kotlin.math.abs(actual.blue - wanted.blue) < 0.01f,
+                    abs(actual.alpha - wanted.alpha) < 0.01f &&
+                        abs(actual.red - wanted.red) < 0.01f &&
+                        abs(actual.blue - wanted.blue) < 0.01f,
                     "$mode at source x=$x: expected $wanted, got $actual",
                 )
             }

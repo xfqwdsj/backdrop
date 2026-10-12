@@ -11,14 +11,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
@@ -29,6 +32,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
@@ -174,16 +178,17 @@ class BackdropStyleTest {
 
     @Test
     fun ambientColorAlphaAndBlendModeReachTheDrawingLayer() = runComposeUiTest {
-        val style =
-            mutableStateOf(
-                HighlightStyle.Ambient(
-                    color = Color.White.copy(alpha = 0.2f),
-                    angle = 0f,
-                )
-            )
+        val style = mutableStateOf(HighlightStyle.Ambient(color = Color.White.copy(alpha = 0.2f)))
         setContent {
             ProvideBackdropStyle(
-                highlight = { Highlight(width = 2.dp, blurRadius = 0.dp, style = style.value) },
+                highlight = {
+                    Highlight(
+                        width = 2.dp,
+                        blurRadius = 0.dp,
+                        style = style.value,
+                        direction = HighlightDirection(angle = 0f),
+                    )
+                },
                 shadow = { Shadow.None },
             ) {
                 Panel("panel")
@@ -191,11 +196,11 @@ class BackdropStyleTest {
         }
         waitForIdle()
         val faint = onNodeWithTag("panel").captureToImage().toPixelMap()[39, 20]
-        assertEquals(0.2f, faint.red, 0.03f)
+        assertEquals(0.2f * 0.84375f, faint.red, 0.03f)
         style.value = style.value.copy(color = Color.White.copy(alpha = 0.8f))
         waitForIdle()
         val bright = onNodeWithTag("panel").captureToImage().toPixelMap()[39, 20]
-        assertEquals(0.8f, bright.red, 0.03f)
+        assertEquals(0.8f * 0.84375f, bright.red, 0.03f)
         val srcOver = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
         style.value = style.value.copy(blendMode = BlendMode.Plus)
         waitForIdle()
@@ -325,7 +330,7 @@ class BackdropStyleTest {
 
     private fun solidHighlight(color: Color): Highlight.Config =
         Highlight(
-            width = 2.dp,
+            width = 20.dp,
             blurRadius = 0.dp,
             style = HighlightStyle.Plain(color, BlendMode.SrcOver),
         )
@@ -336,9 +341,9 @@ private val TestBackdrop =
         override val isCoordinatesDependent: Boolean = false
 
         override fun BackdropDrawScope.drawBackdrop(
-            density: androidx.compose.ui.unit.Density,
-            coordinates: androidx.compose.ui.layout.LayoutCoordinates?,
-            layerBlock: (androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit)?,
+            density: Density,
+            coordinates: LayoutCoordinates?,
+            layerBlock: (GraphicsLayerScope.() -> Unit)?,
         ) {
             drawRect(Color.Blue)
         }

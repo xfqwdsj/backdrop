@@ -23,7 +23,9 @@ import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.ceil
 import top.ltfan.backdrop.LocalBackdropRenderEpoch
 
@@ -117,8 +119,8 @@ internal class SurfaceIsolationNode(
     private fun configureLayer(
         layer: GraphicsLayer,
         size: Size,
-        density: androidx.compose.ui.unit.Density,
-        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: Density,
+        layoutDirection: LayoutDirection,
     ) {
         val scope = InverseLayerScope()
         scope.reset()

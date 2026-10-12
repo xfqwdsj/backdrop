@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.FilterBlurMode
@@ -31,7 +32,7 @@ class MaskBlurSupportTest {
             Surface.makeRaster(info).use { surface ->
                 Paint().use { paint ->
                     paint.isAntiAlias = true
-                    paint.color = org.jetbrains.skia.Color.WHITE
+                    paint.color = Color.WHITE
                     paint.maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius)
                     surface.canvas.drawRect(source, paint)
                 }

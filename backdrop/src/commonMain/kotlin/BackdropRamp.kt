@@ -1,6 +1,5 @@
 package top.ltfan.backdrop
 
-import androidx.compose.animation.core.Easing
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -9,53 +8,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
-
-/** Iterations both this file and the progressive blur shader run to invert the curve. */
-internal const val BezierSolveIterations = 16
-
-/** One axis of a cubic bezier from 0 to 1 through [first] and [second]. */
-private fun coordinate(t: Float, first: Float, second: Float): Float {
-    val inverse = 1f - t
-    return 3f * inverse * inverse * t * first + 3f * inverse * t * t * second + t * t * t
-}
-
-/**
- * A cubic bezier easing, held as its four control values rather than as an [Easing] so the
- * progressive blur shader evaluates the very curve the Kotlin side samples. Parameterized the way
- * [androidx.compose.animation.core.CubicBezierEasing] is: the curve runs from (0,0) to (1,1)
- * through (x1,y1) and (x2,y2).
- */
-@Immutable
-public data class BackdropBezier(
-    public val x1: Float,
-    public val y1: Float,
-    public val x2: Float,
-    public val y2: Float,
-) {
-    /**
-     * The curve's output for [input], solved the way the shader solves it, so a mask painted from
-     * this value and a blur evaluated in a shader stay on one curve.
-     */
-    public fun transform(input: Float): Float {
-        val x = input.coerceIn(0f, 1f)
-        var low = 0f
-        var high = 1f
-        var t = x
-        repeat(BezierSolveIterations) {
-            t = (low + high) * 0.5f
-            if (coordinate(t, x1, x2) < x) low = t else high = t
-        }
-        return coordinate(t, y1, y2)
-    }
-
-    /** This curve as a Compose [Easing], for interop with the animation APIs. */
-    public fun asEasing(): Easing = Easing { transform(it) }
-
-    public companion object {
-        /** The curve the scroll edge of this library ramps with. */
-        public val Default: BackdropBezier = BackdropBezier(0.35f, 0f, 0.6f, 1f)
-    }
-}
 
 /**
  * The geometry of one axis of a surface, in layout pixels. Both ranges start where the surface's
@@ -171,7 +123,7 @@ public data class BackdropRamp(
     public val from: Float = 0f,
     /** The intensity at the ramp's larger coordinate. */
     public val to: Float = 1f,
-    public val curve: BackdropBezier = BackdropBezier.Default,
+    public val curve: BackdropCurve = BackdropCurve.Default,
     /** Samples of the curve [brush] paints, between [MIN_STOPS] and [MAX_STOPS]. */
     public val stops: Int = DEFAULT_STOPS,
 ) {

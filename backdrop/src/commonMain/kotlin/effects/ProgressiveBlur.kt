@@ -1,9 +1,12 @@
 package top.ltfan.backdrop.effects
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
+import kotlin.math.exp
 import top.ltfan.backdrop.BackdropAxis
+import top.ltfan.backdrop.BackdropCurveShader
 import top.ltfan.backdrop.BackdropEdge
 import top.ltfan.backdrop.BackdropEffectScope
 import top.ltfan.backdrop.BackdropInsets
@@ -12,6 +15,7 @@ import top.ltfan.backdrop.BackdropSampling
 import top.ltfan.backdrop.BackdropSide
 import top.ltfan.backdrop.backdropRampEnds
 import top.ltfan.backdrop.isRuntimeShaderSupported
+import top.ltfan.backdrop.shaderControls
 import top.ltfan.backdrop.side
 
 /**
@@ -57,9 +61,6 @@ public fun BackdropEffectScope.progressiveBlur(
         "Progressive blur intensities must be finite and within 0..1"
     }
     val curve = ramp.curve
-    require(listOf(curve.x1, curve.y1, curve.x2, curve.y2).all { it.isFinite() && it in 0f..1f }) {
-        "Progressive blur curve controls must be finite and within 0..1"
-    }
     if (radius == 0f) return
 
     val side = edge.side(layoutDirection)
@@ -101,10 +102,8 @@ public fun BackdropEffectScope.progressiveBlur(
     require(anchorStart.isFinite() && anchorEnd.isFinite() && anchorStart != anchorEnd) {
         "Progressive blur ramp anchors must be finite and distinct"
     }
-    val samplingAxisStart = anchorStart
-    val samplingAxisEnd = anchorEnd
     val verticalSampling =
-        progressiveBlurSampling(true, vertical, radius, ramp, samplingAxisStart, samplingAxisEnd)
+        progressiveBlurSampling(true, vertical, radius, ramp, anchorStart, anchorEnd)
     runtimeShaderEffect(
         key = "ProgressiveBlurVertical",
         shaderString = ProgressiveBlurVerticalShader,
@@ -116,7 +115,7 @@ public fun BackdropEffectScope.progressiveBlur(
         setFloatUniform("anchors", anchorStart + offset, anchorEnd + offset)
         setFloatUniform("blurRadius", radius)
         setFloatUniform("axis", axis)
-        setFloatUniform("curve", curve.x1, curve.y1, curve.x2, curve.y2)
+        setFloatUniform("curve", curve.shaderControls())
         setFloatUniform("intensities", startIntensity, endIntensity)
     }
     runtimeShaderEffect(
@@ -129,8 +128,8 @@ public fun BackdropEffectScope.progressiveBlur(
                 vertical,
                 radius,
                 ramp,
-                samplingAxisStart,
-                samplingAxisEnd,
+                anchorStart,
+                anchorEnd,
             ),
     ) {
         val room = extension
@@ -138,7 +137,7 @@ public fun BackdropEffectScope.progressiveBlur(
         setFloatUniform("anchors", anchorStart + offset, anchorEnd + offset)
         setFloatUniform("blurRadius", radius)
         setFloatUniform("axis", axis)
-        setFloatUniform("curve", curve.x1, curve.y1, curve.x2, curve.y2)
+        setFloatUniform("curve", curve.shaderControls())
         setFloatUniform("intensities", startIntensity, endIntensity)
     }
 }
@@ -159,14 +158,14 @@ internal fun progressiveBlurSampling(
     if (intensity <= 0f) return@BackdropSampling output
     val support = progressiveBlurKernelSupport(radius * intensity)
     if (vertical) {
-        androidx.compose.ui.geometry.Rect(
+        Rect(
             output.left,
             output.top - support,
             output.right,
             output.bottom + support,
         )
     } else {
-        androidx.compose.ui.geometry.Rect(
+        Rect(
             output.left - support,
             output.top,
             output.right + support,
@@ -185,7 +184,7 @@ internal fun progressiveBlurKernelSupport(radius: Float): Float {
     val lastPair = tapCount - 1f
     val sigma = maxOf(radius / 2f, 1e-4f)
     val exponent = (2f * lastPair + 1f) / (2f * sigma * sigma)
-    val lastOffset = lastPair + 1f / (1f + kotlin.math.exp(exponent.toDouble()).toFloat())
+    val lastOffset = lastPair + 1f / (1f + exp(exponent.toDouble()).toFloat())
     return lastOffset + 0.5f
 }
 
@@ -211,28 +210,7 @@ uniform float2 intensities;
 
 const float maxRadius = 150.0;
 
-float bezierAxis(float t, float first, float second) {
-  float inverse = 1.0 - t;
-  return 3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t;
-}
-
-// Inverting the curve by bisection keeps this to one expression the Kotlin side solves the same
-// way, so a mask of the same ramp and this blur agree on one curve.
-float bezier(float x) {
-  x = clamp(x, 0.0, 1.0);
-  float low = 0.0;
-  float high = 1.0;
-  float t = x;
-  for (int i = 0; i < 16; i++) {
-    t = (low + high) * 0.5;
-    if (bezierAxis(t, curve.x, curve.z) < x) {
-      low = t;
-    } else {
-      high = t;
-    }
-  }
-  return bezierAxis(t, curve.y, curve.w);
-}
+$BackdropCurveShader
 
 vec4 blur(vec2 coord, float radius) {
   if (radius <= 0.0) {
@@ -289,7 +267,7 @@ vec4 main(vec2 coord) {
   float position = mix(coord.x, coord.y, axis);
   // The ramp runs from its start anchor to its end anchor, which is what a brush of it paints.
   float ramp = (position - anchors.x) / (anchors.y - anchors.x);
-  float intensity = mix(intensities.x, intensities.y, bezier(clamp(ramp, 0.0, 1.0)));
+  float intensity = mix(intensities.x, intensities.y, backdropCurve(clamp(ramp, 0.0, 1.0), curve));
 
   if (intensity <= 0.0 || blurRadius <= 0.0) {
     return content.eval(coord);

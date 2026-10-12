@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -150,8 +152,8 @@ class GenericEnvironmentHighlightRenderingTest {
         shape: Shape,
         enabled: Boolean,
         source: Source,
-    ): androidx.compose.ui.graphics.PixelMap {
-        lateinit var pixels: androidx.compose.ui.graphics.PixelMap
+    ): PixelMap {
+        lateinit var pixels: PixelMap
         runComposeUiTest {
             val sourceState = mutableStateOf(source)
             setContent {
@@ -197,14 +199,16 @@ class GenericEnvironmentHighlightRenderingTest {
     private fun environmentHighlight() =
         EnvironmentHighlight(
             sampleDistance = 20.dp,
-            strength = 1f,
-            threshold = 0f,
+            blurRadius = 0.dp,
+            brightness = EnvironmentHighlight.Contribution(0f, 0f),
+            tint = EnvironmentHighlight.Contribution(1f, 0f),
+            thickness = EnvironmentHighlight.Thickness(3.dp, 0f),
             blendMode = BlendMode.Plus,
         )
 
     private fun assertLitDifference(
-        without: androidx.compose.ui.graphics.PixelMap,
-        with: androidx.compose.ui.graphics.PixelMap,
+        without: PixelMap,
+        with: PixelMap,
         x: Int,
         y: Int,
     ) {
@@ -215,8 +219,8 @@ class GenericEnvironmentHighlightRenderingTest {
     }
 
     private fun assertUnchanged(
-        without: androidx.compose.ui.graphics.PixelMap,
-        with: androidx.compose.ui.graphics.PixelMap,
+        without: PixelMap,
+        with: PixelMap,
         x: Int,
     ) {
         val y = 100
@@ -322,9 +326,9 @@ private object EvenOddHoleShape : Shape {
         Outline.Generic(
             Path().apply {
                 fillType = PathFillType.EvenOdd
-                addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
+                addRect(Rect(0f, 0f, size.width, size.height))
                 addRect(
-                    androidx.compose.ui.geometry.Rect(
+                    Rect(
                         size.width * 0.33f,
                         size.height * 0.33f,
                         size.width * 0.67f,

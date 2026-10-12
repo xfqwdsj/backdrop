@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Modifier
@@ -13,9 +15,11 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -39,12 +43,9 @@ class LayerBackdropTransformRenderingTest {
         var compositions = 0
 
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 SideEffect { compositions++ }
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
                     GradientSource(source)
@@ -89,11 +90,8 @@ class LayerBackdropTransformRenderingTest {
     fun explicitConsumerLayerBlockTracksItsOwnTransform() = runComposeUiTest {
         lateinit var output: LayerBackdrop
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
                     GradientSource(source)
@@ -130,11 +128,8 @@ class LayerBackdropTransformRenderingTest {
     fun arbitraryNonUniformLayerBlockScaleRemainsPlanarForCombinedSources() = runComposeUiTest {
         lateinit var output: LayerBackdrop
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 val combined = rememberCombinedBackdrop(source, source)
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
@@ -176,12 +171,9 @@ class LayerBackdropTransformRenderingTest {
         val dynamicScaleY = mutableFloatStateOf(1f)
         var compositions = 0
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 SideEffect { compositions++ }
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
                     GradientSource(source)
@@ -228,11 +220,8 @@ class LayerBackdropTransformRenderingTest {
     fun ancestorAndConsumerLayerTransformsComposeInSourceCoordinates() = runComposeUiTest {
         lateinit var output: LayerBackdrop
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
                     GradientSource(source)
@@ -278,11 +267,8 @@ class LayerBackdropTransformRenderingTest {
     fun ancestorRotationAndTranslationTrackSourceCoordinates() = runComposeUiTest {
         lateinit var output: LayerBackdrop
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
                     GradientSource(source)
@@ -334,11 +320,8 @@ class LayerBackdropTransformRenderingTest {
         lateinit var intermediate: LayerBackdrop
         lateinit var output: LayerBackdrop
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.ui.platform.LocalDensity provides Density(1f)
-            ) {
-                val source =
-                    rememberLayerBackdrop(tileMode = androidx.compose.ui.graphics.TileMode.Decal)
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                val source = rememberLayerBackdrop(tileMode = TileMode.Decal)
                 intermediate = rememberLayerBackdrop()
                 output = rememberLayerBackdrop()
                 Box(Modifier.size(300.dp)) {
@@ -381,7 +364,7 @@ class LayerBackdropTransformRenderingTest {
         assertGradientSamples(output, outerScaleX = 0.8f, outerScaleY = 0.9f)
     }
 
-    @androidx.compose.runtime.Composable
+    @Composable
     private fun GradientSource(source: LayerBackdrop) {
         Box(Modifier.fillMaxSize().layerBackdrop(source)) {
             Canvas(Modifier.fillMaxSize()) {

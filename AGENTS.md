@@ -41,6 +41,28 @@ test counts — belong in the code, and this file points to the source instead o
   `composeCompiler { reportsDestination = …; metricsDestination = … }` block yields `<module>-classes.txt` and
   `<module>-composables.txt`. Do this in a temporary copy, never in this repository.
 
+## Import aliases
+
+### General rules
+
+- Import referenced Kotlin declarations. Keep fully qualified names only where the language requires them, such as package and import declarations or string-based external identifiers.
+- Leave imports unaliased when their simple names are unambiguous.
+- For collisions between Compose (`androidx.compose.*`) and Skia (`org.jetbrains.skia.*`), prefix the alias with the source: `Compose<Type>` or `Skia<Type>`. Keep the unaliased name for the other declaration when it remains clear.
+
+### Established names
+
+| Declaration | Import name | Use |
+| --- | --- | --- |
+| `androidx.compose.ui.graphics.Paint` | `ComposePaint` | When Compose and Skia `Paint` are both used in one file |
+| `org.jetbrains.skia.Paint` | `SkiaPaint` | When Compose and Skia `Paint` are both used in one file |
+| `org.jetbrains.skia.BlendMode` | `SkiaBlendMode` | When Compose and Skia `BlendMode` are both used in one file |
+| `org.jetbrains.skia.ColorFilter` | `SkiaColorFilter` | When Compose and Skia `ColorFilter` are both used in one file |
+| `org.jetbrains.skia.Rect` | `SkiaRect` | When Compose geometry `Rect` and Skia `Rect` are both used in one file |
+
+### Adding a new collision
+
+When a new same-file import collision appears, apply the source-prefix convention when it fits. Add its exact declaration-to-alias mapping to **Established names** in the same change, then use that name consistently in later files. Do not invent abbreviations or file-specific variants.
+
 ## Hard rules
 
 - Never remove a `@Stable`/`@Immutable` from a public type to "simplify". The annotation is the only channel that carries
@@ -132,19 +154,28 @@ test counts — belong in the code, and this file points to the source instead o
 - `drawPlainBackdrop` consumes only the style's effects. Shape, source, drawing callbacks and layer
   control belong to the call site.
 - Highlight color alpha controls strength; the enclosing highlight alpha controls layer opacity.
-  Ambient and Default share color, blend mode, angle and falloff parameters, while retaining their
-  single-sided and two-sided shader behavior.
+  `HighlightDirection` controls directional width and strength for Default and Ambient, while Plain
+  keeps a fixed-width uniform stroke and ignores direction curves. Ambient uses signed projection:
+  the positive side emits its color and the negative side emits black RGB with matching alpha.
+  `depthCurve` fades intensity from the outline to the inner band edge, and `exclusions` mask selected
+  outward-normal directions after blur. Custom `HighlightStyle` implementations provide matching
+  straight-alpha AGSL and CPU shading; mutable public properties are snapshot-backed under its
+  `@Stable` contract.
 - `EnvironmentHighlight` is opt-in and augments the static highlight after it is drawn.
   `HighlightStyle.None` disables only the static pass; `Highlight.None` disables both. It samples
   the raw backdrop through its own layer, independent of the blur and lens effect chain. All outline
-  types are supported. Rectangles and normalized circular rounded rectangles use analytic boundaries;
-  other outlines use cached adaptive path geometry for edge distance and direction, with the original
-  outline clipping emitted light. Preserve sampled
-  premultiplied alpha and extended-range RGB through brightness extraction and blending. Display
+  types are supported. Rectangles and normalized circular rounded rectangles use analytic
+  signed-distance geometry; other outlines use shared cached adaptive path geometry. Preserve sampled
+  premultiplied alpha and source RGB through brightness extraction and blending. Environment source
+  blur follows the platform `BlurEffect` color support. Display
   headroom is a refresh signal; it never supplies an automatic radiance multiplier or RGB limit.
-  Shader working-space brightness is not physical HDR luminance. Environment light shares the
-  highlight width, while blur radius affects only the static style. The enclosing alpha controls
-  both passes; static color alpha and environment strength remain independent. Default and Ambient
-  use 90-degree angles, lighting top/bottom and the lower edge respectively; explicit angles take
-  precedence. Snapshot-driven producers update drawing
-  without recomposition, and unsupported runtime shaders leave the static highlight visible.
+  Shader working-space brightness is not physical HDR luminance. Brightness and tint are the only
+  environment emission channels and fade inward to zero. Brightness follows total band width, tint
+  stays capped by configured width, and thickness extends geometry according to its threshold
+  without emitting light by itself. `EnvironmentHighlight.blurRadius` prefilters the raw backdrop
+  before edge shading; zero disables that source blur, which never blurs the generated edge band.
+  `Highlight.blurRadius` blurs only the static style. The enclosing alpha
+  controls both passes; static color
+  alpha and environment channel strengths remain independent. Default and Ambient use 90-degree
+  directions, lighting top/bottom and the lower edge respectively. Snapshot-driven producers update
+  drawing without recomposition, and unsupported runtime shaders leave the static highlight visible.

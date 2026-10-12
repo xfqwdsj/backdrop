@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -42,7 +44,7 @@ class SurfaceIsolationRenderingTest {
         var compositionToken: Any? = null
         setContent {
             CompositionLocalProvider(LocalBackdropRenderEpoch provides epoch.intValue) {
-                val token = androidx.compose.runtime.remember { Any() }
+                val token = remember { Any() }
                 compositionToken = token
                 val backdrop = rememberCanvasBackdrop {}
                 Box(Modifier.size(80.dp)) {
@@ -120,7 +122,7 @@ class SurfaceIsolationRenderingTest {
         assertTrue(refreshed.blue in 0.47f..0.53f)
     }
 
-    @androidx.compose.runtime.Composable
+    @Composable
     private fun IsolationScene() {
         val backdrop = rememberCanvasBackdrop {}
         Box(Modifier.size(80.dp).background(Color.Black).testTag("root")) {

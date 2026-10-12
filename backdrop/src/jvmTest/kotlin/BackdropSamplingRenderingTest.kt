@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Canvas
+import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
@@ -101,7 +102,7 @@ class BackdropSamplingRenderingTest {
                     )
                 )
                 Paint().use { source ->
-                    source.color = org.jetbrains.skia.Color.WHITE
+                    source.color = Color.WHITE
                     source.setAlphaf(alpha)
                     surface.canvas.drawRect(Rect.makeWH(width.toFloat(), height.toFloat()), source)
                 }

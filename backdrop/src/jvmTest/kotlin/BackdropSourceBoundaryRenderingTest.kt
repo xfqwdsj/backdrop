@@ -9,11 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -25,6 +27,9 @@ import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.effects.lens
 import top.ltfan.backdrop.effects.progressiveBlur
+import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.shadow.InnerShadow
+import top.ltfan.backdrop.shadow.Shadow
 
 @OptIn(ExperimentalTestApi::class)
 class BackdropSourceBoundaryRenderingTest {
@@ -176,7 +181,7 @@ class BackdropSourceBoundaryRenderingTest {
                         color =
                             if (index % 2 == 0) Color.Red.copy(alpha) else Color.Blue.copy(alpha),
                         topLeft = Offset(index * stripeWidth, 0f),
-                        size = androidx.compose.ui.geometry.Size(stripeWidth, size.height),
+                        size = Size(stripeWidth, size.height),
                     )
                 }
             }
@@ -194,7 +199,7 @@ class BackdropSourceBoundaryRenderingTest {
                     drawRect(
                         color = if (index % 2 == 0) Color.Red else Color.Blue,
                         topLeft = Offset(index * stripeWidth, 0f),
-                        size = androidx.compose.ui.geometry.Size(stripeWidth, size.height),
+                        size = Size(stripeWidth, size.height),
                     )
                 }
             }
@@ -206,7 +211,7 @@ class BackdropSourceBoundaryRenderingTest {
         source: Backdrop,
         output: LayerBackdrop,
         modifier: Modifier,
-        width: androidx.compose.ui.unit.Dp = 160.dp,
+        width: Dp = 160.dp,
         effects: BackdropEffectScope.() -> Unit,
     ) {
         Box(
@@ -217,9 +222,9 @@ class BackdropSourceBoundaryRenderingTest {
                     shape = { RoundedCornerShape(4.dp) },
                     effects = effects,
                     insets = { BackdropInsets.all(8.dp) },
-                    highlight = { top.ltfan.backdrop.highlight.Highlight.None },
-                    shadow = { top.ltfan.backdrop.shadow.Shadow.None },
-                    innerShadow = { top.ltfan.backdrop.shadow.InnerShadow.None },
+                    highlight = { Highlight.None },
+                    shadow = { Shadow.None },
+                    innerShadow = { InnerShadow.None },
                     exportedBackdrop = output,
                 )
         )

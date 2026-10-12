@@ -29,6 +29,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -36,9 +37,11 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
+import top.ltfan.backdrop.effects.gaussianSupport
 import top.ltfan.backdrop.effects.lens
 import top.ltfan.backdrop.highlight.EnvironmentHighlight
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.internal.environmentHighlightSamplingOutset
 import top.ltfan.backdrop.shadow.InnerShadow
@@ -54,8 +57,10 @@ class EnvironmentHighlightRenderingTest {
                 mutableStateOf<EnvironmentHighlight?>(
                     EnvironmentHighlight(
                         sampleDistance = 16.dp,
-                        strength = 0.5f,
-                        threshold = 0.01f,
+                        blurRadius = 0.dp,
+                        brightness = EnvironmentHighlight.Contribution(0f, 0f),
+                        tint = EnvironmentHighlight.Contribution(0.5f, 0.01f),
+                        thickness = EnvironmentHighlight.Thickness(3.dp, 0f),
                         blendMode = BlendMode.Plus,
                     )
                 )
@@ -145,14 +150,18 @@ class EnvironmentHighlightRenderingTest {
                         environment = environment.value,
                     )
 
-            environment.value = requireNotNull(environment.value).copy(threshold = 0.3f)
+            environment.value =
+                requireNotNull(environment.value)
+                    .copy(tint = EnvironmentHighlight.Contribution(0.5f, 0.3f))
             waitForIdle()
             val filtered = onNodeWithTag("root").captureToImage().toPixelMap()[118, 80]
             assertTrue(
                 filtered.blue < rimAfter.blue - 0.15f,
                 "threshold updates the environment rim",
             )
-            environment.value = requireNotNull(environment.value).copy(threshold = 0.01f)
+            environment.value =
+                requireNotNull(environment.value)
+                    .copy(tint = EnvironmentHighlight.Contribution(0.5f, 0.01f))
             waitForIdle()
             val enabledAgain = onNodeWithTag("root").captureToImage().toPixelMap()[118, 80]
             environment.value = null
@@ -184,6 +193,107 @@ class EnvironmentHighlightRenderingTest {
         }
 
     @Test
+    fun environmentBlurPrefiltersSourceAndUpdatesWithoutRecomposition() = runComposeUiTest {
+        val environment =
+            mutableStateOf(
+                EnvironmentHighlight(
+                    sampleDistance = 16.dp,
+                    blurRadius = 0.dp,
+                    brightness = EnvironmentHighlight.Contribution(1f, 0.01f),
+                    tint = EnvironmentHighlight.Contribution(0f, 0f),
+                    thickness = EnvironmentHighlight.Thickness(0.dp, 0f),
+                )
+            )
+        val exclusions = mutableStateOf<Set<HighlightExclusion>>(emptySet())
+        var compositions = 0
+        setContent {
+            val rawBackdrop = rememberLayerBackdrop()
+            Box(Modifier.size(160.dp).testTag("root")) {
+                Box(Modifier.fillMaxSize().layerBackdrop(rawBackdrop)) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawRect(
+                            Color.Red,
+                            Offset(122.dp.toPx(), 72.dp.toPx()),
+                            Size(22.dp.toPx(), 16.dp.toPx()),
+                        )
+                    }
+                }
+                SideEffect { compositions++ }
+                Box(
+                    Modifier.offset(40.dp, 40.dp)
+                        .size(80.dp)
+                        .drawBackdrop(
+                            rawBackdrop,
+                            { RectangleShape },
+                            highlight = {
+                                Highlight(
+                                    width = 6.dp,
+                                    blurRadius = 0.dp,
+                                    style = HighlightStyle.Plain(Color.Black, BlendMode.Plus),
+                                    environment = environment.value,
+                                    exclusions = exclusions.value,
+                                )
+                            },
+                            shadow = { Shadow.None },
+                            innerShadow = { InnerShadow.None },
+                        )
+                )
+            }
+        }
+        waitForIdle()
+        val initialCompositionCount = compositions
+        val sharp = onNodeWithTag("root").captureToImage().toPixelMap()
+
+        environment.value = environment.value.copy(blurRadius = 4.dp)
+        waitForIdle()
+        val softened = onNodeWithTag("root").captureToImage().toPixelMap()
+
+        exclusions.value = setOf(HighlightExclusion.Right)
+        waitForIdle()
+        val excluded = onNodeWithTag("root").captureToImage().toPixelMap()
+        (64..96).forEach { y ->
+            val pixel = excluded[119, y]
+            assertTrue(
+                pixel.red < 0.002f && pixel.green < 0.002f && pixel.blue < 0.002f,
+                "expanded blurred source stays excluded at row=$y: $pixel",
+            )
+        }
+
+        exclusions.value = emptySet()
+        waitForIdle()
+        val softenedAgain = onNodeWithTag("root").captureToImage().toPixelMap()
+
+        environment.value = environment.value.copy(blurRadius = 0.dp)
+        waitForIdle()
+        val restored = onNodeWithTag("root").captureToImage().toPixelMap()
+
+        fun sourceEdgeSamples(pixels: PixelMap): List<Float> =
+            (64..96).map { y -> pixels[119, y].red }
+        fun maxAdjacentSourceEdgeJump(samples: List<Float>): Float =
+            samples.zipWithNext().maxOf { (a, b) -> abs(a - b) }
+
+        val sharpSamples = sourceEdgeSamples(sharp)
+        val softenedSamples = sourceEdgeSamples(softened)
+        val softenedAgainSamples = sourceEdgeSamples(softenedAgain)
+        val restoredSamples = sourceEdgeSamples(restored)
+        val sharpJump = maxAdjacentSourceEdgeJump(sharpSamples)
+        val softenedJump = maxAdjacentSourceEdgeJump(softenedSamples)
+        assertTrue(sharpJump > 0.1f, "source edge should be visible in sharp samples: $sharpJump")
+        assertTrue(
+            softenedJump < sharpJump * 0.5f,
+            "source blur should soften the adjacent output jump: $sharpJump -> $softenedJump",
+        )
+        assertEquals(sharpSamples.size, restoredSamples.size)
+        sharpSamples.zip(restoredSamples).forEachIndexed { index, (before, after) ->
+            assertEquals(before, after, 0.004f, "restored pixel row=${index + 64}")
+        }
+        softenedSamples.zip(softenedAgainSamples).forEachIndexed { index, (before, after) ->
+            assertEquals(before, after, 0.004f, "cleared exclusion row=${index + 64}")
+        }
+        assertEquals(initialCompositionCount, compositions)
+    }
+
+    @Test
     fun transparentBrightSourceDoesNotEmitEnvironmentLight() = runComposeUiTest {
         val visibleSource = mutableStateOf(false)
         setContent {
@@ -212,8 +322,10 @@ class EnvironmentHighlightRenderingTest {
                                     environment =
                                         EnvironmentHighlight(
                                             sampleDistance = 16.dp,
-                                            strength = 1f,
-                                            threshold = 0f,
+                                            blurRadius = 0.dp,
+                                            brightness = EnvironmentHighlight.Contribution(0f, 0f),
+                                            tint = EnvironmentHighlight.Contribution(1f, 0f),
+                                            thickness = EnvironmentHighlight.Thickness(0.dp, 0f),
                                             blendMode = BlendMode.Plus,
                                         ),
                                 )
@@ -256,8 +368,10 @@ class EnvironmentHighlightRenderingTest {
                             environment =
                                 EnvironmentHighlight(
                                     sampleDistance = 16.dp,
-                                    strength = 1f,
-                                    threshold = 0f,
+                                    blurRadius = 0.dp,
+                                    brightness = EnvironmentHighlight.Contribution(0f, 0f),
+                                    tint = EnvironmentHighlight.Contribution(1f, 0f),
+                                    thickness = EnvironmentHighlight.Thickness(0.dp, 0f),
                                 ),
                         )
                     },
@@ -275,7 +389,7 @@ class EnvironmentHighlightRenderingTest {
         waitForIdle()
         val pixels = onNodeWithTag("root").captureToImage().toPixelMap()
 
-        assertTrue(pixels[110, 41].red > pixels[110, 119].red + 0.15f, "top edge faces the source")
+        assertTrue(pixels[110, 41].red > pixels[110, 119].red + 0.08f, "top edge faces the source")
         assertTrue(pixels[41, 110].red < pixels[110, 41].red, "left edge stays dim")
         assertTrue(pixels[119, 80].red < pixels[110, 41].red, "right edge stays dim")
         assertTrue(pixels[41, 41].alpha < 0.1f, "the rounded corner stays outside the surface")
@@ -309,8 +423,10 @@ class EnvironmentHighlightRenderingTest {
                                     environment =
                                         EnvironmentHighlight(
                                             sampleDistance = 16.dp,
-                                            strength = 1f,
-                                            threshold = 0f,
+                                            blurRadius = 0.dp,
+                                            brightness = EnvironmentHighlight.Contribution(0f, 0f),
+                                            tint = EnvironmentHighlight.Contribution(1f, 0f),
+                                            thickness = EnvironmentHighlight.Thickness(0.dp, 0f),
                                         ),
                                 )
                             },
@@ -378,8 +494,22 @@ class EnvironmentHighlightRenderingTest {
                                                 if (environmentEnabled)
                                                     EnvironmentHighlight(
                                                         sampleDistance = 60.dp,
-                                                        strength = 1f,
-                                                        threshold = 0f,
+                                                        blurRadius = 0.dp,
+                                                        brightness =
+                                                            EnvironmentHighlight.Contribution(
+                                                                0f,
+                                                                0f,
+                                                            ),
+                                                        tint =
+                                                            EnvironmentHighlight.Contribution(
+                                                                1f,
+                                                                0f,
+                                                            ),
+                                                        thickness =
+                                                            EnvironmentHighlight.Thickness(
+                                                                0.dp,
+                                                                0f,
+                                                            ),
                                                     )
                                                 else null,
                                         )
@@ -432,7 +562,12 @@ class EnvironmentHighlightRenderingTest {
                                 Highlight(
                                     width = 3.dp,
                                     blurRadius = 0.dp,
-                                    environment = EnvironmentHighlight(strength = 1f),
+                                    environment =
+                                        EnvironmentHighlight(
+                                            blurRadius = 0.dp,
+                                            brightness =
+                                                EnvironmentHighlight.Contribution(1f, 0.2f),
+                                        ),
                                 )
                             },
                         )
@@ -450,6 +585,12 @@ class EnvironmentHighlightSamplingTest {
         assertEquals(17f, environmentHighlightSamplingOutset(sampleDistance = 16f))
         assertEquals(18f, environmentHighlightSamplingOutset(sampleDistance = 17f))
         assertEquals(2f, environmentHighlightSamplingOutset(sampleDistance = 1f))
+        assertEquals(17f, environmentHighlightSamplingOutset(sampleDistance = 16f, blurRadius = 0f))
+        assertEquals(26f, environmentHighlightSamplingOutset(sampleDistance = 16f, blurRadius = 4f))
+        assertEquals(
+            environmentHighlightSamplingOutset(sampleDistance = 16f) + gaussianSupport(4f),
+            environmentHighlightSamplingOutset(sampleDistance = 16f, blurRadius = 4f),
+        )
     }
 
     @Test
@@ -462,6 +603,12 @@ class EnvironmentHighlightSamplingTest {
         }
         assertFailsWith<IllegalArgumentException> {
             environmentHighlightSamplingOutset(sampleDistance = Float.POSITIVE_INFINITY)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            environmentHighlightSamplingOutset(sampleDistance = 16f, blurRadius = Float.NaN)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            environmentHighlightSamplingOutset(sampleDistance = 16f, blurRadius = -1f)
         }
     }
 }

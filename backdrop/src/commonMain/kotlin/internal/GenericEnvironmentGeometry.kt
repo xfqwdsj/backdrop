@@ -1,5 +1,6 @@
 package top.ltfan.backdrop.internal
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathIterator
@@ -7,6 +8,7 @@ import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.PathSegment
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.sqrt
 
 /**
  * A line approximation of a filled path boundary. Curves are subdivided until their control points
@@ -29,6 +31,59 @@ internal class GenericEnvironmentGeometry(path: Path) {
 
     internal val coordinateScale: Float =
         maxOf(1f, abs(bounds.left), abs(bounds.top), abs(bounds.right), abs(bounds.bottom))
+
+    internal fun contains(point: Offset): Boolean {
+        var crossings = 0
+        for (index in segments.indices step 4) {
+            val x0 = segments[index]
+            val y0 = segments[index + 1]
+            val x1 = segments[index + 2]
+            val y1 = segments[index + 3]
+            if ((y0 > point.y) != (y1 > point.y)) {
+                val crossingX = x0 + (point.y - y0) * (x1 - x0) / (y1 - y0)
+                if (crossingX > point.x) {
+                    crossings++
+                }
+            }
+        }
+        return crossings % 2 != 0
+    }
+
+    internal fun nearestBoundary(point: Offset): Boundary {
+        var bestDistance = Float.POSITIVE_INFINITY
+        var bestNormal = Offset.Zero
+        val coordinateScale = maxOf(coordinateScale, abs(point.x), abs(point.y))
+        val tolerance = (8f * Float.fromBits(0x34000000)) * coordinateScale
+        for (index in segments.indices step 4) {
+            val start = Offset(segments[index], segments[index + 1])
+            val end = Offset(segments[index + 2], segments[index + 3])
+            val edge = end - start
+            val lengthSquared = edge.x * edge.x + edge.y * edge.y
+            if (lengthSquared == 0f) continue
+            val relative = point - start
+            val amount =
+                ((relative.x * edge.x + relative.y * edge.y) / lengthSquared).coerceIn(0f, 1f)
+            val closest = start + edge * amount
+            val delta = point - closest
+            val distanceSquared = delta.x * delta.x + delta.y * delta.y
+            val distance = sqrt(distanceSquared)
+            if (distance < bestDistance - tolerance) {
+                bestDistance = distance
+                var normal = Offset(edge.y, -edge.x) / sqrt(lengthSquared)
+                if (distanceSquared == 0f) {
+                    val probeDistance = maxOf(0.0001f, tolerance * 4f)
+                    if (contains(closest + normal * probeDistance)) normal = -normal
+                } else {
+                    val delta = closest - point
+                    normal = delta / sqrt(distanceSquared)
+                }
+                bestNormal = normal
+            }
+        }
+        return Boundary(bestDistance, bestNormal)
+    }
+
+    internal data class Boundary(val distance: Float, val outwardNormal: Offset)
 
     init {
         val coordinates = ArrayList<Float>()
@@ -269,7 +324,7 @@ internal class GenericEnvironmentGeometry(path: Path) {
                     val leftControlY = (c[1] + w * c[3]) / (1f + w)
                     val rightControlX = (w * c[2] + c[4]) / (1f + w)
                     val rightControlY = (w * c[3] + c[5]) / (1f + w)
-                    val childWeight = kotlin.math.sqrt(((1.0 + w.toDouble()) * 0.5)).toFloat()
+                    val childWeight = sqrt(((1.0 + w.toDouble()) * 0.5)).toFloat()
                     val left =
                         floatArrayOf(
                             c[0],

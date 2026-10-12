@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.skiaImageFilter
 import kotlin.math.ceil
 import kotlin.math.floor
 import org.jetbrains.skia.ImageFilter
+import org.jetbrains.skia.Rect as SkiaRect
 import top.ltfan.backdrop.RuntimeShader
 import top.ltfan.backdrop.asSkikoRuntimeShader
 
@@ -20,6 +21,7 @@ internal actual fun RenderEffect?.chain(other: RenderEffect): RenderEffect {
     }
 }
 
+@Suppress("FunctionName")
 internal actual fun RuntimeShaderEffect(
     runtimeShader: RuntimeShader,
     uniformShaderName: String,
@@ -27,7 +29,7 @@ internal actual fun RuntimeShaderEffect(
 ): RenderEffect {
     val input = inputBounds?.let { bounds ->
         val rect =
-            org.jetbrains.skia.Rect(
+            SkiaRect(
                 floor(bounds.left),
                 floor(bounds.top),
                 ceil(bounds.right),
@@ -45,6 +47,7 @@ internal actual fun RuntimeShaderEffect(
         .asComposeRenderEffect()
 }
 
+@Suppress("FunctionName")
 internal actual fun ColorFilterEffect(
     renderEffect: RenderEffect?,
     colorFilter: ColorFilter,

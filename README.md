@@ -68,7 +68,7 @@ overloads, and both retain the fill in flat and progressive modes.
 ```kotlin
 ProvideBackdropStyle(
     effects = { blur(8.dp.toPx()) },
-    highlight = { Highlight(style = HighlightStyle.Ambient()) },
+    highlight = { Highlight.Ambient },
 ) {
     Box(Modifier.drawBackdrop(backdrop, shape = { RoundedCornerShape(24.dp) }))
 }
@@ -157,71 +157,51 @@ extension. The effects producer runs once per resolution. The library builds def
 and invokes runtime shader uniform blocks after calculating the final extension, so setup can use the
 resolved bounds.
 
-`Highlight(...)`, `Shadow(...)`, and `InnerShadow(...)` create their respective `Config` data classes.
-The `Config` constructors and preset values support `copy`; `InnerShadow.lerp` interpolates two
-`InnerShadow.Config` values.
+`Highlight(...)`, `Shadow(...)`, and `InnerShadow(...)` create their respective `Config` values.
+`Highlight.Config` is a stable configuration class with `copy` and component accessors; it snapshots
+the supplied exclusions. `InnerShadow.lerp` interpolates two `InnerShadow.Config` values.
 
-Highlight styles share `color` and `blendMode`. `HighlightDirection` controls local edge width and
-strength for `Default` and `Ambient`; its default angle is 90 degrees, with 0 right, 90 down, 180
-left, and 270 up. Its default width response is the cubic Bezier `(1/3, 0, 2/3, 0)`, which narrows
-the band toward tangent-facing edges. `Plain` keeps uniform width and strength at every boundary
-normal and ignores the direction curves. The `depthCurve` fades light from full strength at the
-outline to zero at the band's inner edge; its default is smoothstep. `exclusions` suppress selected
-outward-normal directions after blur. Color alpha controls highlight strength, while
-`Highlight.Config.alpha` controls the drawing layer's opacity. Extended-range RGB preserves HDR on
-supported drawing paths. `Ambient` uses signed projection: the positive side emits its color and
-the negative side emits black RGB with the same alpha. Its default direction lights the lower edge;
-`Default` draws a two-sided highlight at top and bottom edges by default.
+`Highlight` renders a configurable falloff profile around the nearest outline boundary. `Default`
+uses a solid style with two-sided direction; `Ambient` uses a two-tone style, and `Plain` disables
+directional modulation. Direction angle uses 0 right, 90 down, 180 left, and 270 up. The configured
+`width` is the base width. `HighlightDirection.widthScale` maps side-facing incidence to aligned incidence (default 60%
+to 100%); its curve and endpoints are independent from the color `strength` response. The `from`
+endpoint is the side-facing ratio and `to` is the aligned ratio. Either may exceed 1 to scale beyond
+the base width or strength. The profile is clipped to that direction-scaled width. `Highlight.Config.opacity` controls
+the drawing layer. Each pixel evaluates the profile at its center; the shape clip supplies the
+antialiased contour edge. Emission strength includes color alpha and direction response, so black
+RGB can still carry emission. `colorResponse` tints covered samples from the already processed backdrop
+while preserving the highlight peak and emission strength. Its default amount is 0.5; set it to zero
+to disable backdrop sampling. The transform receives linear extended-sRGB colors and keeps
+extended-range channels on supported drawing paths.
 
-Applications can implement `HighlightStyle` for custom boundary shading. Provide both
-`shaderSource` (AGSL) and `shade(HighlightSample)` with matching straight-alpha output; the shared
-pipeline applies directional response, depth fade, exclusions, and premultiplication. Use
+Applications can implement `HighlightStyle` for custom boundary shading. Provide matching
+`shaderSource` (AGSL) and `shade(HighlightSample)` implementations. Both return straight-alpha color
+and emission strength; each covered sample uses its nearest boundary position and normal, then
+applies direction strength, direction-scaled width, the configured falloff, one exclusion weight,
+and premultiplication. The shader provides `shadeHighlight` and `highlightStrength`. Use
 `configureShader` to upload custom uniforms. The interface is `@Stable`, so mutable public
 properties must be backed by Compose snapshot state to invalidate drawing.
 
-`EnvironmentHighlight` adds light sampled from the backdrop to a configured highlight. It is opt-in;
-the default `Highlight` keeps the existing static style. The environment pass draws after that style
-and samples the raw backdrop through its own layer, independently of the blur or lens effect chain.
-Its defaults sample 16.dp from the edge, use independently configured brightness, tint, and thickness
-contributions, and combine with `BlendMode.Plus`:
+`colorResponse` samples the processed backdrop at each covered highlight sample, after the effect
+chain and backdrop callback have rendered. Surface callbacks, text, and front decorations are not
+part of that source. `PreservePeak` maps the sample's positive RGB peak to the base highlight peak;
+if either peak cannot produce a finite positive scale, the base color is retained. Sample alpha
+controls the tint amount, while highlight alpha and direction alone control emission:
 
 ```kotlin
 Highlight(
-    style = HighlightStyle.Default,
-    environment = EnvironmentHighlight(
-        sampleDistance = 16.dp,
-        blurRadius = 4.dp,
-        brightness = EnvironmentHighlight.Contribution(strength = 0.2f, threshold = 0.2f),
-        tint = EnvironmentHighlight.Contribution(strength = 0.08f, threshold = 0.05f),
-        thickness = EnvironmentHighlight.Thickness(maxWidth = 1.dp, threshold = 0.2f),
-        blendMode = BlendMode.Plus,
-    ),
+    style = HighlightStyle.Solid,
+    colorResponse = HighlightColorResponse(amount = 0.5f),
 )
 ```
 
-The environment light uses the configured static width as its base. Brightness spans the combined
-base and thickness width; tint is capped by the configured width. Thickness extends the geometry
-according to its threshold and adds no light by itself. Brightness and tint are the only environment
-emission channels, and their depth curves fade inward to zero. `EnvironmentHighlight.blurRadius`
-defaults to `4.dp` and prefilters the raw backdrop before edge shading; set it to `0.dp` for sharp
-source sampling. It does not blur the resulting edge band. Its color handling follows the platform's
-`BlurEffect` support. The separate `Highlight.blurRadius` continues to blur the static highlight.
-`Highlight.Config.alpha` controls the opacity of both passes. The static style's color alpha controls
-its own strength, independently of environment channel strengths. Brightness uses unpremultiplied
-sample luminance; tint uses sampled color, and both use independently thresholded bands. Thickness
-sets an additional width from sampled brightness. Sample alpha is preserved
-when light is composited; environment channels retain the filtered source RGB supported by the
-platform blur path.
-Set `style = HighlightStyle.None` for an environment-only rim; `Highlight.None` disables both passes.
-The shader retains extended-range source RGB and uses the source's radiance. Applications control
-the HDR window and any explicitly configured static highlight colors. Actual HDR rendering follows
-the platform's Compose support.
-Brightness is evaluated in the shader's working color space; it is not a measurement of physical HDR
-luminance. All outline types are supported. Rectangles and normalized circular rounded rectangles use
-analytic signed-distance boundaries. Other outlines, including elliptical corners and Generic paths,
-use cached adaptive path geometry for edge distance and outward direction. The original outline
-clips the light, preserving concavities, holes and the path fill rule.
-Snapshot state read by the highlight producer updates drawing without recomposition.
+The response only changes RGB. The pipeline composes in linear extended-sRGB arithmetic and stores
+premultiplied RGB; transforms retain extended-range channels on supported paths. HDR window
+configuration remains the app's responsibility. Rectangles and circular-corner rounded rectangles
+use analytic bounds and radius uniforms for nearest-boundary queries. Other outlines use cached
+flattened path geometry, and the original fill-rule-aware outline clip preserves concavities and
+holes. Snapshot state read by the highlight producer updates drawing without recomposition.
 
 ## HDR
 

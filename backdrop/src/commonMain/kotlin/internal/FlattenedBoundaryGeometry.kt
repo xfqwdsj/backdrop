@@ -13,9 +13,9 @@ import kotlin.math.sqrt
 /**
  * A line approximation of a filled path boundary. Curves are subdivided until their control points
  * are within 0.05 px of the finite chord. Keep this value in pixel units: these segments are
- * consumed in the same local pixel coordinates as the environment shader.
+ * consumed in the same local pixel coordinates as the contour shader.
  */
-internal class GenericEnvironmentGeometry(path: Path) {
+internal class FlattenedBoundaryGeometry(path: Path) {
     /** Four floats per segment: start x/y followed by end x/y. */
     internal val segments: FloatArray
 
@@ -31,6 +31,74 @@ internal class GenericEnvironmentGeometry(path: Path) {
 
     internal val coordinateScale: Float =
         maxOf(1f, abs(bounds.left), abs(bounds.top), abs(bounds.right), abs(bounds.bottom))
+
+    /** A nonzero value certifies the segment's outward normal for its full length. */
+    internal val normalSigns: FloatArray by
+        lazy(LazyThreadSafetyMode.NONE) {
+            val signs = FloatArray(segmentCount)
+            val tolerance = 9.5367432e-7 * coordinateScale.toDouble()
+            val probe = maxOf(0.0001, tolerance * 4.0)
+            val distanceLimit = tolerance * 2.0
+            val distanceLimitSquared = distanceLimit * distanceLimit
+            for (index in 0 until segmentCount) {
+                val offset = index * 4
+                val ax = segments[offset].toDouble()
+                val ay = segments[offset + 1].toDouble()
+                val bx = segments[offset + 2].toDouble()
+                val by = segments[offset + 3].toDouble()
+                val dx = bx - ax
+                val dy = by - ay
+                val length = sqrt(dx * dx + dy * dy)
+                if (length <= 0.0) continue
+                val normalX = dy / length
+                val normalY = -dx / length
+                val shiftedAx = ax + normalX * probe
+                val shiftedAy = ay + normalY * probe
+                val shiftedBx = bx + normalX * probe
+                val shiftedBy = by + normalY * probe
+                val minX = minOf(shiftedAx, shiftedBx) - distanceLimit
+                val minY = minOf(shiftedAy, shiftedBy) - distanceLimit
+                val maxX = maxOf(shiftedAx, shiftedBx) + distanceLimit
+                val maxY = maxOf(shiftedAy, shiftedBy) + distanceLimit
+                var touchesBoundary = false
+                for (otherIndex in 0 until segmentCount) {
+                    val otherOffset = otherIndex * 4
+                    val cx = segments[otherOffset].toDouble()
+                    val cy = segments[otherOffset + 1].toDouble()
+                    val ex = segments[otherOffset + 2].toDouble()
+                    val ey = segments[otherOffset + 3].toDouble()
+                    if (
+                        minOf(cx, ex) > maxX ||
+                            maxOf(cx, ex) < minX ||
+                            minOf(cy, ey) > maxY ||
+                            maxOf(cy, ey) < minY
+                    ) {
+                        continue
+                    }
+                    if (
+                        distanceSquaredBetweenSegments(
+                            shiftedAx,
+                            shiftedAy,
+                            shiftedBx,
+                            shiftedBy,
+                            cx,
+                            cy,
+                            ex,
+                            ey,
+                        ) <= distanceLimitSquared
+                    ) {
+                        touchesBoundary = true
+                        break
+                    }
+                }
+                if (!touchesBoundary) {
+                    val midpointX = (shiftedAx + shiftedBx) * 0.5
+                    val midpointY = (shiftedAy + shiftedBy) * 0.5
+                    signs[index] = if (contains(midpointX, midpointY)) -1f else 1f
+                }
+            }
+            signs
+        }
 
     internal fun contains(point: Offset): Boolean {
         var crossings = 0
@@ -49,9 +117,25 @@ internal class GenericEnvironmentGeometry(path: Path) {
         return crossings % 2 != 0
     }
 
+    private fun contains(x: Double, y: Double): Boolean {
+        var crossings = 0
+        for (index in segments.indices step 4) {
+            val x0 = segments[index].toDouble()
+            val y0 = segments[index + 1].toDouble()
+            val x1 = segments[index + 2].toDouble()
+            val y1 = segments[index + 3].toDouble()
+            if ((y0 > y) != (y1 > y)) {
+                val crossingX = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
+                if (crossingX > x) crossings++
+            }
+        }
+        return crossings % 2 != 0
+    }
+
     internal fun nearestBoundary(point: Offset): Boundary {
         var bestDistance = Float.POSITIVE_INFINITY
         var bestNormal = Offset.Zero
+        var bestPosition = Offset.Zero
         val coordinateScale = maxOf(coordinateScale, abs(point.x), abs(point.y))
         val tolerance = (8f * Float.fromBits(0x34000000)) * coordinateScale
         for (index in segments.indices step 4) {
@@ -69,21 +153,26 @@ internal class GenericEnvironmentGeometry(path: Path) {
             val distance = sqrt(distanceSquared)
             if (distance < bestDistance - tolerance) {
                 bestDistance = distance
-                var normal = Offset(edge.y, -edge.x) / sqrt(lengthSquared)
-                if (distanceSquared == 0f) {
-                    val probeDistance = maxOf(0.0001f, tolerance * 4f)
-                    if (contains(closest + normal * probeDistance)) normal = -normal
-                } else {
-                    val delta = closest - point
-                    normal = delta / sqrt(distanceSquared)
-                }
-                bestNormal = normal
+                bestNormal = Offset(edge.y, -edge.x) / sqrt(lengthSquared)
+                bestPosition = closest
             }
         }
-        return Boundary(bestDistance, bestNormal)
+        val probeDistance = maxOf(0.0001f, tolerance * 4f)
+        if (contains(bestPosition + bestNormal * probeDistance)) bestNormal = -bestNormal
+        return Boundary(
+            bestDistance,
+            bestNormal,
+            bestPosition,
+            if (contains(point)) -bestDistance else bestDistance,
+        )
     }
 
-    internal data class Boundary(val distance: Float, val outwardNormal: Offset)
+    internal data class Boundary(
+        val distance: Float,
+        val outwardNormal: Offset,
+        val position: Offset,
+        val signedDistance: Float,
+    )
 
     init {
         val coordinates = ArrayList<Float>()
@@ -372,3 +461,66 @@ internal class GenericEnvironmentGeometry(path: Path) {
         }
     }
 }
+
+private fun distanceSquaredBetweenSegments(
+    ax: Double,
+    ay: Double,
+    bx: Double,
+    by: Double,
+    cx: Double,
+    cy: Double,
+    dx: Double,
+    dy: Double,
+): Double {
+    val abx = bx - ax
+    val aby = by - ay
+    val cdx = dx - cx
+    val cdy = dy - cy
+    val acx = cx - ax
+    val acy = cy - ay
+    val adx = dx - ax
+    val ady = dy - ay
+    val cax = ax - cx
+    val cay = ay - cy
+    val cbx = bx - cx
+    val cby = by - cy
+    val o1 = cross(abx, aby, acx, acy)
+    val o2 = cross(abx, aby, adx, ady)
+    val o3 = cross(cdx, cdy, cax, cay)
+    val o4 = cross(cdx, cdy, cbx, cby)
+    val firstStraddles = (o1 > 0.0 && o2 < 0.0) || (o2 > 0.0 && o1 < 0.0)
+    val secondStraddles = (o3 > 0.0 && o4 < 0.0) || (o4 > 0.0 && o3 < 0.0)
+    if (firstStraddles && secondStraddles) return 0.0
+    var minimum = pointSegmentDistanceSquared(ax, ay, cx, cy, dx, dy)
+    val distance = pointSegmentDistanceSquared(bx, by, cx, cy, dx, dy)
+    if (distance < minimum) minimum = distance
+    val reverseDistance = pointSegmentDistanceSquared(cx, cy, ax, ay, bx, by)
+    if (reverseDistance < minimum) minimum = reverseDistance
+    val otherReverseDistance = pointSegmentDistanceSquared(dx, dy, ax, ay, bx, by)
+    if (otherReverseDistance < minimum) minimum = otherReverseDistance
+    return minimum
+}
+
+private fun pointSegmentDistanceSquared(
+    px: Double,
+    py: Double,
+    ax: Double,
+    ay: Double,
+    bx: Double,
+    by: Double,
+): Double {
+    val dx = bx - ax
+    val dy = by - ay
+    val denominator = dx * dx + dy * dy
+    if (denominator <= 0.0) {
+        val x = px - ax
+        val y = py - ay
+        return x * x + y * y
+    }
+    val amount = (((px - ax) * dx + (py - ay) * dy) / denominator).coerceIn(0.0, 1.0)
+    val x = px - (ax + amount * dx)
+    val y = py - (ay + amount * dy)
+    return x * x + y * y
+}
+
+private fun cross(ax: Double, ay: Double, bx: Double, by: Double): Double = ax * by - ay * bx

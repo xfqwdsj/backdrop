@@ -117,19 +117,25 @@ internal constructor(
         }
         // Normalize the z=0 plane mapping so floating-point inverse noise in unused z terms does
         // not change its two-dimensional coordinates. Preserve x/y perspective for validation.
-        val normalizedTransform =
-            Matrix().apply {
-                this[0, 0] = transform[0, 0] / homogeneousScale
-                this[0, 1] = transform[0, 1] / homogeneousScale
-                this[0, 3] = transform[0, 3] / homogeneousScale
-                this[1, 0] = transform[1, 0] / homogeneousScale
-                this[1, 1] = transform[1, 1] / homogeneousScale
-                this[1, 3] = transform[1, 3] / homogeneousScale
-                this[3, 0] = transform[3, 0] / homogeneousScale
-                this[3, 1] = transform[3, 1] / homogeneousScale
-            }
+        val m00 = transform[0, 0] / homogeneousScale
+        val m01 = transform[0, 1] / homogeneousScale
+        val m03 = transform[0, 3] / homogeneousScale
+        val m10 = transform[1, 0] / homogeneousScale
+        val m11 = transform[1, 1] / homogeneousScale
+        val m13 = transform[1, 3] / homogeneousScale
+        val m30 = transform[3, 0] / homogeneousScale
+        val m31 = transform[3, 1] / homogeneousScale
+        transform.reset()
+        transform[0, 0] = m00
+        transform[0, 1] = m01
+        transform[0, 3] = m03
+        transform[1, 0] = m10
+        transform[1, 1] = m11
+        transform[1, 3] = m13
+        transform[3, 0] = m30
+        transform[3, 1] = m31
         // Recorded pixels begin at the surface's expanded-layer offset, before coordinate mapping.
-        normalizedTransform.translate(-offset.x, -offset.y)
+        transform.translate(-offset.x, -offset.y)
         val sourceSize = recordedLayer.size
         // Retained bounds let consumers reference a replacement layer before its producer records
         // it.
@@ -139,7 +145,7 @@ internal constructor(
         drawSource(
             bounds,
             tileMode,
-            normalizedTransform,
+            transform,
         ) {
             drawLayer(recordedLayer)
         }

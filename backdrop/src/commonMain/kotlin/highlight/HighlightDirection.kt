@@ -4,20 +4,40 @@ import androidx.compose.runtime.Immutable
 import kotlin.math.PI
 import top.ltfan.backdrop.BackdropCurve
 
-/**
- * Directional width and strength applied to Default and Ambient highlights using local normals.
- * Plain uses uniform width and strength.
- */
+/** Directional emission measured against each boundary's outward normal. */
 @Immutable
-public data class HighlightDirection(
-    public val angle: Float = 90f,
-    public val widthCurve: BackdropCurve = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 0f),
-    public val strengthCurve: BackdropCurve = BackdropCurve.Linear,
-) {
-    init {
-        require(angle.isFinite()) { "angle must be finite" }
+public sealed interface HighlightDirection {
+    @Immutable public data object None : HighlightDirection
+
+    @Immutable
+    public data class Config(
+        public val angle: Float = 90f,
+        public val mode: Mode = Mode.Double,
+        public val strength: HighlightResponse = HighlightResponse(.35f, 1f, DefaultDirectionCurve),
+        public val widthScale: HighlightResponse =
+            HighlightResponse(.6f, 1f, DefaultDirectionCurve),
+    ) : HighlightDirection {
+        init {
+            require(angle.isFinite()) { "angle must be finite" }
+        }
+    }
+
+    @Immutable
+    public enum class Mode {
+        Single,
+        Double,
     }
 }
+
+private val DefaultDirectionCurve = BackdropCurve.CubicBezier(.6f, 0f, 1f, .2f)
+
+@Suppress("FunctionName")
+public fun HighlightDirection(
+    angle: Float = 90f,
+    mode: HighlightDirection.Mode = HighlightDirection.Mode.Double,
+    strength: HighlightResponse = HighlightResponse(.35f, 1f, DefaultDirectionCurve),
+    widthScale: HighlightResponse = HighlightResponse(.6f, 1f, DefaultDirectionCurve),
+): HighlightDirection.Config = HighlightDirection.Config(angle, mode, strength, widthScale)
 
 /** A boundary region where a highlight is hidden, measured from its local outward normal. */
 @Immutable
@@ -61,8 +81,8 @@ internal fun HighlightExclusion.asDirection(): HighlightExclusion.Direction =
 
 internal fun Set<HighlightExclusion>.shaderValues(): FloatArray {
     val values = FloatArray(size * 3)
-    forEachIndexed { index, exclusion ->
-        val direction = exclusion.asDirection()
+    forEachIndexed { index, item ->
+        val direction = item.asDirection()
         val radians = (PI / 180.0).toFloat()
         values[index * 3] = normalizedAngle(direction.angle) * radians
         values[index * 3 + 1] = direction.halfAngle * radians

@@ -1,7 +1,9 @@
 package top.ltfan.backdrop.internal
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.colorspace.ColorSpace
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
+import androidx.compose.ui.graphics.colorspace.Connector
 import androidx.compose.ui.graphics.colorspace.Rgb
 import androidx.compose.ui.graphics.colorspace.connect
 import kotlin.math.abs
@@ -35,4 +37,50 @@ internal fun colorUniformComponents(color: Color): FloatArray {
     val components = floatArrayOf(color.red, color.green, color.blue)
     return if (color.colorSpace == ColorSpaces.Srgb) components
     else color.colorSpace.connect(UniformSrgb).transform(components)
+}
+
+/**
+ * Converts shader colors with reusable per-runtime-shader scratch storage and connectors. The
+ * returned component array is reused by the next call.
+ */
+internal class ColorUniformConverter {
+    private val components = FloatArray(3)
+    private val sources = arrayOfNulls<ColorSpace>(64)
+    private val connectors = arrayOfNulls<Connector>(64)
+    private var lastSource: ColorSpace? = null
+    private var lastConnector: Connector? = null
+
+    fun write(color: Color): FloatArray {
+        components[0] = color.red
+        components[1] = color.green
+        components[2] = color.blue
+        val source = color.colorSpace
+        if (source == ColorSpaces.Srgb) return components
+        if (source === lastSource) {
+            lastConnector!!.transform(components)
+            return components
+        }
+
+        val empty = sources.indexOf(null)
+        for (index in sources.indices) {
+            val cachedSource = sources[index]
+            if (cachedSource === source) {
+                val connector = connectors[index]!!
+                lastSource = source
+                lastConnector = connector
+                connector.transform(components)
+                return components
+            }
+        }
+
+        val connector = source.connect(UniformSrgb)
+        if (empty >= 0) {
+            sources[empty] = source
+            connectors[empty] = connector
+            lastSource = source
+            lastConnector = connector
+        }
+        connector.transform(components)
+        return components
+    }
 }

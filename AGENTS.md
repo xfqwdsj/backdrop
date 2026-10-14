@@ -85,10 +85,14 @@ When a new same-file import collision appears, apply the source-prefix conventio
   effects run. Layer sources default to Clamp, preserving boundary alpha and extended-range RGB.
   Exported source domains exclude unused sampling padding. Boundary resources belong to each
   consuming modifier, so combined and shared sources retain independent boundary policies.
-- Sources declare `package top.ltfan.backdrop[.sub]` but live flat under `backdrop/src/<sourceSet>/kotlin/`: the
-  `top/ltfan/backdrop` prefix is dropped from the directory path, and subpackages keep their last segment as a directory
-  (`effects/Lens.kt` declares `top.ltfan.backdrop.effects`). An IDE hint about the package not matching the directory is
-  expected — do not reorganize the tree.
+- Select the omitted package prefix from each module's actual package conventions. This repository
+  has one module, `:backdrop`, whose prefix is `top.ltfan.backdrop`; do not apply it to other modules.
+  Its sources declare `package top.ltfan.backdrop[.sub]` under `backdrop/src/<sourceSet>/kotlin/` with the
+  `top/ltfan/backdrop` directory prefix omitted. The remaining package segments map directly to
+  directories (`effects/Lens.kt` declares `top.ltfan.backdrop.effects`). Files in the same relative
+  directory share the same package. Tests at the source-set root declare `top.ltfan.backdrop`;
+  tests in a subdirectory use its corresponding subpackage. Ignore an IDE package-directory hint
+  only after verifying this mapping; a different package in the same directory is a real violation.
 - Probes, clones and temporary copies go under a temp directory such as `/tmp/<name>`. Never modify this repository from a
   probe, and never commit one.
 - Do not push to the upstream repository; do not push or rewrite published history. The owner pushes.
@@ -146,36 +150,39 @@ When a new same-file import collision appears, apply the source-prefix conventio
 - `BackdropStyle` stores delayed producers. Provider parameters inherit omitted producers; explicit
   modifier producers replace individual defaults. Modifier `null` means inherit, decoration `None`
   means disabled, and `BackdropStyle.NoEffects` selects an empty effect chain.
-- Decoration types have a `Config` data class and a separate `None` branch. Zero-alpha configurations
+- Decoration types have a `Config` type and a separate `None` branch. `Highlight.Config` snapshots
+  exclusions and provides value equality and `copy()`. Zero-alpha configurations
   remain configurations. Drawing nodes retain observation while disabled and allocate layers only
   for active drawing; disable and detach release layers and reset layer-dependent caches.
 - Read visual producers in drawing or effect observation, so snapshot-driven animations invalidate
-  rendering without requiring recomposition. Resolve locals at the modifier's use position.
+  rendering without requiring recomposition. Resolve locals at the modifier's use position, and read
+  style defaults only for inherited producers. Position-only updates notify coordinate-dependent
+  sampling without resolving the effect chain; size, density, font scale and layout direction changes
+  resolve its geometry-dependent inputs.
 - `drawPlainBackdrop` consumes only the style's effects. Shape, source, drawing callbacks and layer
   control belong to the call site.
-- Highlight color alpha controls strength; the enclosing highlight alpha controls layer opacity.
-  `HighlightDirection` controls directional width and strength for Default and Ambient, while Plain
-  keeps a fixed-width uniform stroke and ignores direction curves. Ambient uses signed projection:
-  the positive side emits its color and the negative side emits black RGB with matching alpha.
-  `depthCurve` fades intensity from the outline to the inner band edge, and `exclusions` mask selected
-  outward-normal directions after blur. Custom `HighlightStyle` implementations provide matching
-  straight-alpha AGSL and CPU shading; mutable public properties are snapshot-backed under its
-  `@Stable` contract.
-- `EnvironmentHighlight` is opt-in and augments the static highlight after it is drawn.
-  `HighlightStyle.None` disables only the static pass; `Highlight.None` disables both. It samples
-  the raw backdrop through its own layer, independent of the blur and lens effect chain. All outline
-  types are supported. Rectangles and normalized circular rounded rectangles use analytic
-  signed-distance geometry; other outlines use shared cached adaptive path geometry. Preserve sampled
-  premultiplied alpha and source RGB through brightness extraction and blending. Environment source
-  blur follows the platform `BlurEffect` color support. Display
-  headroom is a refresh signal; it never supplies an automatic radiance multiplier or RGB limit.
-  Shader working-space brightness is not physical HDR luminance. Brightness and tint are the only
-  environment emission channels and fade inward to zero. Brightness follows total band width, tint
-  stays capped by configured width, and thickness extends geometry according to its threshold
-  without emitting light by itself. `EnvironmentHighlight.blurRadius` prefilters the raw backdrop
-  before edge shading; zero disables that source blur, which never blurs the generated edge band.
-  `Highlight.blurRadius` blurs only the static style. The enclosing alpha
-  controls both passes; static color
-  alpha and environment channel strengths remain independent. Default and Ambient use 90-degree
-  directions, lighting top/bottom and the lower edge respectively. Snapshot-driven producers update
-  drawing without recomposition, and unsupported runtime shaders leave the static highlight visible.
+- Surface isolation configures its retained layer during placement. Observed layer properties and
+  render epochs invalidate placement; measurement supplies size, density and layout direction.
+- Highlight emission strength includes color alpha and directional response;
+  `Highlight.Config.opacity` controls the shared drawing layer. Highlights use one fixed-width
+  profile on the nearest contour. `Highlight.width` is the base width; `HighlightDirection.widthScale`
+  maps side-facing incidence to aligned incidence (default 60% to 100%), independently of the
+  direction strength response. Each pixel uses its center sample and the configured falloff curve.
+  TwoTone emits black
+  RGB on the negative side while retaining emission strength. Exclusions mask selected nearest
+  outward-normal directions. Custom `HighlightStyle` implementations provide matching straight-alpha
+  AGSL and CPU shading; mutable public properties are snapshot-backed under its `@Stable` contract.
+  A component retains one output layer for the contour response. `Highlight.colorResponse` samples
+  the already processed backdrop at covered samples and changes RGB while preserving emission
+  strength. Its default `PreservePeak` transform operates in linear extended-sRGB; sample alpha
+  scales the configured tint amount. The backdrop callback is included, while surface and front
+  callbacks are not. Display headroom is a refresh signal and never supplies an automatic radiance
+  multiplier or RGB limit. Snapshot-driven producers update drawing without recomposition, and
+  unsupported runtime shaders leave static emission visible.
+  Generic outlines use a uniform-backed full scan over a power-of-two segment capacity; padded
+  degenerate segments are skipped. Their geometry caches a per-segment orientation only when the
+  normal probe remains separated from every boundary segment; uncertain segments use the original
+  containment probe at draw time. Rectangles and circular-corner rounded rectangles use analytic
+  bounds and radius uniforms instead of flattened segment geometry. Falloff curve variants are
+  specialized independently from direction response curves so their control points keep their own
+  semantics.

@@ -101,6 +101,7 @@ class BackdropSourceScopeTest {
     @Test
     fun scopedAffineTransformMapsRequestsBeforeSourceExtension() = runComposeUiTest {
         lateinit var output: LayerBackdrop
+        var rejectedNonFiniteInverse = false
         val matrix =
             Matrix().apply {
                 translate(20f, 20f)
@@ -108,10 +109,17 @@ class BackdropSourceScopeTest {
                 scale(2f, 2f)
             }
         val source = procedural {
+            try {
+                withTransform(Matrix().apply { scale(1e-39f, 1f) }) {}
+            } catch (_: IllegalArgumentException) {
+                rejectedNonFiniteInverse = true
+            }
             withTransform(matrix) {
-                drawSource(Rect(0f, 0f, 16f, 16f)) {
-                    drawRect(Color.Red)
-                    drawRect(Color.Blue, topLeft = Offset(8f, 0f), size = Size(8f, 16f))
+                withTransform(Matrix()) {
+                    drawSource(Rect(0f, 0f, 16f, 16f)) {
+                        drawRect(Color.Red)
+                        drawRect(Color.Blue, topLeft = Offset(8f, 0f), size = Size(8f, 16f))
+                    }
                 }
             }
         }
@@ -128,6 +136,7 @@ class BackdropSourceScopeTest {
             )
         }
         waitForIdle()
+        assertTrue(rejectedNonFiniteInverse, "A non-finite inverse was accepted")
         val pixels = output.graphicsLayer.toImageBitmap().toPixelMap()
         assertTrue(pixels[12, 24].red > 0.99f)
         assertTrue(pixels[12, 40].blue > 0.99f)

@@ -1,4 +1,4 @@
-package top.ltfan.backdrop.internal
+package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -10,6 +10,7 @@ import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import top.ltfan.backdrop.internal.lensSampling
 
 class LensSamplingTest {
     @Test

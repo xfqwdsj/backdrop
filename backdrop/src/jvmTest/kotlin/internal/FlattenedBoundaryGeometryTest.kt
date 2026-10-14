@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class GenericEnvironmentGeometryTest {
+class FlattenedBoundaryGeometryTest {
     @Test
     fun openContourIsClosedForFillBoundary() {
         val path =
@@ -19,7 +19,7 @@ class GenericEnvironmentGeometryTest {
                 lineTo(8f, 9f)
             }
 
-        val geometry = GenericEnvironmentGeometry(path)
+        val geometry = FlattenedBoundaryGeometry(path)
 
         assertEquals(3, geometry.segmentCount)
         assertEquals(8f, geometry.segments[8])
@@ -38,7 +38,7 @@ class GenericEnvironmentGeometryTest {
                 close()
             }
 
-        val geometry = GenericEnvironmentGeometry(path)
+        val geometry = FlattenedBoundaryGeometry(path)
 
         assertTrue(geometry.segmentCount > 2)
         assertTrue((0 until geometry.segmentCount).any { geometry.segments[it * 4 + 2] > 10f })
@@ -53,7 +53,7 @@ class GenericEnvironmentGeometryTest {
                 close()
             }
 
-        val geometry = GenericEnvironmentGeometry(path)
+        val geometry = FlattenedBoundaryGeometry(path)
 
         assertTrue(geometry.segmentCount > 4)
         assertTrue(geometry.segments.any { it > 1f })
@@ -67,7 +67,7 @@ class GenericEnvironmentGeometryTest {
                 addRect(Rect(8f, 0f, 20f, 10f))
             }
 
-        val geometry = GenericEnvironmentGeometry(path)
+        val geometry = FlattenedBoundaryGeometry(path)
 
         assertFalse(
             (0 until geometry.segmentCount).any { index ->
@@ -86,7 +86,7 @@ class GenericEnvironmentGeometryTest {
                 addRoundRect(RoundRect(Rect(0f, 0f, 30f, 20f), CornerRadius(8f, 8f)))
             }
 
-        val geometry = GenericEnvironmentGeometry(path)
+        val geometry = FlattenedBoundaryGeometry(path)
 
         assertTrue(geometry.segmentCount > 8)
         assertEquals(Rect(0f, 0f, 30f, 20f), geometry.bounds)

@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.RectangleShape
@@ -25,8 +24,10 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightExclusion
+import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
@@ -51,8 +52,9 @@ class HighlightDirectionRenderingTest {
                             highlight = {
                                 Highlight(
                                     width = 6.dp,
-                                    blurRadius = 4.dp,
-                                    style = HighlightStyle.Plain(Color.White, BlendMode.Plus),
+                                    style = HighlightStyle.Solid(Color.White),
+                                    direction = HighlightDirection.None,
+                                    colorResponse = HighlightColorResponse(amount = 0f),
                                     exclusions = exclusions.value,
                                 )
                             },
@@ -88,35 +90,22 @@ class HighlightDirectionRenderingTest {
     }
 
     @Test
-    fun widthCurveChangesIntegratedDiagonalCornerBand() {
-        val linear =
+    fun directionalStrengthSelectsTheFacingBoundary() {
+        val top =
             captureCorner(
                 Highlight(
                     width = 6.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Default,
-                    direction = HighlightDirection(angle = 45f, widthCurve = BackdropCurve.Linear),
-                )
-            )
-        val cubic =
-            captureCorner(
-                Highlight(
-                    width = 6.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Default,
+                    style = HighlightStyle.Solid(Color.White),
                     direction =
                         HighlightDirection(
-                            angle = 45f,
-                            widthCurve = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 0f),
+                            angle = 270f,
+                            mode = HighlightDirection.Mode.Single,
+                            strength = HighlightResponse(0f, 1f),
                         ),
+                    colorResponse = HighlightColorResponse(amount = 0f),
                 )
             )
-        val linearEnergy = cornerEnergy(linear)
-        val cubicEnergy = cornerEnergy(cubic)
-        assertTrue(
-            linearEnergy > cubicEnergy * 1.1f,
-            "linear width curve should emit a wider diagonal corner band: linear=$linearEnergy cubic=$cubicEnergy",
-        )
+        assertTrue(top[80, 41].alpha > top[80, 118].alpha + 0.1f)
     }
 
     private fun captureCorner(highlight: Highlight): PixelMap {
@@ -143,13 +132,5 @@ class HighlightDirectionRenderingTest {
             pixels = onNodeWithTag("root").captureToImage().toPixelMap()
         }
         return pixels
-    }
-
-    private fun cornerEnergy(pixels: PixelMap): Float {
-        var energy = 0f
-        for (y in 40 until 62) for (x in 40 until 62) {
-            energy += pixels[x, y].alpha
-        }
-        return energy
     }
 }

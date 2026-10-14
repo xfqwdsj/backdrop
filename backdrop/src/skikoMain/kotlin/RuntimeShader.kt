@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.asComposeShader
 import org.intellij.lang.annotations.Language
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.RuntimeShaderBuilder
-import top.ltfan.backdrop.internal.colorUniformComponents
+import top.ltfan.backdrop.internal.ColorUniformConverter
 
 public actual fun RuntimeShader(@Language("AGSL") shaderString: String): RuntimeShader {
     val shader = RuntimeShaderBuilder(RuntimeEffect.makeForShader(shaderString))
@@ -22,6 +22,7 @@ public fun RuntimeShader.asSkikoRuntimeShader(): RuntimeShaderBuilder {
 }
 
 internal class SkikoRuntimeShader(val shader: RuntimeShaderBuilder) : RuntimeShader {
+    private val colorUniformConverter = ColorUniformConverter()
 
     override fun setFloatUniform(name: String, value: Float) {
         shader.uniform(name, value)
@@ -72,7 +73,7 @@ internal class SkikoRuntimeShader(val shader: RuntimeShaderBuilder) : RuntimeSha
     }
 
     override fun setColorUniform(name: String, color: Color) {
-        val components = colorUniformComponents(color)
+        val components = colorUniformConverter.write(color)
         // Skia transforms layout(color) uniforms from unpremultiplied sRGB to the
         // destination color space. Premultiplication belongs in the shader.
         shader.uniform(name, components[0], components[1], components[2], color.alpha)

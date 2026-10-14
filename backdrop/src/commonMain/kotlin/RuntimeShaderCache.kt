@@ -15,6 +15,10 @@ internal class RuntimeShaderCacheImpl : RuntimeShaderCache {
         return runtimeShaders.getOrPut(key) { RuntimeShader(string) }
     }
 
+    internal fun obtainRuntimeShader(key: String, string: () -> String): RuntimeShader {
+        return runtimeShaders.getOrPut(key) { RuntimeShader(string()) }
+    }
+
     fun clear() {
         runtimeShaders.clear()
     }

@@ -4,8 +4,8 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import top.ltfan.backdrop.highlight.EnvironmentHighlight
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightExclusion
 
 class HighlightConfigurationTest {
@@ -21,35 +21,19 @@ class HighlightConfigurationTest {
     }
 
     @Test
-    fun environmentContributionsValidateFiniteStrengthThresholdAndWidth() {
-        assertEquals(0.2f, EnvironmentHighlight().brightness.strength)
-        assertEquals(4.dp, EnvironmentHighlight().blurRadius)
-        assertFailsWith<IllegalArgumentException> { EnvironmentHighlight(blurRadius = (-1).dp) }
-        assertFailsWith<IllegalArgumentException> {
-            EnvironmentHighlight(blurRadius = Float.NaN.dp)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            EnvironmentHighlight(blurRadius = Float.POSITIVE_INFINITY.dp)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            EnvironmentHighlight.Contribution(Float.NaN, 0f)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            EnvironmentHighlight.Contribution(1f, Float.POSITIVE_INFINITY)
-        }
-        assertFailsWith<IllegalArgumentException> { EnvironmentHighlight.Thickness((-1).dp, 0f) }
-        assertFailsWith<IllegalArgumentException> {
-            EnvironmentHighlight.Thickness(1.dp, Float.NaN)
-        }
+    fun colorResponseAmountMustBeFiniteAndBounded() {
+        assertEquals(.5f, HighlightColorResponse().amount)
+        assertFailsWith<IllegalArgumentException> { HighlightColorResponse(Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { HighlightColorResponse(-.1f) }
+        assertFailsWith<IllegalArgumentException> { HighlightColorResponse(1.1f) }
     }
 
     @Test
     fun highlightBoundsAndOpacityMustBeFiniteAndNonNegative() {
         assertFailsWith<IllegalArgumentException> { Highlight(width = Float.NaN.dp) }
-        assertFailsWith<IllegalArgumentException> {
-            Highlight(width = 1.dp, blurRadius = Float.POSITIVE_INFINITY.dp)
-        }
-        assertFailsWith<IllegalArgumentException> { Highlight(alpha = Float.NaN) }
-        assertFailsWith<IllegalArgumentException> { Highlight(alpha = 1.01f) }
+        assertFailsWith<IllegalArgumentException> { Highlight(width = (-1).dp) }
+        assertFailsWith<IllegalArgumentException> { Highlight(opacity = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { Highlight(opacity = 1.01f) }
+        assertEquals(2.dp, Highlight().width)
     }
 }

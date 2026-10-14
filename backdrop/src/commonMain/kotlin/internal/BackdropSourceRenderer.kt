@@ -25,6 +25,7 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
     private class Slot(val layer: GraphicsLayer, val shader: RuntimeShader)
 
     private val slots = mutableListOf<Slot>()
+    private val inverseSourceTransformScratch = Matrix()
     private var used = 0
 
     fun beginFrame() {
@@ -58,7 +59,8 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
         override val samplingBounds: Rect,
     ) : BackdropDrawScope, DrawScope by target {
         override fun withTransform(transform: Matrix, draw: BackdropDrawScope.() -> Unit) {
-            val bounds = inverseSourceTransform(transform).map(samplingBounds)
+            val bounds =
+                inverseSourceTransform(transform, inverseSourceTransformScratch).map(samplingBounds)
             val surfaceSize = size
             target.withTransform({ transform(transform) }) {
                 Scope(this, surfaceSize, bounds).draw()
@@ -72,18 +74,15 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
             draw: DrawScope.() -> Unit,
         ) {
             validateBounds(bounds)
-            val inverse = inverseSourceTransform(transform)
+            val inverse = inverseSourceTransform(transform, inverseSourceTransformScratch)
             val request = inverse.map(samplingBounds)
             require(
-                listOf(
-                        request.left,
-                        request.top,
-                        request.right,
-                        request.bottom,
-                        request.width,
-                        request.height,
-                    )
-                    .all { it.isFinite() }
+                request.left.isFinite() &&
+                    request.top.isFinite() &&
+                    request.right.isFinite() &&
+                    request.bottom.isFinite() &&
+                    request.width.isFinite() &&
+                    request.height.isFinite()
             ) {
                 "Source sampling request must be finite"
             }
@@ -204,9 +203,10 @@ private fun Rect.contains(other: Rect): Boolean =
 
 private fun validateBounds(bounds: Rect) {
     require(
-        listOf(bounds.left, bounds.top, bounds.right, bounds.bottom).all {
-            it.isFinite() && floor(it) == it
-        } &&
+        bounds.left.isPixelAligned() &&
+            bounds.top.isPixelAligned() &&
+            bounds.right.isPixelAligned() &&
+            bounds.bottom.isPixelAligned() &&
             bounds.width.isFinite() &&
             bounds.height.isFinite() &&
             bounds.width > 0f &&
@@ -215,6 +215,8 @@ private fun validateBounds(bounds: Rect) {
         "Source bounds must be a finite, non-empty, pixel-aligned rectangle: $bounds"
     }
 }
+
+private fun Float.isPixelAligned(): Boolean = isFinite() && floor(this) == this
 
 private fun clampedInput(output: Rect, source: Rect): Rect =
     Rect(
@@ -260,7 +262,7 @@ float4 main(float2 coord) {
 }
 """
 
-private fun inverseSourceTransform(transform: Matrix): Matrix {
+private fun inverseSourceTransform(transform: Matrix, destination: Matrix): Matrix {
     require(transform.values.size == 16 && transform.values.all { it.isFinite() }) {
         "Source transform must be finite"
     }
@@ -279,7 +281,8 @@ private fun inverseSourceTransform(transform: Matrix): Matrix {
     ) {
         "Source transform must be an invertible two-dimensional affine transform"
     }
-    return Matrix(transform.values.copyOf()).apply {
+    transform.values.copyInto(destination.values)
+    return destination.apply {
         invert()
         require(values.all { it.isFinite() }) { "Inverse source transform must be finite" }
     }

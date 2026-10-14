@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -35,6 +37,52 @@ import top.ltfan.backdrop.shadow.Shadow
 
 @OptIn(ExperimentalTestApi::class)
 class SurfaceIsolationRenderingTest {
+    @Test
+    fun alphaUpdateRedrawsTheGroupWithoutMeasuringItsParent() = runComposeUiTest {
+        val alpha = mutableIntStateOf(50)
+        var parentMeasureCount = 0
+        setContent {
+            val backdrop = rememberCanvasBackdrop {}
+            Box(Modifier.size(80.dp).background(Color.Black).testTag("root")) {
+                Box(
+                    Modifier.layout { measurable, constraints ->
+                            parentMeasureCount++
+                            val placeable = measurable.measure(constraints)
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
+                        .size(60.dp)
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { RectangleShape },
+                            effects = {},
+                            layerBlock = { this.alpha = alpha.intValue / 100f },
+                            highlight = { Highlight.None },
+                            shadow = { Shadow.None },
+                            innerShadow = { InnerShadow.None },
+                        )
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        Box(Modifier.offset(5.dp, 5.dp).size(30.dp).background(Color.White))
+                        Box(Modifier.offset(20.dp, 5.dp).size(30.dp).background(Color.White))
+                    }
+                }
+            }
+        }
+        waitForIdle()
+
+        val initialMeasureCount = parentMeasureCount
+        val initial = onNodeWithTag("root").captureToImage().toPixelMap()[25, 15]
+        assertTrue(initial.red in 0.47f..0.53f)
+
+        runOnIdle { alpha.intValue = 25 }
+        waitForIdle()
+
+        val updated = onNodeWithTag("root").captureToImage().toPixelMap()[25, 15]
+        assertNotEquals(initial.red, updated.red)
+        assertTrue(updated.red in 0.22f..0.28f)
+        assertEquals(initialMeasureCount, parentMeasureCount)
+    }
+
     @Test
     fun epochChangeReplacesTheLayerThatRecordsDescendantDrawing() = runComposeUiTest {
         val epoch = mutableIntStateOf(0)

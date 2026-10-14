@@ -18,7 +18,7 @@ import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.ObserverModifierNode
 import androidx.compose.ui.node.currentValueOf
-import androidx.compose.ui.node.invalidateMeasurement
+import androidx.compose.ui.node.invalidatePlacement
 import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
@@ -38,7 +38,7 @@ internal class SurfaceIsolationElement(
     override fun update(node: SurfaceIsolationNode) {
         node.surfaceBounds = surfaceBounds
         node.layerBlock = layerBlock
-        node.invalidateMeasurement()
+        node.invalidatePlacement()
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -81,7 +81,7 @@ internal class SurfaceIsolationNode(
     }
 
     override fun onObservedReadsChanged() {
-        invalidateMeasurement()
+        invalidatePlacement()
     }
 
     override fun MeasureScope.measure(
@@ -90,29 +90,22 @@ internal class SurfaceIsolationNode(
     ): MeasureResult {
         val placeable = measurable.measure(constraints)
         val nodeSize = Size(placeable.width.toFloat(), placeable.height.toFloat())
-
-        observeReads {
-            val epoch = currentValueOf(LocalBackdropRenderEpoch)
-            val context = requireGraphicsContext()
-            val currentLayer =
-                layerOwner.resourceFor(
-                    epoch,
-                    context::createGraphicsLayer,
-                    context::releaseGraphicsLayer,
-                )
-            configureLayer(currentLayer, nodeSize, this, layoutDirection)
-        }
-        val epoch = currentValueOf(LocalBackdropRenderEpoch)
-        val context = requireGraphicsContext()
-        val placementLayer =
-            layerOwner.resourceFor(
-                epoch,
-                context::createGraphicsLayer,
-                context::releaseGraphicsLayer,
-            )
+        val nodeDensity = Density(density, fontScale)
+        val nodeLayoutDirection = layoutDirection
 
         return layout(placeable.width, placeable.height) {
-            placeable.placeWithLayer(IntOffset.Zero, placementLayer)
+            observeReads {
+                val epoch = currentValueOf(LocalBackdropRenderEpoch)
+                val context = requireGraphicsContext()
+                val placementLayer =
+                    layerOwner.resourceFor(
+                        epoch,
+                        context::createGraphicsLayer,
+                        context::releaseGraphicsLayer,
+                    )
+                configureLayer(placementLayer, nodeSize, nodeDensity, nodeLayoutDirection)
+                placeable.placeWithLayer(IntOffset.Zero, placementLayer)
+            }
         }
     }
 

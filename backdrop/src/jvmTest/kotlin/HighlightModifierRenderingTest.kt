@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.RectangleShape
@@ -23,6 +22,7 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
@@ -31,44 +31,27 @@ import top.ltfan.backdrop.shadow.Shadow
 @OptIn(ExperimentalTestApi::class)
 class HighlightModifierRenderingTest {
     @Test
-    fun plainIgnoresDirectionAndDepthCurveStillFadesInward() {
-        val linearDepth =
+    fun plainKeepsFixedBandIndependentOfDirectionalResponse() {
+        val plain =
             capture(
                 Highlight(
                     width = 8.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Plain(Color.White, BlendMode.Plus),
-                    direction = HighlightDirection(angle = 0f),
-                    depthCurve = BackdropCurve.Linear,
+                    style = HighlightStyle.Solid(Color.White),
+                    direction = HighlightDirection.None,
+                    colorResponse = HighlightColorResponse(amount = 0f),
                 )
             )
-        val cubicDepth =
+        val preset =
             capture(
-                Highlight(
+                Highlight.Plain.copy(
                     width = 8.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Plain(Color.White, BlendMode.Plus),
-                    direction = HighlightDirection(angle = 270f),
-                    depthCurve = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 0f),
+                    style = HighlightStyle.Solid(Color.White),
+                    colorResponse = HighlightColorResponse(amount = 0f),
                 )
             )
-        val inwardLinear = linearDepth[44, 80].alpha
-        val inwardCubic = cubicDepth[44, 80].alpha
 
-        assertTrue(inwardLinear > inwardCubic + 0.02f, "depth response reduces the inner rim")
-        assertTrue(linearDepth[80, 41].alpha > 0.05f && linearDepth[41, 80].alpha > 0.05f)
-        assertImageAlphaClose(
-            linearDepth,
-            capture(
-                Highlight(
-                    width = 8.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Plain(Color.White, BlendMode.Plus),
-                    direction = HighlightDirection(angle = 270f),
-                    depthCurve = BackdropCurve.Linear,
-                )
-            ),
-        )
+        assertTrue(plain[80, 41].alpha > 0.05f && plain[41, 80].alpha > 0.05f)
+        assertImageAlphaClose(plain, preset)
     }
 
     @Test
@@ -77,23 +60,39 @@ class HighlightModifierRenderingTest {
             capture(
                 Highlight(
                     width = 6.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Ambient(Color.White, BlendMode.Plus),
+                    style = HighlightStyle.TwoTone(Color.White),
                     direction = HighlightDirection(angle = 270f),
+                    colorResponse = HighlightColorResponse(amount = 0f),
                 )
             )
         val bottom =
             capture(
                 Highlight(
                     width = 6.dp,
-                    blurRadius = 0.dp,
-                    style = HighlightStyle.Ambient(Color.White, BlendMode.Plus),
+                    style = HighlightStyle.TwoTone(Color.White),
                     direction = HighlightDirection(angle = 90f),
+                    colorResponse = HighlightColorResponse(amount = 0f),
                 )
             )
 
         assertTrue(top[80, 41].red > top[80, 118].red + 0.5f)
         assertTrue(bottom[80, 118].red > bottom[80, 41].red + 0.5f)
+    }
+
+    @Test
+    fun gpuProfileRetainsEmissionAcrossTheHalfPixelOuterFootprint() {
+        val pixels =
+            capture(
+                Highlight(
+                    width = 8.25.dp,
+                    falloff = BackdropCurve.CubicBezier(.35f, 1f, .6f, 1f),
+                    style = HighlightStyle.Solid(Color.White),
+                    direction = HighlightDirection.None,
+                    colorResponse = HighlightColorResponse(amount = 0f),
+                )
+            )
+
+        assertTrue(pixels[80, 48].alpha > 0f)
     }
 
     private fun capture(highlight: Highlight): PixelMap {

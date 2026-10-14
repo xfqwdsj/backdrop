@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -27,12 +26,50 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightColorResponse
+import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
 @OptIn(ExperimentalTestApi::class)
 class DisconnectedHighlightGeometryTest {
+    @Test
+    fun thinGenericContourKeepsPartialClipCoverageAtSubpixelEdges() = runComposeUiTest {
+        setContent {
+            val backdrop = rememberLayerBackdrop()
+            Box(Modifier.size(120.dp).testTag("root")) {
+                Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
+                Box(
+                    Modifier.offset(20.dp, 20.dp)
+                        .size(80.dp)
+                        .drawBackdrop(
+                            backdrop,
+                            { ThinSubpixelShape },
+                            highlight = {
+                                Highlight(
+                                    width = 8.dp,
+                                    direction = HighlightDirection.None,
+                                    style = HighlightStyle.Solid(Color.White),
+                                    colorResponse = HighlightColorResponse(amount = 0f),
+                                )
+                            },
+                            shadow = { Shadow.None },
+                            innerShadow = { InnerShadow.None },
+                        )
+                )
+            }
+        }
+        waitForIdle()
+        val pixels = onNodeWithTag("root").captureToImage().toPixelMap()
+
+        val edgeAlpha = maxOf(pixels[40, 40].alpha, pixels[41, 40].alpha)
+        assertTrue(edgeAlpha > 0f, "subpixel contour retains partial clip coverage")
+        assertTrue(edgeAlpha < 1f, "subpixel contour edge remains antialiased")
+        assertTrue(pixels[39, 40].alpha < 0.02f, "pixels outside the clipped contour stay clear")
+        assertTrue(pixels[42, 40].alpha < 0.02f, "pixels beyond the clipped contour stay clear")
+    }
+
     @Test
     fun separateContoursAndHoleKeepTheirOwnRimsWithoutBridgingTheGap() = runComposeUiTest {
         setContent {
@@ -48,8 +85,9 @@ class DisconnectedHighlightGeometryTest {
                             highlight = {
                                 Highlight(
                                     width = 4.dp,
-                                    blurRadius = 0.dp,
-                                    style = HighlightStyle.Plain(Color.White, BlendMode.Plus),
+                                    direction = HighlightDirection.None,
+                                    style = HighlightStyle.Solid(Color.White),
+                                    colorResponse = HighlightColorResponse(amount = 0f),
                                 )
                             },
                             shadow = { Shadow.None },
@@ -70,6 +108,14 @@ class DisconnectedHighlightGeometryTest {
             "filled side of hole boundary should have a rim: x28=${pixels[28, 50]}, x29=${pixels[29, 50]}, inside=${pixels[35, 50]}",
         )
     }
+}
+
+private object ThinSubpixelShape : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline = Outline.Generic(Path().apply { addRect(Rect(20.25f, 10f, 20.75f, 70f)) })
 }
 
 private object DisconnectedShape : Shape {

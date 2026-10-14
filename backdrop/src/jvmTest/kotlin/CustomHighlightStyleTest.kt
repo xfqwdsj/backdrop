@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
@@ -27,11 +26,12 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
-import top.ltfan.backdrop.internal.GenericEnvironmentGeometry
+import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
@@ -56,8 +56,8 @@ class CustomHighlightStyleTest {
                             highlight = {
                                 Highlight(
                                     width = 5.dp,
-                                    blurRadius = 0.dp,
                                     style = style,
+                                    colorResponse = HighlightColorResponse(amount = 0f),
                                 )
                             },
                             shadow = { Shadow.None },
@@ -86,17 +86,16 @@ class CustomHighlightStyleTest {
         val cpuPixels =
             renderStaticHighlightPixels(
                 geometry =
-                    GenericEnvironmentGeometry(
+                    FlattenedBoundaryGeometry(
                         Path().apply {
                             addRect(Rect(0f, 0f, 80f, 80f))
                         }
                     ),
                 size = Size(80f, 80f),
-                width = 5f,
-                blurRadius = 0f,
+                widthPx = 5f,
+                falloff = Highlight().falloff,
                 style = style,
                 direction = HighlightDirection(),
-                depthCurve = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 1f),
                 exclusions = emptySet(),
             )
         val cpuOffset = (1 * 80 + 40) * 4
@@ -115,19 +114,20 @@ class CustomHighlightStyleTest {
 
 private class TestHighlightStyle(private val mix: MutableState<Float>) : HighlightStyle {
     override val color: Color = Color.White
-    override val blendMode: BlendMode = BlendMode.Plus
-    override val directional: Boolean = false
     override val shaderSource: String =
         """
         uniform float styleMix;
-        half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, float distance, float width, half4 color) {
+        half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, half4 color) {
             return half4(1.0 - styleMix, styleMix, 0.0, color.a);
         }
+        float highlightStrength(float2 position, float2 outwardNormal, float projection) { return 1.0; }
         """
             .trimIndent()
 
-    override fun shade(sample: HighlightSample): Color =
-        Color(1f - mix.value, mix.value, 0f, color.alpha)
+    override fun shade(sample: HighlightSample): top.ltfan.backdrop.highlight.HighlightEmission =
+        top.ltfan.backdrop.highlight.HighlightEmission(
+            Color(1f - mix.value, mix.value, 0f, color.alpha)
+        )
 
     override fun configureShader(shader: RuntimeShader) {
         shader.setFloatUniform("styleMix", mix.value)

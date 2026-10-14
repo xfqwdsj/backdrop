@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint as ComposePaint
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.toArgb
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -34,18 +36,22 @@ import org.jetbrains.skia.Shader
 import org.jetbrains.skia.Surface
 import top.ltfan.backdrop.effects.colorFilter
 import top.ltfan.backdrop.effects.vibrancy
+import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
+import top.ltfan.backdrop.highlight.HighlightColorTransform
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightExclusion
+import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
 import top.ltfan.backdrop.highlight.shaderValues
+import top.ltfan.backdrop.highlight.toHighlightLinearExtendedSrgb
 import top.ltfan.backdrop.internal.LightingShaderString
 import top.ltfan.backdrop.internal.SourceBoundaryShader
 import top.ltfan.backdrop.internal.TintShaderString
 import top.ltfan.backdrop.internal.colorUniformComponents
-import top.ltfan.backdrop.internal.genericEnvironmentHighlightShader
-import top.ltfan.backdrop.internal.highlightExclusionMaskShader
 import top.ltfan.backdrop.internal.setHdrColor
-import top.ltfan.backdrop.internal.staticHighlightShader
+import top.ltfan.backdrop.internal.staticHighlightTileShader
 
 class HdrRenderingTest {
     @Test
@@ -217,253 +223,318 @@ class HdrRenderingTest {
     }
 
     @Test
-    fun environmentHighlightPreservesHdrAndSourceAlpha() {
-        assertPixel(
-            floatArrayOf(1.1763f, 1.1763f, 1.1763f, 0.5f),
-            renderEnvironmentHighlight(floatArrayOf(4f, 2f, 1f, 1f)),
-        )
-        assertPixel(
-            floatArrayOf(0.58815f, 0.58815f, 0.58815f, 0.25f),
-            renderEnvironmentHighlight(floatArrayOf(2f, 1f, 0.5f, 0.5f)),
-        )
-        assertPixel(
-            floatArrayOf(0f, 0f, 0f, 0f),
-            renderEnvironmentHighlight(floatArrayOf(0f, 0f, 0f, 0f)),
-        )
-    }
+    fun highlightColorTransformPreservesPeakAndBaseAlpha() {
+        val base = Color(2f, 2f, 2f, 0.25f, ColorSpaces.ExtendedSrgb)
+        val sample = Color(4f, 2f, 1f, 0.9f, ColorSpaces.ExtendedSrgb)
+        val result =
+            HighlightColorTransform.PreservePeak.transform(
+                base,
+                sample,
+            )
+        // Use the renderer's unclamped extended-sRGB conversion instead of Compose's Color.convert,
+        // which quantizes these extended channels more coarsely in the HDR path.
+        val expectedBase = base.toHighlightLinearExtendedSrgb()
+        val actual = result.toHighlightLinearExtendedSrgb()
+        val expectedPeak = maxOf(expectedBase.red, expectedBase.green, expectedBase.blue)
+        val actualPeak = maxOf(actual.red, actual.green, actual.blue)
 
-    private fun renderEnvironmentHighlight(
-        input: FloatArray,
-        distance: Float = 0.5f,
-        width: Float = 1f,
-        thicknessWidth: Float = 0f,
-        depthCurve: BackdropCurve = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 1f),
-        brightnessStrength: Float = 1f,
-        tintStrength: Float = 0f,
-        staticEnabled: Float = 1f,
-    ): FloatArray {
-        val runtime = RuntimeShader(genericEnvironmentHighlightShader(4))
-        runtime.setFloatUniform("origin", -40f, 8.5f - distance)
-        runtime.setFloatUniform("geometryScale", 100f)
-        runtime.setFloatUniform(
-            "segments",
-            floatArrayOf(
-                0f,
-                0f,
-                100f,
-                0f,
-                100f,
-                0f,
-                100f,
-                100f,
-                100f,
-                100f,
-                0f,
-                100f,
-                0f,
-                100f,
-                0f,
-                0f,
-            ),
-        )
-        runtime.setFloatUniform("width", width)
-        runtime.setFloatUniform("staticEnabled", staticEnabled)
-        runtime.setFloatUniform("angle", 0f)
-        runtime.setFloatUniform("widthCurve", 0f, 0f, 1f, 1f)
-        runtime.setFloatUniform("directional", 0f)
-        runtime.setFloatUniform("sampleDistance", 3f)
-        runtime.setFloatUniform("brightnessStrength", brightnessStrength)
-        runtime.setFloatUniform("brightnessThreshold", 0.2f)
-        runtime.setFloatUniform("tintStrength", tintStrength)
-        runtime.setFloatUniform("tintThreshold", 0.2f)
-        runtime.setFloatUniform("thicknessWidth", thicknessWidth)
-        runtime.setFloatUniform("thicknessThreshold", 0.2f)
-        runtime.setFloatUniform("depthCurve", depthCurve.shaderControls())
-        val builder = runtime.asSkikoRuntimeShader()
-        builder.child("content", constantShader(input))
-        return renderShader(builder.makeShader())
+        assertEquals(0.25f, actual.alpha, 0.001f)
+        assertEquals(expectedPeak, actualPeak, 0.005f)
+        assertTrue(actual.red > actual.green && actual.green > actual.blue)
     }
 
     @Test
-    fun environmentBrightnessAndTintFadeMonotonicallyAcrossExtendedBands() {
-        val curves =
-            listOf(
-                BackdropCurve.Linear,
-                BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 1f),
-                BackdropCurve.CubicBezier(0.5f, 0f, 0.8f, 0.3f),
+    fun highlightColorResponseSamplesTheCoveredPixelBackdrop() {
+        val geometry =
+            HighlightBoundaryGeometry(
+                Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f))
             )
-        data class Case(
-            val thickness: Float,
-            val brightness: Float,
-            val tint: Float,
-            val staticEnabled: Float,
-        )
-        val cases =
-            listOf(
-                Case(thickness = 0f, brightness = 1f, tint = 0f, staticEnabled = 1f),
-                Case(thickness = 4f, brightness = 1f, tint = 0f, staticEnabled = 1f),
-                Case(thickness = 4f, brightness = 1f, tint = 0f, staticEnabled = 0f),
-                Case(thickness = 0f, brightness = 0f, tint = 1f, staticEnabled = 1f),
-                Case(thickness = 4f, brightness = 0f, tint = 1f, staticEnabled = 1f),
-                Case(thickness = 4f, brightness = 0f, tint = 1f, staticEnabled = 0f),
-                Case(thickness = 0f, brightness = 0f, tint = 0f, staticEnabled = 1f),
-                Case(thickness = 4f, brightness = 0f, tint = 0f, staticEnabled = 1f),
-                Case(thickness = 0f, brightness = 0f, tint = 0f, staticEnabled = 0f),
-                Case(thickness = 4f, brightness = 0f, tint = 0f, staticEnabled = 0f),
+        val shader =
+            RuntimeShader(
+                staticHighlightTileShader(
+                    geometry.cpuGeometry(),
+                    HighlightStyle.Solid(Color.White),
+                    exclusionCount = 0,
+                    colorTransform = HighlightColorTransform.PreservePeak,
+                )
             )
-        for (depthCurve in curves) {
-            for (case in cases) {
-                val baseWidth = if (case.staticEnabled > 0.5f) 4f else 0f
-                val totalWidth = baseWidth + case.thickness
-                val bandWidth = if (case.tint > 0f) minOf(totalWidth, 4f) else totalWidth
-                val samples =
-                    generateSequence(0.5f) { previous -> previous + 1f }
-                        .takeWhile { it <= bandWidth + 0.5f }
-                        .map { distance ->
-                            renderEnvironmentHighlight(
-                                input = floatArrayOf(4f, 2f, 1f, 1f),
-                                distance = distance,
-                                width = 4f,
-                                thicknessWidth = case.thickness,
-                                depthCurve = depthCurve,
-                                brightnessStrength = case.brightness,
-                                tintStrength = case.tint,
-                                staticEnabled = case.staticEnabled,
-                            )
-                        }
-                        .toList()
-                if (case.brightness == 0f && case.tint == 0f) {
-                    samples.forEach { pixel ->
-                        assertPixel(
-                            floatArrayOf(0f, 0f, 0f, 0f),
-                            pixel,
-                            "thickness with zero strengths (curve=$depthCurve)",
-                        )
-                    }
-                    continue
-                }
-                val sourceBrightness = 4f * 0.2126f + 2f * 0.7152f + 0.0722f
-                val outputPerProfile = if (case.brightness > 0f) sourceBrightness else 4f
-                samples.forEachIndexed { index, pixel ->
-                    val distance = 0.5f + index
-                    val expectedProfile = highlightBandProfile(distance, bandWidth, depthCurve)
-                    val expected =
-                        if (case.brightness > 0f) {
-                            floatArrayOf(
-                                expectedProfile * outputPerProfile,
-                                expectedProfile * outputPerProfile,
-                                expectedProfile * outputPerProfile,
-                                expectedProfile,
-                            )
-                        } else {
-                            floatArrayOf(
-                                expectedProfile * 4f,
-                                expectedProfile * 2f,
-                                expectedProfile,
-                                expectedProfile,
-                            )
-                        }
-                    assertPixel(expected, pixel, "curve=$depthCurve distance=$distance case=$case")
-                }
-                if (case.brightness > 0f || case.tint > 0f) {
-                    assertTrue(samples.first()[0] > 1f, "F16 output preserves HDR")
-                }
-            }
-        }
+        shader.setFloatUniform("origin", 0f, 0f)
+        shader.setFloatUniform("geometryScale", 16f)
+        shader.setFloatUniform("segments", geometry.cpuGeometry().segments)
+        shader.setFloatUniform("tileBounds", 0f, 0f, 16f, 16f)
+        shader.setFloatUniform("width", 2f)
+        shader.setFloatUniform("directionVector", 0f, 1f)
+        shader.setFloatUniform("directionEnabled", 0f)
+        shader.setFloatUniform("directionMode", 1f)
+        shader.setFloatUniform("directionStrengthRange", 1f, 1f)
+        shader.setFloatUniform("directionStrengthCurve", BackdropCurve.Linear.shaderControls())
+        shader.setFloatUniform("directionWidthRange", 1f, 1f)
+        shader.setFloatUniform("directionWidthCurve", BackdropCurve.Linear.shaderControls())
+        shader.setFloatUniform("falloffCurve", Highlight().falloff.shaderControls())
+        shader.setColorUniform("color", Color.White)
+        shader.setFloatUniform("colorResponseAmount", 1f)
+
+        val builder = shader.asSkikoRuntimeShader()
+        builder.child("content", constantShader(floatArrayOf(0f, 0f, 1f, 1f)))
+        val pixels = renderShader(builder.makeShader(), wholeSurface = true)
+        val sample = 8 * 4
+        assertTrue(pixels[sample + 2] > pixels[sample] + .1f)
+        assertTrue(pixels[sample + 3] > 0f)
     }
 
     @Test
     fun highlightDirectionUsesConfiguredCurvesAndVerticalDefault() {
         val direction = HighlightDirection()
         assertEquals(90f, direction.angle)
-        assertEquals(0.125f, direction.widthCurve.transform(0.5f), 0.0001f)
-        assertEquals(0.5f, direction.strengthCurve.transform(0.5f))
+        assertEquals(0.35f, direction.strength.from)
+        assertEquals(1f, direction.strength.to)
+        assertEquals(0.6f, direction.widthScale.from)
+        assertEquals(1f, direction.widthScale.to)
         assertEquals(450f, HighlightDirection(angle = 450f).angle)
     }
 
     @Test
-    fun staticAmbientShaderPreservesHdrStrengthAlphaAndSignedDirection() {
+    fun twoToneStyleRetainsEmissionStrengthForBlackRgb() {
         val color = Color(2f, 2f, 2f, 0.2f, ColorSpaces.ExtendedSrgb)
-        val top = renderStaticHighlight(color, 270f, ambient = true)
-        assertPixel(floatArrayOf(0.2f, 0.2f, 0.2f, 0.1f), top)
-        assertPixel(
-            floatArrayOf(0f, 0f, 0f, 0.1f),
-            renderStaticHighlight(color, 90f, ambient = true),
-        )
-        assertPixel(
-            floatArrayOf(0.2f, 0.2f, 0.2f, 0.1f),
-            renderStaticHighlight(color, 270f, ambient = false),
+        val style = HighlightStyle.TwoTone(color)
+        val positive =
+            style.shade(
+                top.ltfan.backdrop.highlight.HighlightSample(
+                    androidx.compose.ui.geometry.Offset.Zero,
+                    androidx.compose.ui.geometry.Offset(0f, -1f),
+                    1f,
+                )
+            )
+        val negative =
+            style.shade(
+                top.ltfan.backdrop.highlight.HighlightSample(
+                    androidx.compose.ui.geometry.Offset.Zero,
+                    androidx.compose.ui.geometry.Offset(0f, 1f),
+                    -1f,
+                )
+            )
+
+        assertEquals(0.2f, positive.color.alpha, 0.001f)
+        assertEquals(0.2f, negative.color.alpha, 0.001f)
+        assertEquals(1f, positive.strength, 0.001f)
+        assertTrue(positive.color.red > 1f)
+        assertEquals(0f, negative.color.red)
+        assertEquals(1f, negative.strength, 0.001f)
+    }
+
+    @Test
+    fun fixedWidthHighlightShaderMatchesCpuForHdrAndBlackEmission() {
+        val cases =
+            listOf(
+                HighlightStyle.Solid(Color(2f, 1f, 0.5f, 0.4f, ColorSpaces.ExtendedSrgb)) to
+                    HighlightDirection.None,
+                HighlightStyle.TwoTone(Color(2f, 2f, 2f, 0.4f, ColorSpaces.ExtendedSrgb)) to
+                    HighlightDirection(angle = 90f, mode = HighlightDirection.Mode.Double),
+            )
+        for ((style, direction) in cases) assertHighlightParity(style, direction, 2f)
+    }
+
+    @Test
+    fun widthScaleAboveOneExtendsTheContourAndMatchesCpu() {
+        val direction =
+            HighlightDirection(
+                angle = 270f,
+                mode = HighlightDirection.Mode.Single,
+                widthScale = HighlightResponse(2f, 2f),
+            )
+        val extended = renderHighlightShader(HighlightStyle.Solid(Color.White), direction, 2f)
+        val base =
+            renderHighlightShader(HighlightStyle.Solid(Color.White), HighlightDirection.None, 2f)
+        assertTrue(extended[(3 * 16 + 8) * 4 + 3] > 0f)
+        assertEquals(0f, base[(3 * 16 + 8) * 4 + 3], 0.001f)
+        assertHighlightParity(
+            HighlightStyle.Solid(Color.White),
+            direction,
+            widthPx = 2f,
+            pixels = listOf(8 to 2, 8 to 3, 8 to 4),
         )
     }
 
     @Test
-    fun exclusionMaskUsesLocalBoundaryNormals() {
-        val shader = RuntimeShader(highlightExclusionMaskShader(4, 1))
-        shader.setFloatUniform("geometryScale", 100f)
-        shader.setFloatUniform(
-            "segments",
-            floatArrayOf(
-                0f,
-                0f,
-                100f,
-                0f,
-                100f,
-                0f,
-                100f,
-                100f,
-                100f,
-                100f,
-                0f,
-                100f,
-                0f,
-                100f,
-                0f,
-                0f,
-            ),
-        )
-        shader.setFloatUniform("exclusions", setOf(HighlightExclusion.Top).shaderValues())
-        val builder = shader.asSkikoRuntimeShader()
-        builder.child("content", constantShader(floatArrayOf(1f, 1f, 1f, 1f)))
-        shader.setFloatUniform("origin", -40f, 8f)
-        assertPixel(floatArrayOf(0f, 0f, 0f, 0f), renderShader(builder.makeShader()))
-        shader.setFloatUniform("origin", -40f, -91f)
-        assertPixel(floatArrayOf(1f, 1f, 1f, 1f), renderShader(builder.makeShader()))
+    fun conservativeWidthCullPreservesDefaultAndDescendingResponses() {
+        val ranges =
+            listOf(
+                HighlightResponse(.6f, 1f),
+                HighlightResponse(994.6558f, 369.27536f),
+                HighlightResponse(1.4f, .35f, BackdropCurve.CubicBezier(.2f, .1f, .8f, .9f)),
+            )
+        for (response in ranges) {
+            val widthPx = .001f
+            val endpointWidth = widthPx * response.transform(1f)
+            val maxBandWidth = widthPx * maxOf(response.from, response.to)
+            val endpointMargin = maxOf(.0001f, abs(maxBandWidth) * .000001f)
+            assertTrue(
+                endpointWidth <= maxBandWidth + endpointMargin,
+                "response endpoint must fit the conservative bound: $response",
+            )
+            val direction =
+                HighlightDirection(
+                    angle = 270f,
+                    mode = HighlightDirection.Mode.Single,
+                    widthScale = response,
+                )
+            val style = HighlightStyle.Solid(Color.White)
+            val cpu =
+                renderStaticHighlightPixels(
+                    geometry =
+                        HighlightBoundaryGeometry(
+                                Outline.Rectangle(
+                                    androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f)
+                                )
+                            )
+                            .cpuGeometry(),
+                    size = Size(16f, 16f),
+                    widthPx = widthPx,
+                    falloff = Highlight().falloff,
+                    direction = direction,
+                    style = style,
+                    exclusions = emptySet(),
+                )
+            val gpu = renderHighlightShader(style, direction, widthPx)
+            for (pixel in listOf(8 to 0, 8 to 1)) {
+                val index = (pixel.second * 16 + pixel.first) * 4
+                for (channel in 0..3) {
+                    assertEquals(
+                        cpu[index + channel],
+                        gpu[index + channel],
+                        .12f,
+                        "widthScale=$response pixel=$pixel channel=$channel",
+                    )
+                }
+            }
+        }
+
+        val noDirection =
+            renderHighlightShader(HighlightStyle.Solid(Color.White), HighlightDirection.None, 2f)
+        assertTrue(noDirection[(8 * 16) * 4 + 3] > 0f)
+
+        val overflowingBound =
+            renderHighlightShader(
+                HighlightStyle.Solid(Color.White),
+                HighlightDirection(widthScale = HighlightResponse(2f, 2f)),
+                Float.MAX_VALUE,
+            )
+        assertTrue(overflowingBound[(8 * 16 + 8) * 4 + 3] > 0f)
     }
 
-    private fun renderStaticHighlight(color: Color, angle: Float, ambient: Boolean): FloatArray {
-        val style = if (ambient) HighlightStyle.Ambient(color) else HighlightStyle.Default(color)
-        val runtime = RuntimeShader(staticHighlightShader(4, style))
-        runtime.setFloatUniform("origin", -40f, 8f)
-        runtime.setFloatUniform("geometryScale", 100f)
-        runtime.setFloatUniform(
-            "segments",
-            floatArrayOf(
-                0f,
-                0f,
-                100f,
-                0f,
-                100f,
-                0f,
-                100f,
-                100f,
-                100f,
-                100f,
-                0f,
-                100f,
-                0f,
-                100f,
-                0f,
-                0f,
-            ),
+    private fun assertHighlightParity(
+        style: HighlightStyle,
+        direction: HighlightDirection,
+        widthPx: Float,
+        pixels: List<Pair<Int, Int>> = listOf(8 to 0, 8 to 1, 8 to 2, 8 to 4, 0 to 8, 2 to 8),
+    ) {
+        val genericGeometry =
+            HighlightBoundaryGeometry(
+                    Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f))
+                )
+                .cpuGeometry()
+        val cpu =
+            renderStaticHighlightPixels(
+                geometry = genericGeometry,
+                size = Size(16f, 16f),
+                widthPx = widthPx,
+                falloff = Highlight().falloff,
+                direction = direction,
+                style = style,
+                exclusions = emptySet(),
+            )
+        val native = renderHighlightShader(style, direction, widthPx)
+        for ((x, y) in pixels) {
+            val index = (y * 16 + x) * 4
+            for (channel in 0..3) {
+                assertEquals(
+                    cpu[index + channel],
+                    native[index + channel],
+                    0.12f,
+                    "style=$style direction=$direction width=$widthPx pixel=($x,$y) channel=$channel",
+                )
+            }
+        }
+    }
+
+    private fun renderHighlightShader(
+        style: HighlightStyle,
+        direction: HighlightDirection,
+        widthPx: Float,
+        exclusions: Set<HighlightExclusion> = emptySet(),
+    ): FloatArray {
+        val genericGeometry =
+            HighlightBoundaryGeometry(
+                    Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f))
+                )
+                .cpuGeometry()
+        val shader =
+            RuntimeShader(staticHighlightTileShader(genericGeometry, style, exclusions.size))
+        shader.setFloatUniform("origin", 0f, 0f)
+        shader.setFloatUniform("geometryScale", genericGeometry.coordinateScale)
+        shader.setFloatUniform("segments", genericGeometry.segments)
+        shader.setFloatUniform("tileBounds", 0f, 0f, 16f, 16f)
+        shader.setFloatUniform("width", widthPx)
+        val config = direction as? HighlightDirection.Config
+        val angle = (config?.angle ?: 0f) * (PI.toFloat() / 180f)
+        shader.setFloatUniform("directionVector", kotlin.math.cos(angle), kotlin.math.sin(angle))
+        shader.setFloatUniform("directionEnabled", if (config == null) 0f else 1f)
+        shader.setFloatUniform(
+            "directionMode",
+            if (config?.mode == HighlightDirection.Mode.Single) 0f else 1f,
         )
-        runtime.setFloatUniform("width", 1f)
-        runtime.setFloatUniform("angle", (angle * (PI / 180f)).toFloat())
-        runtime.setFloatUniform("widthCurve", 0f, 0f, 1f, 1f)
-        runtime.setFloatUniform("strengthCurve", 0f, 0f, 1f, 1f)
-        runtime.setFloatUniform("depthCurve", 1f / 3f, 0f, 2f / 3f, 1f)
-        runtime.setFloatUniform("directional", 1f)
-        runtime.setColorUniform("color", color)
-        return renderShader(runtime.asSkikoRuntimeShader().makeShader())
+        shader.setFloatUniform(
+            "directionStrengthRange",
+            config?.strength?.from ?: 1f,
+            config?.strength?.to ?: 1f,
+        )
+        shader.setFloatUniform(
+            "directionStrengthCurve",
+            config?.strength?.curve?.shaderControls() ?: BackdropCurve.Linear.shaderControls(),
+        )
+        shader.setFloatUniform(
+            "directionWidthRange",
+            config?.widthScale?.from ?: 1f,
+            config?.widthScale?.to ?: 1f,
+        )
+        shader.setFloatUniform(
+            "directionWidthCurve",
+            config?.widthScale?.curve?.shaderControls() ?: BackdropCurve.Linear.shaderControls(),
+        )
+        shader.setFloatUniform("falloffCurve", Highlight().falloff.shaderControls())
+        if (exclusions.isNotEmpty()) shader.setFloatUniform("exclusions", exclusions.shaderValues())
+        shader.setColorUniform("color", style.color)
+        style.configureShader(shader)
+        return renderShader(shader.asSkikoRuntimeShader().makeShader(), wholeSurface = true)
+    }
+
+    @Test
+    fun exclusionMaskUsesLocalBoundaryNormals() {
+        val style = HighlightStyle.Solid(Color.White)
+        val direction = HighlightDirection.None
+        val withoutExclusion = renderHighlightShader(style, direction, 2f)
+        val withTopExcluded =
+            renderHighlightShader(
+                style,
+                direction,
+                2f,
+                setOf(HighlightExclusion.Top),
+            )
+
+        assertTrue(
+            withoutExclusion[(0 * 16 + 8) * 4 + 3] > 0.05f,
+            "the top edge emits without exclusions",
+        )
+        assertEquals(
+            0f,
+            withTopExcluded[(0 * 16 + 8) * 4 + 3],
+            0.001f,
+            "Top masks the top outward normal",
+        )
+        assertTrue(
+            withTopExcluded[(15 * 16 + 8) * 4 + 3] > 0.05f,
+            "Top leaves the bottom outward normal active",
+        )
     }
 
     @Test
@@ -546,7 +617,11 @@ class HdrRenderingTest {
         return renderShader(shader) { imageFilter = scope.renderEffect?.skiaImageFilter }
     }
 
-    private fun renderShader(shader: Shader, configure: SkiaPaint.() -> Unit = {}): FloatArray {
+    private fun renderShader(
+        shader: Shader,
+        wholeSurface: Boolean = false,
+        configure: SkiaPaint.() -> Unit = {},
+    ): FloatArray {
         val info = ImageInfo(16, 16, ColorType.RGBA_F16, ColorAlphaType.PREMUL, ColorSpace.sRGB)
         Surface.makeRaster(info).use { surface ->
             SkiaPaint().use { paint ->
@@ -568,33 +643,39 @@ class HdrRenderingTest {
                 // Skiko's RGBA_F32 ordinal currently maps to native RGB_F16F16F16x; recheck when
                 // Skiko is updated.
                 // Read the correctly mapped RGBA_F16 format, including alpha.
+                val readWidth = if (wholeSurface) 16 else 1
+                val readHeight = if (wholeSurface) 16 else 1
+                val readX = if (wholeSurface) 0 else 8
+                val readY = if (wholeSurface) 0 else 8
                 assertTrue(
                     bitmap.allocPixels(
                         ImageInfo(
-                            1,
-                            1,
+                            readWidth,
+                            readHeight,
                             ColorType.RGBA_F16,
                             ColorAlphaType.PREMUL,
                             ColorSpace.sRGB,
                         )
                     )
                 )
-                assertTrue(surface.readPixels(bitmap, 8, 8))
+                assertTrue(surface.readPixels(bitmap, readX, readY))
                 val bytes =
                     requireNotNull(
                         bitmap.readPixels(
                             ImageInfo(
-                                1,
-                                1,
+                                readWidth,
+                                readHeight,
                                 ColorType.RGBA_F16,
                                 ColorAlphaType.PREMUL,
                                 ColorSpace.sRGB,
                             ),
-                            8,
+                            readWidth * 8,
                         )
                     )
                 val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
-                return FloatArray(4) { halfToFloat(buffer.short.toInt() and 0xffff) }
+                return FloatArray(readWidth * readHeight * 4) {
+                    halfToFloat(buffer.short.toInt() and 0xffff)
+                }
             }
         }
     }

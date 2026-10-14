@@ -3,116 +3,92 @@ package top.ltfan.backdrop.highlight
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import top.ltfan.backdrop.RuntimeShader
 
+/** Straight-alpha light emitted by the nearest-contour highlight sample. */
+@Immutable
+public data class HighlightEmission(public val color: Color, public val strength: Float = 1f) {
+    init {
+        require(strength.isFinite() && strength >= 0f) {
+            "strength must be finite and non-negative"
+        }
+    }
+}
+
 /**
- * Defines the color and per-boundary shading behavior of a static highlight. Implementations with
- * mutable public properties keep them snapshot-backed so draw observation invalidates correctly.
+ * Produces straight-alpha color and non-negative emission strength for the nearest boundary sample.
+ * Custom implementations with mutable properties keep them snapshot-backed so drawing observes
+ * changes. [shaderSource] declares `half4 shadeHighlight(float2 position, float2 outwardNormal,
+ * float projection, half4 color)` and `float highlightStrength(float2 position, float2
+ * outwardNormal, float projection)`. The returned color is straight alpha; the strength is
+ * independent of color luminance, so black samples retain emission strength. [shade] and both
+ * shader functions must match. GPU and CPU rendering evaluate their matching shading functions once
+ * per covered sample; the direction-scaled contour profile shares that response. The sample `width`
+ * and GPU uniform `width` remain the configured base width; direction scaling changes only
+ * coverage. Prefix custom uniforms and helpers to avoid the shared shader names `position`,
+ * `outwardNormal`, `projection`, `color`, `origin`, `geometryScale`, `segments`, `width`,
+ * `directionEnabled`, `directionMode`, `directionVector`, `directionStrengthRange`,
+ * `directionStrengthCurve`, `directionWidthRange`, `directionWidthCurve`, `falloffCurve`,
+ * `tileBounds`, `exclusionCount`, `exclusions`, `content`, `colorResponseAmount`, and
+ * `transformHighlightColor`.
  */
 @Stable
 public interface HighlightStyle {
     public val color: Color
-    public val blendMode: BlendMode
-
-    /** Whether directional width and strength curves affect this style. */
-    public val directional: Boolean
-        get() = true
-
-    /**
-     * AGSL declarations and a `shadeHighlight` function returning straight-alpha RGBA. Define
-     * `half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, float
-     * distance, float width, half4 color)` and keep returned alpha in 0..1. [shade] must return the
-     * matching straight-alpha color for CPU fallback. The shared pipeline applies directional
-     * strength, depth coverage, premultiplication, and exclusions after this function. Prefix
-     * custom uniforms and helper functions to avoid the shared names `origin`, `segments`,
-     * `geometryScale`, `boundaryBounds`, `cornerRadii`, `width`, `angle`, `directional`,
-     * `widthCurve`, `strengthCurve`, `depthCurve`, and `color`.
-     */
     public val shaderSource: String
 
-    /** Returns the straight-alpha color for one boundary sample, matching [shaderSource]. */
-    public fun shade(sample: HighlightSample): Color
+    public fun shade(sample: HighlightSample): HighlightEmission
 
-    /** Sets custom shader uniforms for the current draw. */
     public fun configureShader(shader: RuntimeShader) {}
 
-    /** Disables the static pass while retaining an optional environment contribution. */
     @Immutable
     public data object None : HighlightStyle {
-        override val color: Color = Color.Transparent
-        override val blendMode: BlendMode = BlendMode.SrcOver
-        override val directional: Boolean = false
-        override val shaderSource: String = DefaultHighlightShader
+        override val color: Color = Color.White
+        override val shaderSource: String = NoHighlightShader
 
-        override fun shade(sample: HighlightSample): Color = Color.Transparent
+        override fun shade(sample: HighlightSample): HighlightEmission =
+            HighlightEmission(Color.White, 0f)
     }
 
-    /** A uniform fixed-width stroke. Directional width and strength curves do not affect it. */
     @Immutable
-    public data class Plain(
-        override val color: Color = Color.White.copy(alpha = 0.38f),
-        override val blendMode: BlendMode = BlendMode.Plus,
-    ) : HighlightStyle {
-        override val directional: Boolean = false
+    public data class Solid(override val color: Color = Color.White.copy(alpha = .32f)) :
+        HighlightStyle {
         override val shaderSource: String = DefaultHighlightShader
 
-        override fun shade(sample: HighlightSample): Color = color
+        override fun shade(sample: HighlightSample): HighlightEmission = HighlightEmission(color)
     }
 
-    /** A symmetric rim whose width and strength follow [Highlight.Config.direction]. */
     @Immutable
-    public data class Default(
-        override val color: Color = Color.White.copy(alpha = 0.5f),
-        override val blendMode: BlendMode = BlendMode.Plus,
-    ) : HighlightStyle {
-        override val shaderSource: String = DefaultHighlightShader
+    public data class TwoTone(override val color: Color = Color.White.copy(alpha = .32f)) :
+        HighlightStyle {
+        override val shaderSource: String = TwoToneHighlightShader
 
-        override fun shade(sample: HighlightSample): Color = color
-    }
-
-    /**
-     * A signed directional sheen following local outward normals. Positive projection lights the
-     * boundary; negative projection emits black RGB with the same alpha.
-     */
-    @Immutable
-    public data class Ambient(
-        /** Sheen color; its alpha controls strength independently of the layer alpha. */
-        override val color: Color = Color.White.copy(alpha = 0.38f),
-        override val blendMode: BlendMode = DrawScope.DefaultBlendMode,
-    ) : HighlightStyle {
-        override val shaderSource: String = AmbientHighlightShader
-
-        override fun shade(sample: HighlightSample): Color =
-            if (sample.projection >= 0f) color else Color(0f, 0f, 0f, color.alpha, color.colorSpace)
+        override fun shade(sample: HighlightSample): HighlightEmission =
+            HighlightEmission(
+                if (sample.projection >= 0f) color
+                else Color(0f, 0f, 0f, color.alpha, color.colorSpace)
+            )
     }
 
     public companion object {
-        @Stable public val Default: Default = Default()
-        @Stable public val Ambient: Ambient = Ambient()
-        @Stable public val Plain: Plain = Plain()
+        @Stable public val Solid: Solid = Solid()
+        @Stable public val TwoTone: TwoTone = TwoTone()
     }
 }
 
-/** Boundary data shared by custom CPU and AGSL highlight implementations. */
+/** Surface-local point, normal, and signed directional incidence at the nearest boundary sample. */
 @Immutable
 public data class HighlightSample(
-    /** Surface-local pixel position. */
     public val position: Offset,
-    /** Unit outward normal in surface-local coordinates. */
     public val outwardNormal: Offset,
-    /** Signed incidence along [Highlight.Config.direction], in -1..1. */
     public val projection: Float,
-    /** Distance inward from the outline, in pixels. */
-    public val distance: Float,
-    /** Direction-adjusted base band width, in pixels. */
-    public val width: Float,
+    public val width: Float = 0f,
 )
 
-private const val DefaultHighlightShader: String =
-    "half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, float distance, float width, half4 color) { return color; }"
-
-private const val AmbientHighlightShader: String =
-    "half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, float distance, float width, half4 color) { return half4(color.rgb * step(0.0, projection), color.a); }"
+private const val DefaultHighlightShader =
+    "half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, half4 color) { return color; }\nfloat highlightStrength(float2 position, float2 outwardNormal, float projection) { return 1.0; }"
+private const val TwoToneHighlightShader =
+    "half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, half4 color) { return half4(color.rgb * step(0.0, projection), color.a); }\nfloat highlightStrength(float2 position, float2 outwardNormal, float projection) { return 1.0; }"
+private const val NoHighlightShader =
+    "half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, half4 color) { return color; }\nfloat highlightStrength(float2 position, float2 outwardNormal, float projection) { return 0.0; }"

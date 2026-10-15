@@ -1,9 +1,11 @@
-package top.ltfan.backdrop.effects
+package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.Rect
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import top.ltfan.backdrop.BackdropRamp
+import top.ltfan.backdrop.effects.gaussianSupport
+import top.ltfan.backdrop.effects.progressiveBlurKernelSupport
+import top.ltfan.backdrop.effects.progressiveBlurSampling
 
 class BlurSamplingTest {
     @Test

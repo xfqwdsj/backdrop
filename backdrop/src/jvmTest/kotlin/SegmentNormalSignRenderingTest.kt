@@ -1,4 +1,4 @@
-package top.ltfan.backdrop.internal
+package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -19,9 +20,9 @@ import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect as SkiaRect
 import org.jetbrains.skia.Surface
-import top.ltfan.backdrop.RuntimeShader
-import top.ltfan.backdrop.asSkikoRuntimeShader
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
+import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
+import top.ltfan.backdrop.internal.genericBoundaryShaderFunctions
 
 class SegmentNormalSignRenderingTest {
     @Test
@@ -150,7 +151,7 @@ class SegmentNormalSignRenderingTest {
             val by = geometry.segments[offset + 3]
             val dx = bx - ax
             val dy = by - ay
-            val length = kotlin.math.sqrt(dx * dx + dy * dy)
+            val length = sqrt(dx * dx + dy * dy)
             if (length == 0f) continue
             val normalX = dy / length
             val normalY = -dx / length

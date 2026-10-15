@@ -1,4 +1,4 @@
-package top.ltfan.backdrop.internal
+package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
@@ -8,6 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 
 class FlattenedBoundaryGeometryTest {
     @Test

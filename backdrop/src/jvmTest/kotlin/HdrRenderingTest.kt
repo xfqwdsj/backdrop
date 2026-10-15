@@ -1,10 +1,12 @@
 package top.ltfan.backdrop
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Outline.Rectangle
 import androidx.compose.ui.graphics.Paint as ComposePaint
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -16,6 +18,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -29,7 +33,7 @@ import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.ImageFilter
 import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Paint as SkiaPaint
-import org.jetbrains.skia.Rect
+import org.jetbrains.skia.Rect as SkiaRect
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.Shader
@@ -245,10 +249,7 @@ class HdrRenderingTest {
 
     @Test
     fun highlightColorResponseSamplesTheCoveredPixelBackdrop() {
-        val geometry =
-            HighlightBoundaryGeometry(
-                Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f))
-            )
+        val geometry = HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f)))
         val shader =
             RuntimeShader(
                 staticHighlightTileShader(
@@ -300,16 +301,16 @@ class HdrRenderingTest {
         val positive =
             style.shade(
                 top.ltfan.backdrop.highlight.HighlightSample(
-                    androidx.compose.ui.geometry.Offset.Zero,
-                    androidx.compose.ui.geometry.Offset(0f, -1f),
+                    Offset.Zero,
+                    Offset(0f, -1f),
                     1f,
                 )
             )
         val negative =
             style.shade(
                 top.ltfan.backdrop.highlight.HighlightSample(
-                    androidx.compose.ui.geometry.Offset.Zero,
-                    androidx.compose.ui.geometry.Offset(0f, 1f),
+                    Offset.Zero,
+                    Offset(0f, 1f),
                     -1f,
                 )
             )
@@ -382,11 +383,7 @@ class HdrRenderingTest {
             val cpu =
                 renderStaticHighlightPixels(
                     geometry =
-                        HighlightBoundaryGeometry(
-                                Outline.Rectangle(
-                                    androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f)
-                                )
-                            )
+                        HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f)))
                             .cpuGeometry(),
                     size = Size(16f, 16f),
                     widthPx = widthPx,
@@ -429,10 +426,7 @@ class HdrRenderingTest {
         pixels: List<Pair<Int, Int>> = listOf(8 to 0, 8 to 1, 8 to 2, 8 to 4, 0 to 8, 2 to 8),
     ) {
         val genericGeometry =
-            HighlightBoundaryGeometry(
-                    Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f))
-                )
-                .cpuGeometry()
+            HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f))).cpuGeometry()
         val cpu =
             renderStaticHighlightPixels(
                 geometry = genericGeometry,
@@ -464,10 +458,7 @@ class HdrRenderingTest {
         exclusions: Set<HighlightExclusion> = emptySet(),
     ): FloatArray {
         val genericGeometry =
-            HighlightBoundaryGeometry(
-                    Outline.Rectangle(androidx.compose.ui.geometry.Rect(0f, 0f, 16f, 16f))
-                )
-                .cpuGeometry()
+            HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f))).cpuGeometry()
         val shader =
             RuntimeShader(staticHighlightTileShader(genericGeometry, style, exclusions.size))
         shader.setFloatUniform("origin", 0f, 0f)
@@ -477,7 +468,7 @@ class HdrRenderingTest {
         shader.setFloatUniform("width", widthPx)
         val config = direction as? HighlightDirection.Config
         val angle = (config?.angle ?: 0f) * (PI.toFloat() / 180f)
-        shader.setFloatUniform("directionVector", kotlin.math.cos(angle), kotlin.math.sin(angle))
+        shader.setFloatUniform("directionVector", cos(angle), sin(angle))
         shader.setFloatUniform("directionEnabled", if (config == null) 0f else 1f)
         shader.setFloatUniform(
             "directionMode",
@@ -635,7 +626,7 @@ class HdrRenderingTest {
                 )
                 SkiaPaint().use { sourcePaint ->
                     sourcePaint.shader = shader
-                    surface.canvas.drawRect(Rect.makeWH(16f, 16f), sourcePaint)
+                    surface.canvas.drawRect(SkiaRect.makeWH(16f, 16f), sourcePaint)
                 }
                 surface.canvas.restore()
             }

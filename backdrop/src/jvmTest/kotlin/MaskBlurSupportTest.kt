@@ -1,4 +1,4 @@
-package top.ltfan.backdrop.shadow
+package top.ltfan.backdrop
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

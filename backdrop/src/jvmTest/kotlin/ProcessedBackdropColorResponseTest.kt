@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,9 +60,7 @@ class ProcessedBackdropColorResponseTest {
         val backdropCallbackCount = AtomicInteger()
         val recordingStyle = RecordingStyle()
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(
-                LocalBackdropRenderEpoch provides epoch.intValue
-            ) {
+            CompositionLocalProvider(LocalBackdropRenderEpoch provides epoch.intValue) {
                 val source = rememberLayerBackdrop()
                 val exported = rememberLayerBackdrop()
                 val secondSource = rememberLayerBackdrop()

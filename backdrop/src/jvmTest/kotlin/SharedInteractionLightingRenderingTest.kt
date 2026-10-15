@@ -36,7 +36,10 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
@@ -47,6 +50,8 @@ import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.interaction.InteractionLight
 import top.ltfan.backdrop.interaction.InteractionLighting
+import top.ltfan.backdrop.interaction.InteractionRegistry
+import top.ltfan.backdrop.interaction.LocalInteractionRegistry
 import top.ltfan.backdrop.interaction.ProvideInteractionLighting
 import top.ltfan.backdrop.interaction.interactionLightSource
 import top.ltfan.backdrop.shadow.InnerShadow
@@ -54,6 +59,235 @@ import top.ltfan.backdrop.shadow.Shadow
 
 @OptIn(ExperimentalTestApi::class)
 class SharedInteractionLightingRenderingTest {
+    @Test
+    fun nestedSourcesShareOnePhysicalPointerContribution() = runComposeUiTest {
+        lateinit var registry: InteractionRegistry
+        setContent {
+            ProvideInteractionLighting {
+                registry = LocalInteractionRegistry.current!!
+                Box(Modifier.size(120.dp).testTag("nested-pointer-root")) {
+                    Box(
+                        Modifier.fillMaxSize().interactionLightSource {
+                            InteractionLight.Config(color = Color.Red, radius = 100.dp)
+                        }
+                    ) {
+                        Box(
+                            Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
+                                InteractionLight.Config(color = Color.Blue, radius = 100.dp)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        waitForIdle()
+
+        onNodeWithTag("nested-pointer-root").performTouchInput {
+            down(position = Offset(60f, 60f))
+        }
+        waitForIdle()
+        assertEquals(
+            1,
+            registry.lights.size,
+            "nested sources contribute one light for the same physical pointer",
+        )
+    }
+
+    @Test
+    fun distinctPointersKeepDistinctNestedContributions() = runComposeUiTest {
+        lateinit var registry: InteractionRegistry
+        setContent {
+            ProvideInteractionLighting {
+                registry = LocalInteractionRegistry.current!!
+                Box(Modifier.size(120.dp).testTag("multi-pointer-root")) {
+                    Box(
+                        Modifier.fillMaxSize().interactionLightSource {
+                            InteractionLight.Config(color = Color.Red, radius = 100.dp)
+                        }
+                    ) {
+                        Box(
+                            Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
+                                InteractionLight.Config(color = Color.Blue, radius = 100.dp)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        waitForIdle()
+
+        onNodeWithTag("multi-pointer-root").performTouchInput {
+            down(pointerId = 1, position = Offset(40f, 40f))
+            down(pointerId = 2, position = Offset(80f, 80f))
+        }
+        waitForIdle()
+        assertEquals(2, registry.lights.size, "different pointer ids retain separate contributions")
+    }
+
+    @Test
+    fun movingPointerAfterNestedChildDetachesRestoresParentContribution() = runComposeUiTest {
+        lateinit var registry: InteractionRegistry
+        val showChild = mutableStateOf(true)
+        setContent {
+            ProvideInteractionLighting {
+                registry = LocalInteractionRegistry.current!!
+                Box(Modifier.size(120.dp).testTag("child-exit-root")) {
+                    Box(
+                        Modifier.fillMaxSize().interactionLightSource {
+                            InteractionLight.Config(color = Color.Red, radius = 100.dp)
+                        }
+                    ) {
+                        if (showChild.value) {
+                            Box(
+                                Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
+                                    InteractionLight.Config(color = Color.Blue, radius = 100.dp)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        waitForIdle()
+        onNodeWithTag("child-exit-root").performTouchInput {
+            down(position = Offset(60f, 60f))
+        }
+        waitForIdle()
+        assertEquals(1, registry.lights.size, "the child owns the shared contribution")
+
+        runOnIdle { showChild.value = false }
+        waitForIdle()
+        assertEquals(0, registry.lights.size, "detaching the winning child removes its entry")
+        onNodeWithTag("child-exit-root").performTouchInput { moveTo(Offset(70f, 65f)) }
+        waitForIdle()
+        assertEquals(
+            1,
+            registry.lights.size,
+            "the parent restores its entry on the next pointer move",
+        )
+    }
+
+    @Test
+    fun movingPointerAfterNestedChildBecomesNoneRestoresParentContribution() = runComposeUiTest {
+        lateinit var registry: InteractionRegistry
+        val childLight =
+            mutableStateOf<InteractionLight>(
+                InteractionLight.Config(color = Color.Blue, radius = 100.dp)
+            )
+        setContent {
+            ProvideInteractionLighting {
+                registry = LocalInteractionRegistry.current!!
+                Box(Modifier.size(120.dp).testTag("child-none-root")) {
+                    Box(
+                        Modifier.fillMaxSize().interactionLightSource {
+                            InteractionLight.Config(color = Color.Red, radius = 100.dp)
+                        }
+                    ) {
+                        Box(
+                            Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
+                                childLight.value
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        waitForIdle()
+        onNodeWithTag("child-none-root").performTouchInput {
+            down(position = Offset(60f, 60f))
+        }
+        waitForIdle()
+        assertEquals(1, registry.lights.size, "nested sources share one active pointer light")
+
+        runOnIdle { childLight.value = InteractionLight.None }
+        waitForIdle()
+        assertEquals(0, registry.lights.size, "None clears the child's winning entry")
+        onNodeWithTag("child-none-root").performTouchInput { moveTo(Offset(70f, 65f)) }
+        waitForIdle()
+        assertEquals(1, registry.lights.size, "the parent restores its entry on the next move")
+        assertEquals(Color.Red, registry.lights.single().color)
+    }
+
+    @Test
+    fun clearingParentSourceDoesNotRemoveNestedChildWinner() = runComposeUiTest {
+        lateinit var registry: InteractionRegistry
+        val parentLight =
+            mutableStateOf<InteractionLight>(
+                InteractionLight.Config(color = Color.Red, radius = 100.dp)
+            )
+        setContent {
+            ProvideInteractionLighting {
+                registry = LocalInteractionRegistry.current!!
+                Box(Modifier.size(120.dp).testTag("parent-exit-root")) {
+                    Box(Modifier.fillMaxSize().interactionLightSource { parentLight.value }) {
+                        Box(
+                            Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
+                                InteractionLight.Config(color = Color.Blue, radius = 100.dp)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        waitForIdle()
+        onNodeWithTag("parent-exit-root").performTouchInput {
+            down(position = Offset(60f, 60f))
+        }
+        waitForIdle()
+        val childEntry = registry.lights.single()
+
+        runOnIdle { parentLight.value = InteractionLight.None }
+        waitForIdle()
+        assertEquals(1, registry.lights.size, "parent cleanup leaves the child's contribution")
+        assertSame(childEntry, registry.lights.single(), "the child winner remains registered")
+    }
+
+    @Test
+    fun reusedPointerIdCancelsOldFadeWithoutRemovingNewEntry() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        lateinit var registry: InteractionRegistry
+        setContent {
+            ProvideInteractionLighting {
+                registry = LocalInteractionRegistry.current!!
+                Box(Modifier.size(120.dp).testTag("pointer-reuse-root")) {
+                    Box(
+                        Modifier.fillMaxSize().interactionLightSource {
+                            InteractionLight.Config(
+                                color = Color.Red,
+                                radius = 100.dp,
+                                releaseDuration = 120.milliseconds,
+                            )
+                        }
+                    )
+                }
+            }
+        }
+        waitForIdle()
+        onNodeWithTag("pointer-reuse-root").performTouchInput {
+            down(pointerId = 1, position = Offset(30f, 30f))
+        }
+        waitForIdle()
+        onNodeWithTag("pointer-reuse-root").performTouchInput { up(pointerId = 1) }
+        waitForIdle()
+        onNodeWithTag("pointer-reuse-root").performTouchInput {
+            down(pointerId = 1, position = Offset(80f, 80f))
+        }
+        waitForIdle()
+        val replacement = registry.lights.single()
+        mainClock.advanceTimeBy(200)
+        waitForIdle()
+        assertEquals(
+            1,
+            registry.lights.size,
+            "the replacement remains registered after the old fade",
+        )
+        assertSame(
+            replacement,
+            registry.lights.single(),
+            "the old fade cannot remove the new entry for a reused pointer id",
+        )
+    }
+
     @Test
     fun pressLightsASeparateReceiverAndReleaseFadesToBaseline() = runComposeUiTest {
         mainClock.autoAdvance = false
@@ -660,7 +894,10 @@ class SharedInteractionLightingRenderingTest {
         runOnIdle { sourceFocus.requestFocus() }
         waitForIdle()
         val focused = sample()
-        assertTrue(focused.red > .05f && focused.blue > .05f, "raw focus creates a center light")
+        assertTrue(
+            focused.red < baseline.red + .05f && focused.blue < baseline.blue + .05f,
+            "raw focus alone does not create a light: $focused",
+        )
 
         onNodeWithTag("keyboard-source").performKeyInput {
             keyDown(Key.Enter)
@@ -683,9 +920,10 @@ class SharedInteractionLightingRenderingTest {
     }
 
     @Test
-    fun rawModeRestoresExistingFocusAfterSourceSwitchAndLightReenable() = runComposeUiTest {
+    fun switchingToRawModeDoesNotCreateLightFromExistingFocus() = runComposeUiTest {
         val focus = FocusRequester()
         val externalSource = MutableInteractionSource()
+        val externalFocus = FocusInteraction.Focus()
         val interactionSource = mutableStateOf<MutableInteractionSource?>(externalSource)
         val light =
             mutableStateOf<InteractionLight>(
@@ -724,14 +962,17 @@ class SharedInteractionLightingRenderingTest {
         waitForIdle()
         val sample = { onNodeWithTag("root").captureToImage().toPixelMap()[140, 120] }
         runOnIdle { focus.requestFocus() }
+        runOnIdle { externalSource.tryEmit(externalFocus) }
         waitForIdle()
         val externalMode = sample()
+        assertTrue(externalMode.green > .05f, "external focus interaction emits a light")
         runOnIdle { interactionSource.value = null }
+        mainClock.advanceTimeBy(250)
         waitForIdle()
         val rawMode = sample()
         assertTrue(
-            rawMode.green > externalMode.green + .08f,
-            "switching to raw mode observes the source's already-held focus",
+            rawMode.green < externalMode.green - .05f,
+            "switching to raw mode clears external focus light: $rawMode vs $externalMode",
         )
 
         runOnIdle { light.value = InteractionLight.None }
@@ -740,10 +981,67 @@ class SharedInteractionLightingRenderingTest {
         runOnIdle { light.value = InteractionLight.Default }
         waitForIdle()
         val reenabled = sample()
-        assertTrue(disabled.green < rawMode.green - .05f, "None clears focus-driven source output")
+        assertTrue(disabled.green < rawMode.green + .05f, "None leaves raw focus unlit")
         assertTrue(
-            reenabled.green > disabled.green + .08f,
-            "Default restores the existing center focus light",
+            reenabled.green < disabled.green + .05f,
+            "Default does not recreate a light from existing raw focus",
+        )
+    }
+
+    @Test
+    fun ancestorPreviewKeyActivatesRawLightWhenChildConsumesKey() = runComposeUiTest {
+        val focus = FocusRequester()
+        setContent {
+            ProvideInteractionLighting {
+                val backdrop = rememberLayerBackdrop()
+                Box(Modifier.size(220.dp).background(Color.Black).testTag("root")) {
+                    Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
+                    Box(
+                        Modifier.offset(20.dp, 80.dp)
+                            .size(40.dp)
+                            .interactionLightSource(interactionSource = null) {
+                                InteractionLight.Config(color = Color.Magenta, radius = 160.dp)
+                            }
+                            .testTag("ancestor-key-source")
+                    ) {
+                        Box(
+                            Modifier.fillMaxSize()
+                                .focusRequester(focus)
+                                .focusable()
+                                .clickable {}
+                                .testTag("consuming-child")
+                        )
+                    }
+                    Box(
+                        Modifier.offset(100.dp, 80.dp)
+                            .size(80.dp)
+                            .drawBackdrop(
+                                backdrop,
+                                { RectangleShape },
+                                highlight = { Highlight.None },
+                                shadow = { Shadow.None },
+                                innerShadow = { InnerShadow.None },
+                                interactionLighting = {
+                                    InteractionLighting.Config(interiorOpacity = .8f)
+                                },
+                            )
+                    )
+                }
+            }
+        }
+        waitForIdle()
+        val sample = { onNodeWithTag("root").captureToImage().toPixelMap()[140, 120] }
+        runOnIdle { focus.requestFocus() }
+        waitForIdle()
+        val focused = sample()
+        assertTrue(focused.red < .05f && focused.blue < .05f, "raw focus alone stays unlit")
+
+        onNodeWithTag("consuming-child").performKeyInput { keyDown(Key.Enter) }
+        waitForIdle()
+        val activated = sample()
+        assertTrue(
+            activated.red > .05f && activated.blue > .05f,
+            "ancestor preview sees activation before the child consumes it: $activated",
         )
     }
 
@@ -950,6 +1248,160 @@ class SharedInteractionLightingRenderingTest {
         assertTrue(
             noneFocused.red < .05f,
             "unfocusing B clears both focus lights: $noneFocused",
+        )
+    }
+
+    @Test
+    fun pointerInputEndsExternalFocusUntilKeyboardInputResetsItsOwner() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val source = MutableInteractionSource()
+        val focus = FocusInteraction.Focus()
+        val focusRequester = FocusRequester()
+        setContent {
+            ProvideInteractionLighting {
+                val backdrop = rememberLayerBackdrop()
+                Box(Modifier.size(220.dp).background(Color.Black).testTag("root")) {
+                    Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
+                    Box(
+                        Modifier.offset(20.dp, 80.dp)
+                            .size(40.dp)
+                            .focusRequester(focusRequester)
+                            .interactionLightSource(source) {
+                                InteractionLight.Config(
+                                    color = Color.Red,
+                                    radius = 160.dp,
+                                    releaseDuration = 400.milliseconds,
+                                )
+                            }
+                            .focusable()
+                            .testTag("external-focus-source")
+                    )
+                    Box(
+                        Modifier.offset(100.dp, 80.dp)
+                            .size(80.dp)
+                            .drawBackdrop(
+                                backdrop,
+                                { RectangleShape },
+                                highlight = { Highlight.None },
+                                shadow = { Shadow.None },
+                                innerShadow = { InnerShadow.None },
+                                interactionLighting = {
+                                    InteractionLighting.Config(interiorOpacity = .8f)
+                                },
+                            )
+                    )
+                }
+            }
+        }
+        waitForIdle()
+        runOnIdle { focusRequester.requestFocus() }
+        waitForIdle()
+        val sample = { onNodeWithTag("root").captureToImage().toPixelMap()[140, 120] }
+        runOnIdle { source.tryEmit(focus) }
+        mainClock.advanceTimeBy(16)
+        waitForIdle()
+        val externallyFocused = sample()
+        assertTrue(externallyFocused.red > .05f, "external focus creates a light")
+
+        onNodeWithTag("external-focus-source").performTouchInput {
+            down(center)
+            up()
+        }
+        mainClock.advanceTimeBy(500)
+        waitForIdle()
+        val afterPointer = sample()
+        assertTrue(
+            afterPointer.red < externallyFocused.red - .05f,
+            "pointer input ends prior external focus light: $afterPointer",
+        )
+
+        onNodeWithTag("external-focus-source").performKeyInput { keyDown(Key.A) }
+        runOnIdle { source.tryEmit(FocusInteraction.Focus()) }
+        mainClock.advanceTimeBy(16)
+        waitForIdle()
+        assertTrue(
+            sample().red > afterPointer.red + .05f,
+            "preview key input permits later focus light",
+        )
+    }
+
+    @Test
+    fun pointerDrivenFocusSuppressionSurvivesFocusLossUntilPreviewKeyDown() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val source = MutableInteractionSource()
+        val sourceFocus = FocusRequester()
+        val otherFocus = FocusRequester()
+        setContent {
+            ProvideInteractionLighting {
+                val backdrop = rememberLayerBackdrop()
+                Box(Modifier.size(220.dp).background(Color.Black).testTag("root")) {
+                    Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
+                    Box(
+                        Modifier.offset(20.dp, 80.dp)
+                            .size(40.dp)
+                            .focusRequester(sourceFocus)
+                            .interactionLightSource(source) {
+                                InteractionLight.Config(color = Color.Red, radius = 160.dp)
+                            }
+                            .focusable()
+                            .testTag("focus-history-source")
+                    )
+                    Box(
+                        Modifier.offset(10.dp, 10.dp)
+                            .size(20.dp)
+                            .focusRequester(otherFocus)
+                            .focusable()
+                            .testTag("other-focus")
+                    )
+                    Box(
+                        Modifier.offset(100.dp, 80.dp)
+                            .size(80.dp)
+                            .drawBackdrop(
+                                backdrop,
+                                { RectangleShape },
+                                highlight = { Highlight.None },
+                                shadow = { Shadow.None },
+                                innerShadow = { InnerShadow.None },
+                                interactionLighting = {
+                                    InteractionLighting.Config(interiorOpacity = .8f)
+                                },
+                            )
+                    )
+                }
+            }
+        }
+        waitForIdle()
+        val sample = { onNodeWithTag("root").captureToImage().toPixelMap()[140, 120] }
+        runOnIdle { sourceFocus.requestFocus() }
+        runOnIdle { source.tryEmit(FocusInteraction.Focus()) }
+        mainClock.advanceTimeBy(16)
+        waitForIdle()
+        val initiallyFocused = sample()
+        assertTrue(initiallyFocused.red > .05f, "external focus initially creates a light")
+
+        onNodeWithTag("focus-history-source").performTouchInput {
+            down(center)
+            up()
+        }
+        mainClock.advanceTimeBy(500)
+        runOnIdle { otherFocus.requestFocus() }
+        runOnIdle { sourceFocus.requestFocus() }
+        runOnIdle { source.tryEmit(FocusInteraction.Focus()) }
+        mainClock.advanceTimeBy(16)
+        waitForIdle()
+        val afterProgrammaticRefocus = sample()
+        assertTrue(
+            afterProgrammaticRefocus.red < .05f,
+            "programmatic refocus stays suppressed after pointer input: $afterProgrammaticRefocus",
+        )
+
+        onNodeWithTag("focus-history-source").performKeyInput { keyDown(Key.A) }
+        runOnIdle { source.tryEmit(FocusInteraction.Focus()) }
+        mainClock.advanceTimeBy(16)
+        waitForIdle()
+        assertTrue(
+            sample().red > afterProgrammaticRefocus.red + .05f,
+            "preview key input allows a later external focus light",
         )
     }
 

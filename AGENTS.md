@@ -197,3 +197,6 @@ When a new same-file import collision appears, apply the source-prefix conventio
   mode. The unsupported interior fallback uses a cached interpolated SDR vertex mesh. Keep every finite
   source and retain compiled shader-capacity variants while their renderer remains active; disabling
   or detaching the owning effect releases its renderer resources.
+  Interaction-light sources observe raw focus for keyboard activation without emitting a light from
+  focus alone; supplied `InteractionSource` focus interactions emit focus lights. Pointer input ends
+  existing external focus lights, and preview key input resets pointer-driven focus suppression.

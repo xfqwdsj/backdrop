@@ -131,8 +131,10 @@ and owns its movement and release fade, whether or not an `InteractionSource` is
 modifier observes pointer changes without consuming them. A supplied `InteractionSource` also
 provides synthetic press and focus interactions; a press uniquely matching an active pointer shares
 that pointer's light, while unrelated presses keep their own lifetime. With no source, the modifier
-supports focus and keyboard activation. An unspecified synthetic press position uses the source
-center. Radius is measured in window pixels using the source density, so
+observes focus for keyboard input but does not light from programmatic focus alone; Enter, Space, and
+Center key input create a center light. A supplied `InteractionSource` provides focus lights, which
+pointer input ends and subsequent key input permits again. An unspecified synthetic press position
+uses the source center. Radius is measured in window pixels using the source density, so
 receiver transforms do not scale the light. Release intensity fades according to
 `InteractionLight.Config.releaseDuration`.
 

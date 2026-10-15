@@ -43,8 +43,9 @@ import kotlinx.coroutines.launch
  * Registers this node as a source of window-local interaction light. Physical pointer input owns
  * pointer-light lifetimes regardless of [interactionSource]. A supplied [interactionSource] also
  * provides synthetic press and focus interactions; a press matching one active pointer reuses its
- * light. Place this modifier before the focusable modifier to observe focus and keyboard input.
- * Interior light is added with native Plus blending without allocating an extra layer.
+ * light. A raw source observes focus for keyboard input without lighting on focus alone. Place this
+ * modifier before the focusable modifier to observe focus and keyboard input. Interior light is
+ * added with native Plus blending without allocating an extra layer.
  */
 public fun Modifier.interactionLightSource(
     interactionSource: InteractionSource? = null,
@@ -95,7 +96,6 @@ private class InteractionLightSourceNode(
     private var sourceJob: Job? = null
     private var focused = false
     private var pointerDrivenFocus = false
-    private var focusToken: Any? = null
     private val active = mutableMapOf<Any, InteractionLightEntry>()
     private val localPositions = mutableMapOf<Any, Offset>()
     private val windowAnchoredTokens = mutableSetOf<Any>()
@@ -112,7 +112,6 @@ private class InteractionLightSourceNode(
     override fun onAttach() {
         observeConfigAndBindings()
         restartCollection()
-        syncFocus()
     }
 
     fun update(interactionSource: InteractionSource?, light: (() -> InteractionLight)?) {
@@ -121,7 +120,6 @@ private class InteractionLightSourceNode(
             sourceJob?.cancel()
             this.interactionSource = interactionSource
             restartCollection()
-            syncFocus()
         }
         if (this.light !== light) {
             this.light = light
@@ -150,14 +148,12 @@ private class InteractionLightSourceNode(
         }
         config = nextConfig
         applyConfig()
-        syncFocus()
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         this.coordinates = coordinates
         window = currentValueOf(LocalWindowInfo)
         updatePositions()
-        syncFocus()
     }
 
     override fun onPointerEvent(
@@ -167,14 +163,13 @@ private class InteractionLightSourceNode(
     ) {
         if (pass != PointerEventPass.Initial) return
         for (change in pointerEvent.changes) {
+            pointerDrivenFocus = true
+            endFocusSources()
             when {
                 change.changedToDownIgnoreConsumed() -> {
-                    focusToken?.let(::releaseSource)
-                    focusToken = null
                     pointerDowns[change.id] = change.position
                     pointerStartPositions[change.id] = change.position
-                    pointerDrivenFocus = true
-                    val token = Any()
+                    val token = window?.let { PhysicalPointerToken(it, change.id) } ?: Any()
                     if (putSource(token, change.position, windowAnchored = true)) {
                         pointerTokens[change.id] = token
                     }
@@ -210,13 +205,11 @@ private class InteractionLightSourceNode(
     }
 
     override fun onFocusEvent(focusState: FocusState) {
-        focused = focusState.isFocused
+        focused = focusState.hasFocus
         if (!focused) {
-            pointerDrivenFocus = false
             keyboardTokens.values.toList().forEach(::releaseSource)
             keyboardTokens.clear()
         }
-        syncFocus()
     }
 
     override fun onDensityChange() {
@@ -225,6 +218,12 @@ private class InteractionLightSourceNode(
 
     @Suppress("SameReturnValue")
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        return false
+    }
+
+    @Suppress("SameReturnValue")
+    override fun onPreKeyEvent(event: KeyEvent): Boolean {
+        if (event.type == KeyEventType.KeyDown) pointerDrivenFocus = false
         if (interactionSource != null) return false
         val key = event.key
         if (key != Key.Enter && key != Key.Spacebar && key != Key.DirectionCenter) return false
@@ -232,16 +231,12 @@ private class InteractionLightSourceNode(
             keyboardTokens.remove(key)?.let(::releaseSource)
             return false
         }
-        if (!focused) return false
-        if (event.type == KeyEventType.KeyDown && key !in keyboardTokens) {
+        if (focused && event.type == KeyEventType.KeyDown && key !in keyboardTokens) {
             val token = Any()
             if (putSource(token, center(), centered = true)) keyboardTokens[key] = token
         }
-        // Keep activation events available to the focus and click handlers further along the chain.
         return false
     }
-
-    override fun onPreKeyEvent(event: KeyEvent): Boolean = false
 
     private fun restartCollection() {
         sourceJob?.cancel()
@@ -307,14 +302,10 @@ private class InteractionLightSourceNode(
         }
     }
 
-    private fun syncFocus() {
-        if (interactionSource != null) return
-        if (focused && !pointerDrivenFocus && focusToken == null) {
-            val token = Any()
-            if (putSource(token, center(), centered = true)) focusToken = token
-        }
-        if (!focused && focusToken != null)
-            focusToken?.let(::releaseSource).also { focusToken = null }
+    private fun endFocusSources() {
+        if (externalFocusTokens.isEmpty()) return
+        externalFocusTokens.values.forEach(::releaseSource)
+        externalFocusTokens.clear()
     }
 
     private fun center(): Offset {
@@ -346,7 +337,7 @@ private class InteractionLightSourceNode(
                 light.falloff,
                 1f,
             )
-        currentRegistry.lights.removeAll { it.token === token }
+        currentRegistry.lights.removeAll { it.token == token }
         releaseJobs.remove(token)?.cancel()
         currentRegistry.lights.add(entry)
         active[token] = entry
@@ -357,10 +348,15 @@ private class InteractionLightSourceNode(
 
     private fun updateWindowAnchoredEntry(token: Any, local: Offset) {
         val coords = coordinates ?: return
+        val currentRegistry = registry ?: return
+        val entry = active[token] ?: return
         val position = coords.localToWindow(local)
-        active[token]?.let {
-            it.x = position.x
-            it.y = position.y
+        entry.x = position.x
+        entry.y = position.y
+        if (currentRegistry.lights.none { it.token == token && it === entry }) {
+            currentRegistry.lights.removeAll { it.token == token }
+            currentRegistry.lights.add(entry)
+            releaseJobs.remove(token)?.cancel()
         }
     }
 
@@ -429,7 +425,7 @@ private class InteractionLightSourceNode(
 
     private fun removeSource(token: Any) {
         releaseJobs.remove(token)
-        active.remove(token)?.let { registry?.lights?.remove(it) }
+        active.remove(token)?.let { entry -> registry?.lights?.removeAll { it === entry } }
         localPositions.remove(token)
         windowAnchoredTokens.remove(token)
     }
@@ -449,7 +445,6 @@ private class InteractionLightSourceNode(
         pressTokens.clear()
         externalFocusTokens.clear()
         keyboardTokens.clear()
-        focusToken = null
     }
 
     override fun onDetach() {
@@ -471,3 +466,13 @@ private class InteractionLightSourceNode(
 }
 
 private fun Offset.isFinitePosition(): Boolean = x.isFinite() && y.isFinite()
+
+private class PhysicalPointerToken(
+    private val window: WindowInfo,
+    private val pointerId: PointerId,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is PhysicalPointerToken && window === other.window && pointerId == other.pointerId
+
+    override fun hashCode(): Int = pointerId.hashCode()
+}

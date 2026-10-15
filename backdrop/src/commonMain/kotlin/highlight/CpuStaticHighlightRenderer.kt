@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -147,16 +148,16 @@ internal fun directionLevel(direction: HighlightDirection, projection: Float): F
         HighlightDirection.None -> 1f
         is HighlightDirection.Config ->
             if (direction.mode == HighlightDirection.Mode.Single) maxOf(0f, projection)
-            else kotlin.math.abs(projection)
+            else abs(projection)
     }
 
 private fun directionStrength(direction: HighlightDirection, magnitude: Float): Float =
     (direction as? HighlightDirection.Config)?.strength?.transform(magnitude) ?: 1f
 
-private fun directionWidthScale(direction: HighlightDirection, magnitude: Float): Float =
+internal fun directionWidthScale(direction: HighlightDirection, magnitude: Float): Float =
     (direction as? HighlightDirection.Config)?.widthScale?.transform(magnitude) ?: 1f
 
-private fun exclusionWeight(normal: Offset, exclusions: Set<HighlightExclusion>): Float {
+internal fun exclusionWeight(normal: Offset, exclusions: Set<HighlightExclusion>): Float {
     var weight = 1f
     val radians = (PI / 180.0).toFloat()
     for (entry in exclusions) {

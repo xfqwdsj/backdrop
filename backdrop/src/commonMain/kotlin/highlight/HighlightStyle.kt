@@ -31,7 +31,10 @@ public data class HighlightEmission(public val color: Color, public val strength
  * `directionEnabled`, `directionMode`, `directionVector`, `directionStrengthRange`,
  * `directionStrengthCurve`, `directionWidthRange`, `directionWidthCurve`, `falloffCurve`,
  * `tileBounds`, `exclusionCount`, `exclusions`, `content`, `colorResponseAmount`, and
- * `transformHighlightColor`.
+ * `transformHighlightColor`. Interaction-capable highlight variants also reserve `interactionRowX`,
+ * `interactionRowY`, `interactionRowW`, `interactionPositions`, `interactionColors`,
+ * `interactionParameters`, `interactionCurves`, `interactionLightCount`,
+ * `interactionContourOpacity`, and `interactionField`.
  */
 @Stable
 public interface HighlightStyle {

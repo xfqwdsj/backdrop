@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -116,7 +117,7 @@ class ColorUniformConverterTest {
 
     private fun assertPixel(expected: FloatArray, actual: FloatArray) {
         for (index in expected.indices) {
-            assertTrue(kotlin.math.abs(expected[index] - actual[index]) < 0.01f)
+            assertTrue(abs(expected[index] - actual[index]) < 0.01f)
         }
     }
 

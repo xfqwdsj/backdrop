@@ -63,6 +63,8 @@ internal fun encodeHighlightExtendedSrgb(value: Float): Float =
         if (abs(value) <= .0031308f) abs(value) * 12.92f
         else 1.055f * abs(value).toDouble().pow(1.0 / 2.4).toFloat() - .055f
 
+internal fun decodeHighlightExtendedSrgb(value: Float): Float = decodeSrgb(value)
+
 private fun decodeSrgb(value: Float): Float =
     sign(value) *
         if (abs(value) <= .04045f) abs(value) / 12.92f

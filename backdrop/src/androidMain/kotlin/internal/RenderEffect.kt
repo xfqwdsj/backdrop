@@ -1,5 +1,6 @@
 package top.ltfan.backdrop.internal
 
+import android.graphics.RenderEffect as AndroidRenderEffect
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Rect
@@ -13,7 +14,7 @@ import top.ltfan.backdrop.asAndroidRuntimeShader
 @RequiresApi(Build.VERSION_CODES.S)
 internal actual fun RenderEffect?.chain(other: RenderEffect): RenderEffect {
     return if (this != null) {
-        android.graphics.RenderEffect.createChainEffect(
+        AndroidRenderEffect.createChainEffect(
                 other.asAndroidRenderEffect(),
                 this.asAndroidRenderEffect(),
             )
@@ -29,7 +30,7 @@ internal actual fun RuntimeShaderEffect(
     uniformShaderName: String,
     inputBounds: Rect?,
 ): RenderEffect {
-    return android.graphics.RenderEffect.createRuntimeShaderEffect(
+    return AndroidRenderEffect.createRuntimeShaderEffect(
             runtimeShader.asAndroidRuntimeShader(),
             uniformShaderName,
         )
@@ -42,13 +43,13 @@ internal actual fun ColorFilterEffect(
     colorFilter: ColorFilter,
 ): RenderEffect {
     return if (renderEffect != null) {
-        android.graphics.RenderEffect.createColorFilterEffect(
+        AndroidRenderEffect.createColorFilterEffect(
                 colorFilter.asAndroidColorFilter(),
                 renderEffect.asAndroidRenderEffect(),
             )
             .asComposeRenderEffect()
     } else {
-        android.graphics.RenderEffect.createColorFilterEffect(colorFilter.asAndroidColorFilter())
+        AndroidRenderEffect.createColorFilterEffect(colorFilter.asAndroidColorFilter())
             .asComposeRenderEffect()
     }
 }

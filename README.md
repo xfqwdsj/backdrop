@@ -97,6 +97,51 @@ to update rendering without recomposing the component. A producer can switch bet
 configuration; `None` releases the decoration's drawing layer. Configurations remain configurations
 at zero alpha.
 
+### Shared interaction lighting
+
+`ProvideInteractionLighting` creates a registry for interaction lights. A source opts in with
+`Modifier.interactionLightSource`; a `drawBackdrop` receiver opts in with its
+`interactionLighting` producer or the matching `BackdropStyle` field. The default receiver setting
+is `InteractionLighting.None`, and `drawPlainBackdrop` remains effects-only.
+
+```kotlin
+ProvideInteractionLighting {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.interactionLightSource(light = {
+            InteractionLight.Config(color = Color(0xFFFFB45E), radius = 180.dp)
+        }),
+    ) { Text("Light source") }
+
+    Box(
+        Modifier.drawBackdrop(
+            backdrop,
+            shape = { RoundedCornerShape(24.dp) },
+            interactionLighting = { InteractionLighting.Config() },
+        ),
+    )
+}
+```
+
+The default provider isolates its registry; a nested `ProvideInteractionLighting(isolate = false)`
+reuses the nearest provider registry. Sources and receivers also match Compose's `LocalWindowInfo`
+identity. This shares lights within that provider scope and Compose window; independent roots or
+native windows are not discovered process-wide. Physical pointer input immediately creates a light
+and owns its movement and release fade, whether or not an `InteractionSource` is supplied. The
+modifier observes pointer changes without consuming them. A supplied `InteractionSource` also
+provides synthetic press and focus interactions; a press uniquely matching an active pointer shares
+that pointer's light, while unrelated presses keep their own lifetime. With no source, the modifier
+supports focus and keyboard activation. An unspecified synthetic press position uses the source
+center. Radius is measured in window pixels using the source density, so
+receiver transforms do not scale the light. Release intensity fades according to
+`InteractionLight.Config.releaseDuration`.
+
+Runtime shader rendering evaluates the shared field in linear extended-sRGB. Interior lighting uses
+native Plus blending without an extra layer. Contour lighting joins the highlight output and uses
+the highlight's blend mode. On platforms without runtime shaders, interior lighting uses a cached,
+interpolated SDR vertex mesh; its color range and sampling are therefore approximate, especially
+for very small features and extended-range colors.
+
 ### Source boundaries
 
 Effect sampling bounds describe required pixels; the source defines how those pixels are supplied.

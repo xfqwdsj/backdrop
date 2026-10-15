@@ -46,6 +46,7 @@ import top.ltfan.backdrop.highlight.HighlightColorTransform
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightResponse
+import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
 import top.ltfan.backdrop.highlight.shaderValues
@@ -300,7 +301,7 @@ class HdrRenderingTest {
         val style = HighlightStyle.TwoTone(color)
         val positive =
             style.shade(
-                top.ltfan.backdrop.highlight.HighlightSample(
+                HighlightSample(
                     Offset.Zero,
                     Offset(0f, -1f),
                     1f,
@@ -308,7 +309,7 @@ class HdrRenderingTest {
             )
         val negative =
             style.shade(
-                top.ltfan.backdrop.highlight.HighlightSample(
+                HighlightSample(
                     Offset.Zero,
                     Offset(0f, 1f),
                     -1f,

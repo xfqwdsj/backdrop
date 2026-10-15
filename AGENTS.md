@@ -45,7 +45,7 @@ test counts — belong in the code, and this file points to the source instead o
 
 ### General rules
 
-- Import referenced Kotlin declarations. Keep fully qualified names only where the language requires them, such as package and import declarations or string-based external identifiers.
+- No fully qualified references in source code or KDoc; import declarations instead. Resolve name collisions with explicit import aliases. Package and import declarations and string-based external identifiers are exempt.
 - Leave imports unaliased when their simple names are unambiguous.
 - For collisions between Compose (`androidx.compose.*`) and Skia (`org.jetbrains.skia.*`), prefix the alias with the source: `Compose<Type>` or `Skia<Type>`. Keep the unaliased name for the other declaration when it remains clear.
 
@@ -58,6 +58,8 @@ test counts — belong in the code, and this file points to the source instead o
 | `org.jetbrains.skia.BlendMode` | `SkiaBlendMode` | When Compose and Skia `BlendMode` are both used in one file |
 | `org.jetbrains.skia.ColorFilter` | `SkiaColorFilter` | When Compose and Skia `ColorFilter` are both used in one file |
 | `org.jetbrains.skia.Rect` | `SkiaRect` | When Compose geometry `Rect` and Skia `Rect` are both used in one file |
+| `android.graphics.RenderEffect` | `AndroidRenderEffect` | When Android and Compose `RenderEffect` are both used in one file |
+| `android.graphics.RuntimeShader` | `AndroidGraphicsRuntimeShader` | When Android graphics and the library `RuntimeShader` are both used in one file |
 
 ### Adding a new collision
 
@@ -90,9 +92,9 @@ When a new same-file import collision appears, apply the source-prefix conventio
   Its sources declare `package top.ltfan.backdrop[.sub]` under `backdrop/src/<sourceSet>/kotlin/` with the
   `top/ltfan/backdrop` directory prefix omitted. The remaining package segments map directly to
   directories (`effects/Lens.kt` declares `top.ltfan.backdrop.effects`). Files in the same relative
-  directory share the same package. Tests at the source-set root declare `top.ltfan.backdrop`;
-  tests in a subdirectory use its corresponding subpackage. Ignore an IDE package-directory hint
-  only after verifying this mapping; a different package in the same directory is a real violation.
+  directory share the same package. Tests live flat at the test source-set root and declare
+  `top.ltfan.backdrop`; import the production subpackages they exercise. Ignore an IDE package-directory
+  hint only after verifying this mapping; a different package in the same directory is a real violation.
 - Probes, clones and temporary copies go under a temp directory such as `/tmp/<name>`. Never modify this repository from a
   probe, and never commit one.
 - Do not push to the upstream repository; do not push or rewrite published history. The owner pushes.
@@ -186,3 +188,12 @@ When a new same-file import collision appears, apply the source-prefix conventio
   bounds and radius uniforms instead of flattened segment geometry. Falloff curve variants are
   specialized independently from direction response curves so their control points keep their own
   semantics.
+- Shared interaction lighting is opt-in within the nearest `ProvideInteractionLighting` registry
+  and Compose window identity. Sources register input state; `drawBackdrop` receives the shared
+  field behind content and clipped to the original surface shape. `drawPlainBackdrop` remains
+  effects-only. Source positions and radii use window pixels, with configured dp radius converted
+  using source density. Runtime shader fields use linear extended-sRGB. Interior lighting uses native
+  Plus blending without an extra layer; contour lighting joins the highlight output and uses its blend
+  mode. The unsupported interior fallback uses a cached interpolated SDR vertex mesh. Keep every finite
+  source and retain compiled shader-capacity variants while their renderer remains active; disabling
+  or detaching the owning effect releases its renderer resources.

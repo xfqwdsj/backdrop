@@ -2,6 +2,7 @@ package top.ltfan.backdrop
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
@@ -29,7 +30,7 @@ class ShapeProviderCachingTest {
                 ): Outline {
                     outlineCalls++
                     return Outline.Rounded(
-                        androidx.compose.ui.geometry.RoundRect(
+                        RoundRect(
                             0f,
                             0f,
                             size.width,

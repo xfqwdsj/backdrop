@@ -1,5 +1,6 @@
 package top.ltfan.backdrop
 
+import android.graphics.RuntimeShader as AndroidGraphicsRuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Color
@@ -9,7 +10,7 @@ import org.intellij.lang.annotations.Language
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public actual fun RuntimeShader(@Language("AGSL") shaderString: String): RuntimeShader {
-    val shader = android.graphics.RuntimeShader(shaderString)
+    val shader = AndroidGraphicsRuntimeShader(shaderString)
     return AndroidRuntimeShader(shader)
 }
 
@@ -17,12 +18,12 @@ public actual fun RuntimeShader.asComposeShader(): Shader {
     return this.asAndroidRuntimeShader()
 }
 
-public fun RuntimeShader.asAndroidRuntimeShader(): android.graphics.RuntimeShader {
+public fun RuntimeShader.asAndroidRuntimeShader(): AndroidGraphicsRuntimeShader {
     return (this as AndroidRuntimeShader).shader
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-internal class AndroidRuntimeShader(val shader: android.graphics.RuntimeShader) : RuntimeShader {
+internal class AndroidRuntimeShader(val shader: AndroidGraphicsRuntimeShader) : RuntimeShader {
 
     override fun setFloatUniform(name: String, value: Float) {
         shader.setFloatUniform(name, value)

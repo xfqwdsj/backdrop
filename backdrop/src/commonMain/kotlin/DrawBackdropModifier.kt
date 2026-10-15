@@ -37,6 +37,7 @@ import androidx.compose.ui.node.requireDensity
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutDirection
 import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -46,6 +47,9 @@ import kotlin.math.floor
 import top.ltfan.backdrop.backdrops.LayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightElement
+import top.ltfan.backdrop.interaction.InteractionFieldRenderer
+import top.ltfan.backdrop.interaction.InteractionLighting
+import top.ltfan.backdrop.interaction.LocalInteractionRegistry
 import top.ltfan.backdrop.internal.BackdropSourceRenderer
 import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.SurfaceBounds
@@ -119,6 +123,7 @@ public fun Modifier.drawPlainBackdrop(
                 onDrawSurface = onDrawSurface,
                 onDrawFront = onDrawFront,
                 processedFrame = null,
+                interactionLighting = null,
             )
         )
 }
@@ -144,6 +149,7 @@ public fun Modifier.drawBackdrop(
     onDrawBackdrop: BackdropEffectDrawCallback = DefaultOnDrawBackdrop,
     onDrawSurface: BackdropDrawCallback? = null,
     onDrawFront: BackdropDrawCallback? = null,
+    interactionLighting: (() -> InteractionLighting)? = null,
 ): Modifier {
     val shapeProvider = ShapeProvider(shape)
     val surfaceBounds = SurfaceBounds()
@@ -173,6 +179,7 @@ public fun Modifier.drawBackdrop(
                 shapeProvider = shapeProvider,
                 highlight = highlight,
                 processedFrame = processedFrame,
+                interactionLighting = interactionLighting,
             )
         )
         .then(
@@ -189,6 +196,7 @@ public fun Modifier.drawBackdrop(
                 onDrawSurface = onDrawSurface,
                 onDrawFront = onDrawFront,
                 processedFrame = processedFrame,
+                interactionLighting = interactionLighting,
             )
         )
 }
@@ -198,6 +206,7 @@ private class DrawBackdropElement(
     val shapeProvider: ShapeProvider,
     val surfaceBounds: SurfaceBounds,
     val processedFrame: ProcessedBackdropFrame?,
+    val interactionLighting: (() -> InteractionLighting)?,
     val effects: (BackdropEffectScope.() -> Unit)?,
     val insets: (() -> BackdropInsets)?,
     val layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -214,6 +223,7 @@ private class DrawBackdropElement(
             shapeProvider = shapeProvider,
             surfaceBounds = surfaceBounds,
             processedFrame = processedFrame,
+            interactionLighting = interactionLighting,
             effects = effects,
             insets = insets,
             layerBlock = layerBlock,
@@ -231,6 +241,7 @@ private class DrawBackdropElement(
         node.surfaceBounds = surfaceBounds
         if (node.processedFrame !== processedFrame) node.processedFrame?.clear()
         node.processedFrame = processedFrame
+        node.interactionLighting = interactionLighting
         node.effects = effects
         node.insets = insets
         node.layerBlock = layerBlock
@@ -257,6 +268,7 @@ private class DrawBackdropElement(
         properties["onDrawBackdrop"] = onDrawBackdrop
         properties["onDrawSurface"] = onDrawSurface
         properties["onDrawFront"] = onDrawFront
+        properties["interactionLighting"] = interactionLighting
     }
 
     override fun equals(other: Any?): Boolean {
@@ -266,6 +278,7 @@ private class DrawBackdropElement(
         if (backdrop != other.backdrop) return false
         if (shapeProvider != other.shapeProvider) return false
         if (processedFrame !== other.processedFrame) return false
+        if (interactionLighting != other.interactionLighting) return false
         if (effects != other.effects) return false
         if (insets != other.insets) return false
         if (layerBlock != other.layerBlock) return false
@@ -282,6 +295,7 @@ private class DrawBackdropElement(
         var result = backdrop.hashCode()
         result = 31 * result + shapeProvider.hashCode()
         result = 31 * result + processedFrame.hashCode()
+        result = 31 * result + interactionLighting.hashCode()
         result = 31 * result + effects.hashCode()
         result = 31 * result + insets.hashCode()
         result = 31 * result + layerBlock.hashCode()
@@ -299,6 +313,7 @@ private class DrawBackdropNode(
     var shapeProvider: ShapeProvider,
     var surfaceBounds: SurfaceBounds,
     var processedFrame: ProcessedBackdropFrame?,
+    var interactionLighting: (() -> InteractionLighting)?,
     var effects: (BackdropEffectScope.() -> Unit)?,
     var insets: (() -> BackdropInsets)?,
     var layerBlock: (GraphicsLayerScope.() -> Unit)?,
@@ -324,6 +339,8 @@ private class DrawBackdropNode(
 
     private var graphicsLayer: GraphicsLayer? = null
     private val sourceRenderer = BackdropSourceRenderer { requireGraphicsContext() }
+    private var interactionFieldRenderer: InteractionFieldRenderer? = null
+    private var surfaceCoordinates: LayoutCoordinates? = null
 
     /** Reused across draws for rounded surface shapes, so clipping allocates nothing. */
     private val surfaceClipPath = Path()
@@ -478,6 +495,7 @@ private class DrawBackdropNode(
                 onDrawBehind?.invoke(this, room)
                 drawBackdropLayerOnce(layerTopLeft)
                 onDrawSurface?.invoke(this, room)
+                clipToSurfaceShape(effectScope.size) { drawInteractionLightField() }
             }
             clipToSurfaceShape(effectScope.size) { this@draw.drawContent() }
             clipToSurfaceRegion(visible) { onDrawFront?.invoke(this, room) }
@@ -499,6 +517,7 @@ private class DrawBackdropNode(
                             onDrawBehind?.invoke(this, room)
                             drawBackdropLayerOnce(layerTopLeft)
                             onDrawSurface?.invoke(this, room)
+                            clipToSurfaceShape(effectScope.size) { drawInteractionLightField() }
                             onDrawFront?.invoke(this, room)
                         }
                     }
@@ -511,6 +530,7 @@ private class DrawBackdropNode(
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         if (coordinates.isAttached) {
+            surfaceCoordinates = coordinates
             val density = requireDensity()
             val layoutDirection = requireLayoutDirection()
             val size = Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())
@@ -534,7 +554,38 @@ private class DrawBackdropNode(
                 }
             }
             exportedBackdrop?.layerCoordinates = coordinates
+            invalidateDraw()
         }
+    }
+
+    private fun DrawScope.drawInteractionLightField() {
+        if (processedFrame == null) {
+            interactionFieldRenderer?.release()
+            interactionFieldRenderer = null
+            return
+        }
+        val lighting =
+            (interactionLighting ?: currentValueOf(LocalBackdropStyle).interactionLighting)()
+        val config = lighting as? InteractionLighting.Config
+        val coordinates = surfaceCoordinates
+        val window = currentValueOf(LocalWindowInfo)
+        val entries =
+            if (config == null || coordinates == null) emptyList()
+            else
+                currentValueOf(LocalInteractionRegistry)
+                    ?.lights
+                    ?.filter { it.window === window }
+                    .orEmpty()
+        processedFrame?.publishInteraction(entries, window, coordinates)
+        if (config == null || config.interiorOpacity == 0f || coordinates == null) {
+            interactionFieldRenderer?.release()
+            interactionFieldRenderer = null
+            return
+        }
+        val renderer =
+            interactionFieldRenderer
+                ?: InteractionFieldRenderer().also { interactionFieldRenderer = it }
+        renderer.draw(this, coordinates, entries, config.interiorOpacity)
     }
 
     override fun onObservedReadsChanged() {
@@ -611,6 +662,9 @@ private class DrawBackdropNode(
 
     override fun onDetach() {
         processedFrame?.clear()
+        interactionFieldRenderer?.release()
+        interactionFieldRenderer = null
+        surfaceCoordinates = null
         sourceRenderer.release()
         val graphicsContext = requireGraphicsContext()
         graphicsLayer?.let { layer ->

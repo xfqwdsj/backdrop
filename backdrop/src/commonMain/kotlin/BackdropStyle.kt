@@ -7,6 +7,7 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
@@ -28,6 +29,8 @@ public data class BackdropStyle(
      * recomposing.
      */
     public val insets: () -> BackdropInsets = DefaultInsets,
+    /** Shared interaction light received by this surface. */
+    public val interactionLighting: () -> InteractionLighting = DefaultInteractionLighting,
 ) {
     public companion object {
         /** An empty effect chain, suitable for explicitly disabling inherited effects. */
@@ -42,6 +45,7 @@ private val DefaultInsets: () -> BackdropInsets = { BackdropInsets.None }
 private val DefaultHighlight: () -> Highlight = { Highlight.Default }
 private val DefaultShadow: () -> Shadow = { Shadow.Default }
 private val DefaultInnerShadow: () -> InnerShadow = { InnerShadow.None }
+private val DefaultInteractionLighting: () -> InteractionLighting = { InteractionLighting.None }
 
 /**
  * Visual defaults for descendant backdrop modifiers. Explicit modifier parameters take priority.
@@ -67,7 +71,11 @@ public fun ProvideBackdropStyle(
     shadow: () -> Shadow = LocalBackdropStyle.current.shadow,
     innerShadow: () -> InnerShadow = LocalBackdropStyle.current.innerShadow,
     insets: () -> BackdropInsets = LocalBackdropStyle.current.insets,
+    interactionLighting: () -> InteractionLighting = LocalBackdropStyle.current.interactionLighting,
     content: @Composable () -> Unit,
 ) {
-    ProvideBackdropStyle(BackdropStyle(effects, highlight, shadow, innerShadow, insets), content)
+    ProvideBackdropStyle(
+        BackdropStyle(effects, highlight, shadow, innerShadow, insets, interactionLighting),
+        content,
+    )
 }

@@ -28,6 +28,7 @@ import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
+import top.ltfan.backdrop.highlight.HighlightEmission
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
@@ -124,10 +125,8 @@ private class TestHighlightStyle(private val mix: MutableState<Float>) : Highlig
         """
             .trimIndent()
 
-    override fun shade(sample: HighlightSample): top.ltfan.backdrop.highlight.HighlightEmission =
-        top.ltfan.backdrop.highlight.HighlightEmission(
-            Color(1f - mix.value, mix.value, 0f, color.alpha)
-        )
+    override fun shade(sample: HighlightSample): HighlightEmission =
+        HighlightEmission(Color(1f - mix.value, mix.value, 0f, color.alpha))
 
     override fun configureShader(shader: RuntimeShader) {
         shader.setFloatUniform("styleMix", mix.value)

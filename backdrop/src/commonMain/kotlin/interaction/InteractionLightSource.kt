@@ -40,12 +40,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * Registers this node as a source of window-local interaction light. Physical pointer input owns
- * pointer-light lifetimes regardless of [interactionSource]. A supplied [interactionSource] also
- * provides synthetic press and focus interactions; a press matching one active pointer reuses its
- * light. A raw source observes focus for keyboard input without lighting on focus alone. Place this
- * modifier before the focusable modifier to observe focus and keyboard input. Interior light is
- * added with native Plus blending without allocating an extra layer.
+ * Registers interaction light with the nearest provider in the current Compose window. Physical
+ * pointer input owns its light's lifetime; [interactionSource] can also supply press and focus
+ * events. A matching press shares the pointer's light. Without an interaction source, focus enables
+ * keyboard activation without emitting light by itself. Place this modifier before the focusable
+ * modifier to observe focus and keyboard input.
  */
 public fun Modifier.interactionLightSource(
     interactionSource: InteractionSource? = null,

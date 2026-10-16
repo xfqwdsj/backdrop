@@ -29,23 +29,14 @@ public fun progressiveBackdropStrength(
 ): Float = ramp.intensityAt(1f - position)
 
 /**
- * Blurs the backdrop with a strength that ramps from [radius] at [edge] to none at the opposite
- * edge. The blur radius varies per pixel through a vertical-then-horizontal Gaussian pass, so the
- * clear end stays sharp while the surface itself stays opaque.
+ * Applies spatially varying blur controlled by [ramp] along [edge]. Anchors determine the
+ * transition span and any coverage beyond the surface; changing drawing insets clips it without
+ * moving it.
  *
- * [ramp] supplies the curve, its end intensities and its anchors, which the shader evaluates over
- * the same controls a mask of that ramp samples, so the two stay on one curve and on one stretch of
- * the surface. An anchor inside the surface holds its end intensity beyond it, which is how a bar
- * keeps full strength above its content and fades the rest below. Progressive blur requires finite
- * endpoint intensities and Bezier control values in `0..1`, which keeps the sampled radius within
- * the requested radius and makes its input bounds monotonic along the ramp.
- *
- * [BackdropEffectScope.extension] places the anchors in the effect layer. Extending or contracting
- * the drawing region clips the selected curve without moving its anchors; the ramp itself controls
- * where the curve begins and ends, inside or outside the surface.
- *
- * Every pixel takes the radius its position earns, one pass per axis, and on platforms without
- * runtime shader support this falls back to a uniform [blur].
+ * Radius must be finite and non-negative. Ramp endpoint intensities must be finite and in `0..1`,
+ * and anchors must resolve to a finite increasing span so sampling bounds remain well-defined. The
+ * shader evaluates the shared curve per pixel and falls back to uniform [blur] when runtime shaders
+ * are unavailable.
  */
 public fun BackdropEffectScope.progressiveBlur(
     radius: Float,

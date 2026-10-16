@@ -17,30 +17,24 @@ public data class HighlightEmission(public val color: Color, public val strength
 }
 
 /**
- * Produces straight-alpha color and non-negative emission strength for the nearest boundary sample.
- * Custom implementations with mutable properties keep them snapshot-backed so drawing observes
- * changes. [shaderSource] declares `half4 shadeHighlight(float2 position, float2 outwardNormal,
- * float projection, half4 color)` and `float highlightStrength(float2 position, float2
- * outwardNormal, float projection)`. The returned color is straight alpha; the strength is
- * independent of color luminance, so black samples retain emission strength. [shade] and both
- * shader functions must match. GPU and CPU rendering evaluate their matching shading functions once
- * per covered sample; the direction-scaled contour profile shares that response. The sample `width`
- * and GPU uniform `width` remain the configured base width; direction scaling changes only
- * coverage. Prefix custom uniforms and helpers to avoid the shared shader names `position`,
- * `outwardNormal`, `projection`, `color`, `origin`, `geometryScale`, `segments`, `width`,
- * `directionEnabled`, `directionMode`, `directionVector`, `directionStrengthRange`,
- * `directionStrengthCurve`, `directionWidthRange`, `directionWidthCurve`, `falloffCurve`,
- * `tileBounds`, `exclusionCount`, `exclusions`, `content`, `colorResponseAmount`, and
- * `transformHighlightColor`. Interaction-capable highlight variants also reserve `interactionRowX`,
- * `interactionRowY`, `interactionRowW`, `interactionPositions`, `interactionColors`,
- * `interactionParameters`, `interactionCurves`, `interactionLightCount`,
- * `interactionContourOpacity`, and `interactionField`.
+ * Shading for the nearest contour sample, with color and emission strength evaluated independently.
+ * CPU and shader implementations must agree. Mutable public properties must be snapshot-backed so
+ * drawing observes changes under this interface's stability contract.
  */
 @Stable
 public interface HighlightStyle {
     public val color: Color
+    /**
+     * AGSL declarations of `half4 shadeHighlight(float2 position, float2 outwardNormal, float
+     * projection, half4 color)` and `float highlightStrength(float2 position, float2 outwardNormal,
+     * float projection)`, matching [shade]. Return straight-alpha color and non-negative strength,
+     * including for black samples. The `width` uniform is the configured base width; directional
+     * scaling affects coverage. Prefix custom uniforms and helpers to keep their names separate
+     * from renderer-owned declarations.
+     */
     public val shaderSource: String
 
+    /** CPU counterpart of [shaderSource], evaluated once per covered nearest-boundary sample. */
     public fun shade(sample: HighlightSample): HighlightEmission
 
     public fun configureShader(shader: RuntimeShader) {}

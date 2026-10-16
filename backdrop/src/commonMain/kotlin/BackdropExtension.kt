@@ -6,17 +6,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 
 /**
- * How far the effect layer reaches beyond the surface's own rectangle, per side, in pixels: what
- * the caller asked to cover, plus the room the effect chain needs in order to sample it. The
- * surface keeps its own rectangle, coordinate space and shape; this is extra room, not a new space.
- *
- * The room an effect needs is sampling headroom that stays outside the area the caller asked to
- * cover, so a blur reads the pixels it blends without widening the surface. [BackdropEffectScope]
- * reports this total while the drawing callbacks are clipped to the requested part.
- *
- * A shader receives coordinates in the effect layer, whose origin sits this far before the
- * surface's, so an effect that maps coordinates adds [originInNode] to work in the surface's own
- * space.
+ * Per-side recording room in pixels, combining visible coverage with effect sampling needs. Layout
+ * and foreground geometry retain the surface's own bounds. Drawing callbacks are clipped to visible
+ * coverage; sampling room supplies the neighboring pixels required by effects. Add [originInNode]
+ * to layer coordinates to recover surface-local coordinates.
  */
 @Immutable
 public data class BackdropExtension(
@@ -41,12 +34,8 @@ public data class BackdropExtension(
 }
 
 /**
- * What a drawing callback knows about its surface: the surface's own rectangle, which is also the
- * coordinate space the callback draws in, and how far the effect layer reaches beyond it.
- *
- * The size is carried here because an exported backdrop records the layer, whose drawing scope is
- * the extended area rather than the surface; a callback that measures or positions against the
- * surface reads this instead of the drawing scope.
+ * Surface-local drawing geometry and the resolved recording extension. [size] remains the surface
+ * size when a callback runs in an expanded recording layer.
  */
 @Immutable
 public data class BackdropRoom(

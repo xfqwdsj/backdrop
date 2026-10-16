@@ -10,16 +10,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 
 /**
- * The geometry of one axis of a surface, in layout pixels. Both ranges start where the surface's
- * content side is — the edge the scrolled content passes — and grow towards the surface's own far
- * edge, which is the direction that content travels.
- *
- * [occupied] is the surface itself, `0f..thickness`. [content] is the part of it that carries
- * content, `0f..(thickness - insets)`, so the window insets a surface excludes sit at the far end
- * of both. A ramp that reaches below `0f` therefore asks for room on the content side, beyond the
- * surface, which is the room its effects cover past the surface.
- *
- * A [Density], so a ramp can express its ends in [Dp] while the geometry stays in pixels.
+ * Surface-axis geometry in pixels, increasing from the content side toward the far edge. [occupied]
+ * describes the surface span and [content] the portion available to its content. Coordinates
+ * outside [occupied] describe coverage beyond the surface. [Density] supports anchors expressed in
+ * layout units.
  */
 @Immutable
 public class BackdropAxis(
@@ -58,12 +52,8 @@ public class BackdropAxis(
 }
 
 /**
- * Where a ramp begins and ends on an axis: the coordinates it runs between. [BackdropRamp.from]
- * holds at the smaller of the two and [BackdropRamp.to] at the larger, so a longer coordinate
- * always means a stronger ramp and no caller has to flip anything per edge.
- *
- * The returned span may reach past [BackdropAxis.occupied]: what it asks for beyond the surface is
- * the room the surface's effects cover past itself.
+ * Resolves the coordinate span over which a ramp interpolates from [BackdropRamp.from] to
+ * [BackdropRamp.to]. The span may extend beyond [BackdropAxis.occupied] to request effect coverage.
  */
 public fun interface BackdropRampAnchors {
     public operator fun invoke(axis: BackdropAxis): ClosedFloatingPointRange<Float>
@@ -94,7 +84,7 @@ public fun interface BackdropRampAnchors {
     }
 }
 
-/** Anchors built from a lambda, equal to another of the same shape so caches still hold. */
+/** Anchor equality follows the supplied span function. */
 private class SpanAnchors(private val span: (BackdropAxis) -> ClosedFloatingPointRange<Float>) :
     BackdropRampAnchors {
     override fun invoke(axis: BackdropAxis): ClosedFloatingPointRange<Float> = span(axis)
@@ -105,15 +95,9 @@ private class SpanAnchors(private val span: (BackdropAxis) -> ClosedFloatingPoin
 }
 
 /**
- * A progressive ramp: [from] where its span starts, reaching [to] where the span ends through
- * [curve].
- *
- * A surface paints this ramp as [brush], which samples the curve [stops] times because a gradient
- * brush is a list of colors; the progressive blur evaluates [curve] itself, per pixel. [stops]
- * defaults to [DEFAULT_STOPS], where one sample covers less alpha than a display can show, so a
- * painted ramp reads as continuous; lower it only to shorten that color list, since it costs
- * nothing per pixel. The intensities are the ramp's own share of a surface's alpha, so a surface
- * that paints a translucent mask scales them rather than replacing them.
+ * A spatial intensity transition defined by anchors, endpoints, and a response curve. Consumers
+ * share its geometry to align their transitions. Painted brushes sample the curve; shader consumers
+ * can evaluate it directly. Ramp intensity multiplies the fill's own opacity.
  */
 @Immutable
 public data class BackdropRamp(
@@ -161,16 +145,13 @@ public data class BackdropRamp(
 
     public companion object {
 
-        /**
-         * Samples a ramp paints with unless it asks for another count: one sample per step of an
-         * 8-bit alpha channel, which puts the sampling below what a display can show.
-         */
+        /** Default number of curve samples used to construct a gradient brush. */
         public const val DEFAULT_STOPS: Int = 256
 
         /** Fewest samples that still describe a ramp. */
         public const val MIN_STOPS: Int = 2
 
-        /** Most samples a ramp paints with, so one ramp stays one short list of colors. */
+        /** Maximum supported gradient sample count. */
         public const val MAX_STOPS: Int = 256
     }
 }

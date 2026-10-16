@@ -12,7 +12,7 @@ private fun coordinate(t: Float, first: Float, second: Float): Float {
     return 3f * inverse * inverse * t * first + 3f * inverse * t * t * second + t * t * t
 }
 
-/** A bounded response for ramps and directional highlight width and strength. */
+/** A bounded response curve shared by CPU and shader evaluation. */
 @Immutable
 public sealed interface BackdropCurve {
     public fun transform(input: Float): Float

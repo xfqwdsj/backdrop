@@ -212,21 +212,21 @@ class InteractionFieldRuntimeParityTest {
         var red = 0f
         var green = 0f
         var blue = 0f
-        for (light in lights) {
-            val dx = point.x - light.x
-            val dy = point.y - light.y
+        for ((x, y, radius, intensity, a, r, g, b, curve) in lights) {
+            val dx = point.x - x
+            val dy = point.y - y
             val weight =
                 interactionLightWeight(
                     sqrt(dx * dx + dy * dy),
-                    light.radius,
-                    light.alpha,
-                    light.intensity,
-                    light.curve,
+                    radius,
+                    a,
+                    intensity,
+                    curve,
                 )
             totalWeight += weight
-            red += light.red * weight
-            green += light.green * weight
-            blue += light.blue * weight
+            red += r * weight
+            green += g * weight
+            blue += b * weight
         }
         if (totalWeight <= 0f) return floatArrayOf(0f, 0f, 0f, 0f)
         return floatArrayOf(

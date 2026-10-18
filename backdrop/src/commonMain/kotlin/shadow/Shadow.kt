@@ -34,6 +34,7 @@ public sealed interface Shadow {
 }
 
 /** Creates a configured shadow decoration. */
+@Suppress("FunctionName")
 @Stable
 public fun Shadow(
     radius: Dp = 24f.dp,

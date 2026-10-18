@@ -53,6 +53,7 @@ public sealed interface InnerShadow {
 }
 
 /** Creates a configured inner shadow decoration. */
+@Suppress("FunctionName")
 @Stable
 public fun InnerShadow(
     radius: Dp = 24f.dp,

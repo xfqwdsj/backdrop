@@ -40,7 +40,9 @@ font scale, layout direction, or observed geometry inputs resolve the effect cha
 
 Surface isolation captures size, density, and layout direction during measurement, then configures
 its retained layer during placement. Observed layer properties and render epochs invalidate
-placement, allowing group-alpha changes without remeasuring a parent.
+placement, allowing group-alpha changes without remeasuring a parent. Skiko isolation filters use
+the expanded buffer coordinates: the surface origin lies at the left and top recording margins,
+and the filter covers both margins on each axis.
 [EpochResourceOwner](../backdrop/src/commonMain/kotlin/internal/EpochResourceOwner.kt) creates a
 replacement before releasing the previous resource. A `LayerBackdrop` retains identity across
 owned-layer refreshes, and consumers observe replacement/recording state before early returns so

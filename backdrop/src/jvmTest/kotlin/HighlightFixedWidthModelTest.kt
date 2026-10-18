@@ -18,7 +18,7 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 
-class HighlightFixedWidthModelTest {
+class HighlightFixedWidthModelTest : SkikoGraphicsTest() {
     @Test
     fun fixedWidthProfileFallsToZeroOutsideTheOutlineBand() {
         val geometry = FlattenedBoundaryGeometry(Path().apply { addRect(Rect(0f, 0f, 32f, 32f)) })

@@ -13,7 +13,7 @@ import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.internal.genericBoundaryShaderFunctions
 import top.ltfan.backdrop.internal.staticHighlightTileShader
 
-class HighlightShaderVariantTest {
+class HighlightShaderVariantTest : SkikoGraphicsTest() {
     @Test
     fun geometryCapacityUsesPaddedDegenerateSegments() {
         assertEquals(1, boundaryUniformCapacity(0))

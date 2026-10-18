@@ -22,7 +22,7 @@ import top.ltfan.backdrop.internal.HighlightCurveShader
 import top.ltfan.backdrop.internal.highlightCurveVariant
 import top.ltfan.backdrop.internal.staticHighlightTileShader
 
-class HighlightCurveShaderParityTest {
+class HighlightCurveShaderParityTest : SkikoGraphicsTest() {
     @Test
     fun falloffVariantsDoNotReplaceTheIndependentDirectionCurve() {
         val geometry =

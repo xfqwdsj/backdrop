@@ -19,11 +19,13 @@ internal actual fun surfaceRenderEffect(
         if (size.width <= 0f || size.height <= 0f) return effect
         val bounds =
             Rect(
-                -outsets.left.toPx(),
-                -outsets.top.toPx(),
-                size.width + outsets.right.toPx(),
-                size.height + outsets.bottom.toPx(),
+                0f,
+                0f,
+                outsets.left.toPx() + size.width + outsets.right.toPx(),
+                outsets.top.toPx() + size.height + outsets.bottom.toPx(),
             )
+        // Skiko records the surface at (left, top) inside the expanded layer buffer. Tile bounds
+        // use that buffer's coordinates, including both margins.
         // Runtime shaders can read away from the output pixel. Request the complete surface input
         // so a partially overlapping consumer cannot shrink that input to its own sampling bounds.
         ImageFilter.makeTile(bounds, bounds, effect?.skiaImageFilter).asComposeRenderEffect()

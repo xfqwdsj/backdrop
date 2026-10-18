@@ -10,7 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 
-class FlattenedBoundaryGeometryTest {
+class FlattenedBoundaryGeometryTest : SkikoGraphicsTest() {
     @Test
     fun openContourIsClosedForFillBoundary() {
         val path =

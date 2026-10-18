@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertSame
 import top.ltfan.backdrop.internal.ShapeProvider
 
-class ShapeProviderCachingTest {
+class ShapeProviderCachingTest : SkikoGraphicsTest() {
     @Test
     fun outlineFactoryTracksSnapshotInputsAndDensityWithoutCallingFactoryPerDraw() {
         val radius = mutableStateOf(2f)

@@ -16,7 +16,7 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 
-class CpuStaticHighlightRendererTest {
+class CpuStaticHighlightRendererTest : SkikoGraphicsTest() {
     private val geometry =
         FlattenedBoundaryGeometry(Path().apply { addRect(Rect(0f, 0f, 32f, 32f)) })
 

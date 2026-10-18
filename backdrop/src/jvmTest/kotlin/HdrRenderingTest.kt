@@ -58,7 +58,7 @@ import top.ltfan.backdrop.internal.colorUniformComponents
 import top.ltfan.backdrop.internal.setHdrColor
 import top.ltfan.backdrop.internal.staticHighlightTileShader
 
-class HdrRenderingTest {
+class HdrRenderingTest : SkikoGraphicsTest() {
     @Test
     fun floatSurfacePreservesHdrBaseline() {
         assertPixel(floatArrayOf(2f, 2f, 2f, 1f), render(floatArrayOf(2f, 2f, 2f, 1f)) {})

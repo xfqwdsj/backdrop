@@ -21,7 +21,7 @@ import org.jetbrains.skia.Rect as SkiaRect
 import org.jetbrains.skia.Surface
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
 
-class AnalyticHighlightGeometryTest {
+class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
     @Test
     fun rectangleAndCircularRoundedQueriesMatchGpuForInteriorExteriorAndTies() {
         val outlines =

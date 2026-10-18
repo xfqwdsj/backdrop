@@ -1,9 +1,9 @@
 [versions]
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 agp = "9.1.1"
-compose = "1.12.1"
+compose = "1.13.0-alpha02"
 annotations = "26.1.0"
-spotless = "8.10.3"
+spotless = "8.10.4"
 dokka = "2.2.0"
 mavenPublish = "0.37.0"
 

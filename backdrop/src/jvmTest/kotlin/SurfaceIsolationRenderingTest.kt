@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableIntStateOf
@@ -18,10 +19,10 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,13 +31,49 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
+import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class SurfaceIsolationRenderingTest {
+    @Test
+    fun expandedBufferRetainsAllFourShadowMargins() = runComposeUiTest {
+        setContent {
+            val source = rememberLayerBackdrop()
+            Box(Modifier.size(240.dp).background(Color.White).testTag("scene")) {
+                Box(Modifier.fillMaxSize().layerBackdrop(source).background(Color.White))
+                Box(
+                    Modifier.offset(80.dp, 80.dp)
+                        .size(80.dp)
+                        .drawBackdrop(
+                            source,
+                            shape = { RoundedCornerShape(20.dp) },
+                            effects = {},
+                            highlight = { Highlight.None },
+                            innerShadow = { InnerShadow.None },
+                            shadow = {
+                                Shadow(
+                                    radius = 16.dp,
+                                    offset = DpOffset.Zero,
+                                    color = Color.Black.copy(alpha = 0.8f),
+                                )
+                            },
+                        ),
+                )
+            }
+        }
+        val pixels = onNodeWithTag("scene").captureToImage().toPixelMap()
+        for ((x, y) in listOf(68 to 120, 172 to 120, 120 to 68, 120 to 172)) {
+            assertTrue(
+                pixels[x, y].red < 0.95f,
+                "The expanded isolation buffer must retain the shadow at ($x, $y): ${pixels[x, y]}",
+            )
+        }
+    }
+
     @Test
     fun alphaUpdateRedrawsTheGroupWithoutMeasuringItsParent() = runComposeUiTest {
         val alpha = mutableIntStateOf(50)

@@ -18,7 +18,7 @@ import org.jetbrains.skia.Surface
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.internal.genericBoundaryShaderFunctions
 
-class BoundaryShaderGeometryCapacityTest {
+class BoundaryShaderGeometryCapacityTest : SkikoGraphicsTest() {
     @Test
     fun paddedSegmentsDoNotChangeContainmentOrNearestBoundaryQueries() {
         val geometry = FlattenedBoundaryGeometry(Path().apply { addRect(Rect(2f, 2f, 10f, 10f)) })

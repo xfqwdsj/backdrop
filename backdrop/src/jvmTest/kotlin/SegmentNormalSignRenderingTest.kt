@@ -24,7 +24,7 @@ import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.internal.genericBoundaryShaderFunctions
 
-class SegmentNormalSignRenderingTest {
+class SegmentNormalSignRenderingTest : SkikoGraphicsTest() {
     @Test
     fun certifiedSegmentSignsMatchFullGpuProbeAndCpuOracle() {
         val fixtures =

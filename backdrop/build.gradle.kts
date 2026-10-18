@@ -54,9 +54,9 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation(libs.compose.foundation)
-                implementation(libs.compose.ui)
-                implementation(libs.compose.ui.graphics)
+                api(libs.compose.foundation)
+                api(libs.compose.ui)
+                api(libs.compose.ui.graphics)
                 implementation(libs.annotations)
             }
         }

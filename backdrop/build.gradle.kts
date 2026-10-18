@@ -70,7 +70,6 @@ kotlin {
         jvmTest {
             dependencies {
                 implementation(libs.compose.ui.test)
-                runtimeOnly(compose.desktop.currentOs)
             }
         }
 
@@ -157,7 +156,7 @@ mavenPublishing {
     }
 
     configure(
-        KotlinMultiplatform(javadocJar = JavadocJar.Dokka(tasks.dokkaGeneratePublicationHtml))
+        KotlinMultiplatform(javadocJar = JavadocJar.Dokka(tasks.dokkaGeneratePublicationHtml)),
     )
 }
 

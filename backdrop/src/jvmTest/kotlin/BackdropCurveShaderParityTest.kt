@@ -38,7 +38,7 @@ class BackdropCurveShaderParityTest {
                     return half4(value, value, value, 1.0);
                 }
                 """
-                        .trimIndent()
+                        .trimIndent(),
                 )
             shader.setFloatUniform("controls", curve.shaderControls())
             for (sample in samples) {
@@ -63,8 +63,8 @@ class BackdropCurveShaderParityTest {
             Bitmap().use { bitmap ->
                 check(
                     bitmap.allocPixels(
-                        ImageInfo(1, 1, ColorType.RGBA_F16, ColorAlphaType.PREMUL, ColorSpace.sRGB)
-                    )
+                        ImageInfo(1, 1, ColorType.RGBA_F16, ColorAlphaType.PREMUL, ColorSpace.sRGB),
+                    ),
                 )
                 check(surface.readPixels(bitmap, 4, 4))
                 val bytes =
@@ -78,7 +78,7 @@ class BackdropCurveShaderParityTest {
                                 ColorSpace.sRGB,
                             ),
                             8,
-                        )
+                        ),
                     )
                 return ByteBuffer.wrap(bytes)
                     .order(ByteOrder.nativeOrder())

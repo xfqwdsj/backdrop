@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -43,7 +42,6 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropStyleTest {
     @Test
     fun rootDefaultsAndNestedProvidersKeepOmittedProducers() = runComposeUiTest {
@@ -160,7 +158,7 @@ class BackdropStyleTest {
                 BackdropStyle(
                     highlight = { Highlight.None },
                     shadow = { Shadow.None },
-                )
+                ),
             )
         setContent {
             ProvideBackdropStyle(style.value) { Panel("panel") }
@@ -191,7 +189,7 @@ class BackdropStyleTest {
                     style = style,
                     direction = HighlightDirection(angle = 0f),
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
         setContent {
             ProvideBackdropStyle(
@@ -331,7 +329,7 @@ class BackdropStyleTest {
         Box(
             Modifier.testTag(tag)
                 .size(40.dp)
-                .then(modifier ?: Modifier.drawBackdrop(TestBackdrop, { RectangleShape }))
+                .then(modifier ?: Modifier.drawBackdrop(TestBackdrop, { RectangleShape })),
         )
     }
 
@@ -361,7 +359,8 @@ private class MutableTwoToneStyle(initialColor: Color) : HighlightStyle {
 
     override fun shade(sample: HighlightSample): HighlightEmission =
         HighlightEmission(
-            if (sample.projection >= 0f) color else Color(0f, 0f, 0f, color.alpha, color.colorSpace)
+            if (sample.projection >= 0f) color
+            else Color(0f, 0f, 0f, color.alpha, color.colorSpace),
         )
 }
 

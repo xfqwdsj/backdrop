@@ -68,7 +68,7 @@ internal class SkikoRuntimeShader(val shader: RuntimeShaderBuilder) : RuntimeSha
 
     override fun setIntUniform(name: String, values: IntArray) {
         throw UnsupportedOperationException(
-            "Setting int array uniforms is not supported on Skia RuntimeShader."
+            "Setting int array uniforms is not supported on Skia RuntimeShader.",
         )
     }
 

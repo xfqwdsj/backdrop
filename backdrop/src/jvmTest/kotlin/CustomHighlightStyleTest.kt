@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -36,7 +35,6 @@ import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class CustomHighlightStyleTest {
     @Test
     fun customShaderAndCpuShadeStayAlignedAndUniformUpdatesDoNotRecompose() = runComposeUiTest {
@@ -63,7 +61,7 @@ class CustomHighlightStyleTest {
                             },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -90,7 +88,7 @@ class CustomHighlightStyleTest {
                     FlattenedBoundaryGeometry(
                         Path().apply {
                             addRect(Rect(0f, 0f, 80f, 80f))
-                        }
+                        },
                     ),
                 size = Size(80f, 80f),
                 widthPx = 5f,

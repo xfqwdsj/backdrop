@@ -16,7 +16,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -27,7 +26,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropPositionEffectsTest {
     @Test
     fun positionChangesDoNotRebuildEffectsButGeometryChangesDo() = runComposeUiTest {
@@ -51,7 +49,7 @@ class BackdropPositionEffectsTest {
                     Modifier.offset { IntOffset(x, 0) }
                         .size(width.dp, 40.dp)
                         .testTag("surface")
-                        .drawPlainBackdrop(TestBackdrop, { RectangleShape }, effects = effect)
+                        .drawPlainBackdrop(TestBackdrop, { RectangleShape }, effects = effect),
                 )
             }
         }

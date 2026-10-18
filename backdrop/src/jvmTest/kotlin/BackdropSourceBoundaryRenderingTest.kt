@@ -13,7 +13,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,7 +30,6 @@ import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropSourceBoundaryRenderingTest {
     @Test
     fun finiteSourceClampsAtScreenTopAndPreservesInteriorTransparency() = runComposeUiTest {
@@ -226,7 +224,7 @@ class BackdropSourceBoundaryRenderingTest {
                     shadow = { Shadow.None },
                     innerShadow = { InnerShadow.None },
                     exportedBackdrop = output,
-                )
+                ),
         )
     }
 

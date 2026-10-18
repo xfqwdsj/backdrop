@@ -101,7 +101,7 @@ class SegmentNormalSignRenderingTest : SkikoGraphicsTest() {
                 (boundary.z + 1.0) * 0.5, 1.0);
             }
             """
-                .trimIndent()
+                .trimIndent(),
         )
 
     private fun render(

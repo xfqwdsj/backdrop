@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -32,7 +31,6 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class DisconnectedHighlightGeometryTest {
     @Test
     fun thinGenericContourKeepsPartialClipCoverageAtSubpixelEdges() = runComposeUiTest {
@@ -56,7 +54,7 @@ class DisconnectedHighlightGeometryTest {
                             },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -92,7 +90,7 @@ class DisconnectedHighlightGeometryTest {
                             },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -130,6 +128,6 @@ private object DisconnectedShape : Shape {
                 addRect(Rect(0f, 0f, 30f, 60f))
                 addRect(Rect(50f, 0f, 80f, 60f))
                 addRect(Rect(10f, 20f, 20f, 40f))
-            }
+            },
         )
 }

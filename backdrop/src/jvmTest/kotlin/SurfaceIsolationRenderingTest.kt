@@ -96,7 +96,7 @@ class SurfaceIsolationRenderingTest {
                             highlight = { Highlight.None },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 ) {
                     Box(Modifier.fillMaxSize()) {
                         Box(Modifier.offset(5.dp, 5.dp).size(30.dp).background(Color.White))
@@ -143,7 +143,7 @@ class SurfaceIsolationRenderingTest {
                                 highlight = { Highlight.None },
                                 shadow = { Shadow.None },
                                 innerShadow = { InnerShadow.None },
-                            )
+                            ),
                     ) {
                         Box(
                             Modifier.size(20.dp).drawWithContent {
@@ -151,7 +151,7 @@ class SurfaceIsolationRenderingTest {
                                 observedLayer = drawContext.graphicsLayer
                                 drawCount++
                                 drawContent()
-                            }
+                            },
                         )
                     }
                 }
@@ -221,7 +221,7 @@ class SurfaceIsolationRenderingTest {
                         highlight = { Highlight.None },
                         shadow = { Shadow.None },
                         innerShadow = { InnerShadow.None },
-                    )
+                    ),
             ) {
                 Box(Modifier.fillMaxSize()) {
                     Box(Modifier.offset(5.dp, 5.dp).size(30.dp).background(Color.White))

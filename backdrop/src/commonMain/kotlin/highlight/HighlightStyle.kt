@@ -64,7 +64,7 @@ public interface HighlightStyle {
         override fun shade(sample: HighlightSample): HighlightEmission =
             HighlightEmission(
                 if (sample.projection >= 0f) color
-                else Color(0f, 0f, 0f, color.alpha, color.colorSpace)
+                else Color(0f, 0f, 0f, color.alpha, color.colorSpace),
             )
     }
 

@@ -124,7 +124,7 @@ public fun Modifier.drawPlainBackdrop(
                 onDrawFront = onDrawFront,
                 processedFrame = null,
                 interactionLighting = null,
-            )
+            ),
         )
 }
 
@@ -172,7 +172,7 @@ public fun Modifier.drawBackdrop(
                 shapeProvider = shapeProvider,
                 shadow = shadow,
                 surfaceBounds = surfaceBounds,
-            )
+            ),
         )
         .then(
             HighlightElement(
@@ -180,7 +180,7 @@ public fun Modifier.drawBackdrop(
                 highlight = highlight,
                 processedFrame = processedFrame,
                 interactionLighting = interactionLighting,
-            )
+            ),
         )
         .then(
             DrawBackdropElement(
@@ -197,7 +197,7 @@ public fun Modifier.drawBackdrop(
                 onDrawFront = onDrawFront,
                 processedFrame = processedFrame,
                 interactionLighting = interactionLighting,
-            )
+            ),
         )
 }
 

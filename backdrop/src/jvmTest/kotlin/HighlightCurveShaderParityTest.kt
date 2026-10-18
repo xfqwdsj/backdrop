@@ -42,7 +42,9 @@ class HighlightCurveShaderParityTest : SkikoGraphicsTest() {
         assertTrue(linearFalloff.contains("float backdropFalloffCurve(float x, float4 controls)"))
         assertTrue(linearFalloff.contains("float sharedDirectionLevel = backdropCurve(magnitude"))
         assertTrue(
-            linearFalloff.contains("float error = backdropCurveAxis(t, controls.x, controls.z) - x")
+            linearFalloff.contains(
+                "float error = backdropCurveAxis(t, controls.x, controls.z) - x",
+            ),
         )
 
         val independentDirection =
@@ -112,7 +114,7 @@ class HighlightCurveShaderParityTest : SkikoGraphicsTest() {
                   return half4(value, value, value, 1.0);
                 }
                 """
-                    .trimIndent()
+                    .trimIndent(),
             )
         check(sampleCount == 1005)
         shader.setFloatUniform("controls", curve.shaderControls())

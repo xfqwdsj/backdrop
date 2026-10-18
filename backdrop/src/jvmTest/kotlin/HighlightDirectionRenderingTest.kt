@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -32,7 +31,6 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class HighlightDirectionRenderingTest {
     @Test
     fun exclusionMasksOnlyItsBoundaryAndUpdatesWithoutRecomposition() = runComposeUiTest {
@@ -60,7 +58,7 @@ class HighlightDirectionRenderingTest {
                             },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -103,7 +101,7 @@ class HighlightDirectionRenderingTest {
                             strength = HighlightResponse(0f, 1f),
                         ),
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
         assertTrue(top[80, 41].alpha > top[80, 118].alpha + 0.1f)
     }
@@ -124,7 +122,7 @@ class HighlightDirectionRenderingTest {
                                 highlight = { highlight },
                                 shadow = { Shadow.None },
                                 innerShadow = { InnerShadow.None },
-                            )
+                            ),
                     )
                 }
             }

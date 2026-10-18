@@ -71,7 +71,7 @@ class ColorUniformConverterTest {
                         (firstColor.a + secondColor.a) * 0.5
                     );
                 }
-                """
+                """,
             )
         shader.setColorUniform("firstColor", Color(1f, 0f, 0f, 0.4f))
         shader.setColorUniform("secondColor", Color(0f, 0f, 1f, 0.8f))
@@ -86,7 +86,7 @@ class ColorUniformConverterTest {
                 """
                 layout(color) uniform float4 color;
                 float4 main(float2 coord) { return float4(color.rgb * color.a, color.a); }
-                """
+                """,
             )
         transparentShader.setColorUniform(
             "color",

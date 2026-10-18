@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -34,7 +33,6 @@ import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberCombinedBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 
-@OptIn(ExperimentalTestApi::class)
 class LayerBackdropTransformRenderingTest {
     @Test
     fun ancestorScaleTracksLayerBackdropCoordinatesWithoutRecomposition() = runComposeUiTest {
@@ -56,7 +54,7 @@ class LayerBackdropTransformRenderingTest {
                             scaleX = value
                             scaleY = (1f + value) / 2f
                             transformOrigin = TransformOrigin(0.3f, 1.4f)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.fillMaxSize()
@@ -65,7 +63,7 @@ class LayerBackdropTransformRenderingTest {
                                     shape = { RectangleShape },
                                     effects = {},
                                     exportedBackdrop = output,
-                                )
+                                ),
                         )
                     }
                 }
@@ -109,7 +107,7 @@ class LayerBackdropTransformRenderingTest {
                                     transformOrigin = TransformOrigin(0.3f, 1.4f)
                                 },
                                 exportedBackdrop = output,
-                            )
+                            ),
                     )
                 }
             }
@@ -148,7 +146,7 @@ class LayerBackdropTransformRenderingTest {
                                     transformOrigin = TransformOrigin(0.3f, 1.4f)
                                 },
                                 exportedBackdrop = output,
-                            )
+                            ),
                     )
                 }
             }
@@ -183,7 +181,7 @@ class LayerBackdropTransformRenderingTest {
                             scaleX = dynamicScaleX.floatValue
                             scaleY = dynamicScaleY.floatValue
                             transformOrigin = TransformOrigin(0.3f, 1.4f)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.fillMaxSize()
@@ -192,7 +190,7 @@ class LayerBackdropTransformRenderingTest {
                                     shape = { RectangleShape },
                                     effects = {},
                                     exportedBackdrop = output,
-                                )
+                                ),
                         )
                     }
                 }
@@ -231,7 +229,7 @@ class LayerBackdropTransformRenderingTest {
                             scaleX = 0.8f
                             scaleY = 0.9f
                             transformOrigin = TransformOrigin(0.3f, 1.4f)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.fillMaxSize()
@@ -245,7 +243,7 @@ class LayerBackdropTransformRenderingTest {
                                         transformOrigin = TransformOrigin(0.6f, 0.2f)
                                     },
                                     exportedBackdrop = output,
-                                )
+                                ),
                         )
                     }
                 }
@@ -279,7 +277,7 @@ class LayerBackdropTransformRenderingTest {
                             translationX = 7f
                             translationY = -5f
                             transformOrigin = TransformOrigin(0.3f, 1.4f)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.fillMaxSize()
@@ -288,7 +286,7 @@ class LayerBackdropTransformRenderingTest {
                                     shape = { RectangleShape },
                                     effects = {},
                                     exportedBackdrop = output,
-                                )
+                                ),
                         )
                     }
                 }
@@ -334,7 +332,7 @@ class LayerBackdropTransformRenderingTest {
                                 effects = {},
                                 insets = { BackdropInsets(left = 11.dp, top = 17.dp) },
                                 exportedBackdrop = intermediate,
-                            )
+                            ),
                     )
                     Box(Modifier.fillMaxSize().background(Color.Magenta))
                     Box(
@@ -342,7 +340,7 @@ class LayerBackdropTransformRenderingTest {
                             scaleX = 0.8f
                             scaleY = 0.9f
                             transformOrigin = TransformOrigin(0.3f, 1.4f)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.fillMaxSize()
@@ -351,7 +349,7 @@ class LayerBackdropTransformRenderingTest {
                                     shape = { RectangleShape },
                                     effects = {},
                                     exportedBackdrop = output,
-                                )
+                                ),
                         )
                     }
                 }
@@ -373,7 +371,7 @@ class LayerBackdropTransformRenderingTest {
                         listOf(Color(0f, 0f, 0.1f), Color(1f, 0f, 0.1f)),
                         startX = 0f,
                         endX = 300f,
-                    )
+                    ),
                 )
                 drawRect(
                     Brush.verticalGradient(

@@ -45,7 +45,7 @@ class HighlightShaderVariantTest : SkikoGraphicsTest() {
             "float q = light * fixedBandProfile(nearest.x, bandWidth, falloffCurve) * exclusionWeight(normal)",
         )
         assertFalse(
-            shader.substringAfter("half4 shadeAt(float2 coord)").contains("for (int i = 0; i <")
+            shader.substringAfter("half4 shadeAt(float2 coord)").contains("for (int i = 0; i <"),
         )
         assertContains(shader, "float low = max(0.0, distance - 0.5)")
         assertContains(shader, "float progress = clamp(1.0 - (low + high) * 0.5 / bandWidth")

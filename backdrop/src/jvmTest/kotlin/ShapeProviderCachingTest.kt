@@ -36,7 +36,7 @@ class ShapeProviderCachingTest : SkikoGraphicsTest() {
                             size.width,
                             size.height,
                             CornerRadius(currentRadius * density.fontScale),
-                        )
+                        ),
                     )
                 }
             }

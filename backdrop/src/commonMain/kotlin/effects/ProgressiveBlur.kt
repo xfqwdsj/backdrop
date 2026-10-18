@@ -47,7 +47,7 @@ public fun BackdropEffectScope.progressiveBlur(
         "Progressive blur radius must be finite and non-negative"
     }
     require(
-        ramp.from.isFinite() && ramp.from in 0f..1f && ramp.to.isFinite() && ramp.to in 0f..1f
+        ramp.from.isFinite() && ramp.from in 0f..1f && ramp.to.isFinite() && ramp.to in 0f..1f,
     ) {
         "Progressive blur intensities must be finite and within 0..1"
     }
@@ -74,7 +74,7 @@ public fun BackdropEffectScope.progressiveBlur(
         )
     val span = ramp.span(axisOfSurface)
     require(
-        span.start.isFinite() && span.endInclusive.isFinite() && span.start < span.endInclusive
+        span.start.isFinite() && span.endInclusive.isFinite() && span.start < span.endInclusive,
     ) {
         "Progressive blur ramp anchors must be finite and distinct"
     }
@@ -289,7 +289,7 @@ public fun BackdropEffectScope.coverRamp(ramp: BackdropRamp, edge: BackdropEdge)
         )
     val span = ramp.span(axis)
     require(
-        span.start.isFinite() && span.endInclusive.isFinite() && span.start <= span.endInclusive
+        span.start.isFinite() && span.endInclusive.isFinite() && span.start <= span.endInclusive,
     ) {
         "Progressive blur ramp anchors must be finite and ordered"
     }
@@ -298,7 +298,7 @@ public fun BackdropEffectScope.coverRamp(ramp: BackdropRamp, edge: BackdropEdge)
             side,
             pastContentSide = maxOf(0f, -span.start),
             pastFarSide = maxOf(0f, span.endInclusive - thickness),
-        )
+        ),
     )
 }
 

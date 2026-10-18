@@ -82,7 +82,7 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
                     request.right.isFinite() &&
                     request.bottom.isFinite() &&
                     request.width.isFinite() &&
-                    request.height.isFinite()
+                    request.height.isFinite(),
             ) {
                 "Source sampling request must be finite"
             }
@@ -90,7 +90,7 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
                 tileMode == TileMode.Clamp ||
                     tileMode == TileMode.Decal ||
                     tileMode == TileMode.Repeated ||
-                    tileMode == TileMode.Mirror
+                    tileMode == TileMode.Mirror,
             ) {
                 "Unsupported source tile mode: $tileMode"
             }
@@ -136,7 +136,7 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
                 recorded.width.isFinite() &&
                     recorded.height.isFinite() &&
                     recorded.width < Int.MAX_VALUE.toFloat() &&
-                    recorded.height < Int.MAX_VALUE.toFloat()
+                    recorded.height < Int.MAX_VALUE.toFloat(),
             ) {
                 "Source sampling layer dimensions must fit in positive integers"
             }
@@ -210,7 +210,7 @@ private fun validateBounds(bounds: Rect) {
             bounds.width.isFinite() &&
             bounds.height.isFinite() &&
             bounds.width > 0f &&
-            bounds.height > 0f
+            bounds.height > 0f,
     ) {
         "Source bounds must be a finite, non-empty, pixel-aligned rectangle: $bounds"
     }
@@ -277,7 +277,7 @@ private fun inverseSourceTransform(transform: Matrix, destination: Matrix): Matr
             transform[0, 3] == 0f &&
             transform[1, 3] == 0f &&
             transform[3, 3] == 1f &&
-            transform[0, 0] * transform[1, 1] - transform[0, 1] * transform[1, 0] != 0f
+            transform[0, 0] * transform[1, 1] - transform[0, 1] * transform[1, 0] != 0f,
     ) {
         "Source transform must be an invertible two-dimensional affine transform"
     }

@@ -105,13 +105,13 @@ class LayerBackdropRebuildRenderingTest {
                                             onDrawSurface = {
                                                 drawRect(Color.White.copy(alpha = 0.2f))
                                             },
-                                        )
+                                        ),
                                 ) {
                                     Box(
                                         Modifier.fillMaxSize().drawWithContent {
                                             redrawToken.intValue
                                             drawContent()
-                                        }
+                                        },
                                     )
                                 }
                             }
@@ -174,7 +174,10 @@ class LayerBackdropRebuildRenderingTest {
                                 }
                             }
                             Box(
-                                Modifier.fillMaxSize().alpha(0f).graphicsLayer().layerBackdrop(tabs)
+                                Modifier.fillMaxSize()
+                                    .alpha(0f)
+                                    .graphicsLayer()
+                                    .layerBackdrop(tabs),
                             ) {
                                 Box(
                                     Modifier.fillMaxSize()
@@ -184,13 +187,13 @@ class LayerBackdropRebuildRenderingTest {
                                             effects = { blur(4.dp.toPx()) },
                                             highlight = { Highlight.None },
                                             shadow = { Shadow.None },
-                                        )
+                                        ),
                                 ) {
                                     Box(
                                         Modifier.fillMaxSize().drawWithContent {
                                             redrawToken.intValue
                                             drawContent()
-                                        }
+                                        },
                                     )
                                 }
                             }
@@ -203,13 +206,13 @@ class LayerBackdropRebuildRenderingTest {
                                             effects = { blur(8.dp.toPx()) },
                                             highlight = { Highlight.None },
                                             shadow = { Shadow.None },
-                                        )
+                                        ),
                                 ) {
                                     Box(
                                         Modifier.fillMaxSize().drawWithContent {
                                             redrawToken.intValue
                                             drawContent()
-                                        }
+                                        },
                                     )
                                 }
                             }
@@ -287,7 +290,7 @@ class LayerBackdropRebuildRenderingTest {
                                                 Color.Cyan,
                                             )
                                         },
-                                    )
+                                    ),
                             ) {
                                 Box(Modifier.fillMaxSize().background(Color.Blue))
                                 Box(
@@ -298,7 +301,7 @@ class LayerBackdropRebuildRenderingTest {
                                             effects = {},
                                             highlight = { Highlight.None },
                                             shadow = { Shadow.None },
-                                        )
+                                        ),
                                 )
                             }
                         }

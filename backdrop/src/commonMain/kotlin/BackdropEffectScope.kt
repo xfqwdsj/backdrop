@@ -71,7 +71,7 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         require(
             listOf(insets.left, insets.top, insets.right, insets.bottom).all {
                 it.value.isFinite() && it.value >= 0f
-            }
+            },
         ) {
             "Coverage insets must be finite and non-negative: $insets"
         }
@@ -185,7 +185,7 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
             rect.left.isFinite() &&
                 rect.top.isFinite() &&
                 rect.right.isFinite() &&
-                rect.bottom.isFinite()
+                rect.bottom.isFinite(),
         ) {
             "Sampling regions must have finite bounds: $rect"
         }

@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -31,7 +30,6 @@ import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropSamplingOverlapTest {
     @Test
     fun anotherSamplerPreservesTheSurfaceDuringPartialOverlap() {
@@ -75,13 +73,13 @@ class BackdropSamplingOverlapTest {
                                             highlight = { Highlight.None },
                                             shadow = { Shadow.None },
                                             innerShadow = { InnerShadow.None },
-                                        )
+                                        ),
                                 )
                             }
                             if (sampling)
                                 Box(
                                     Modifier.size(240.dp, 64.dp)
-                                        .drawPlainBackdrop(page, { RectangleShape }, effects = {})
+                                        .drawPlainBackdrop(page, { RectangleShape }, effects = {}),
                                 )
                         }
                     }

@@ -75,7 +75,7 @@ class FlattenedBoundaryGeometryTest : SkikoGraphicsTest() {
                 val offset = index * 4
                 geometry.segments[offset] == geometry.segments[offset + 2] &&
                     geometry.segments[offset] in 8f..12f
-            }
+            },
         )
         assertEquals(Rect(0f, 0f, 20f, 10f), geometry.bounds)
     }

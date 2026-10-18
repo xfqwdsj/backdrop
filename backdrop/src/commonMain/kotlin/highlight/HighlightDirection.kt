@@ -62,7 +62,7 @@ public sealed interface HighlightExclusion {
                 "halfAngle must be finite and between 0 and 180"
             }
             require(
-                featherAngle.isFinite() && featherAngle >= 0f && halfAngle + featherAngle <= 180f
+                featherAngle.isFinite() && featherAngle >= 0f && halfAngle + featherAngle <= 180f,
             ) {
                 "featherAngle must be finite, non-negative, and fit within 180 degrees"
             }

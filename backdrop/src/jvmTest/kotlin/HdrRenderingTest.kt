@@ -108,7 +108,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                 """
             layout(color) uniform float4 color;
             float4 main(float2 coord) { return float4(color.rgb * color.a, color.a); }
-        """
+        """,
             )
         shader.setColorUniform("color", Color(0.8f, 0.4f, 0.2f, 0.5f))
         assertPixel(
@@ -125,8 +125,8 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                     """
             uniform shader content;
             float4 main(float2 p) { return content.eval(p); }
-        """
-                )
+        """,
+                ),
             )
         val source = constantShader(floatArrayOf(2f, 2f, 2f, 1f))
         assertPixel(
@@ -221,7 +221,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                     ColorFilter.tint(
                         Color(2f, 2f, 2f, colorSpace = ColorSpaces.ExtendedSrgb),
                         BlendMode.Plus,
-                    )
+                    ),
                 )
             },
         )
@@ -258,7 +258,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                     HighlightStyle.Solid(Color.White),
                     exclusionCount = 0,
                     colorTransform = HighlightColorTransform.PreservePeak,
-                )
+                ),
             )
         shader.setFloatUniform("origin", 0f, 0f)
         shader.setFloatUniform("geometryScale", 16f)
@@ -305,7 +305,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                     Offset.Zero,
                     Offset(0f, -1f),
                     1f,
-                )
+                ),
             )
         val negative =
             style.shade(
@@ -313,7 +313,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                     Offset.Zero,
                     Offset(0f, 1f),
                     -1f,
-                )
+                ),
             )
 
         assertEquals(0.2f, positive.color.alpha, 0.001f)
@@ -582,8 +582,8 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                     """
             uniform float4 color;
             float4 main(float2 coord) { return color; }
-        """
-                )
+        """,
+                ),
             )
             .apply { uniform("color", input) }
             .makeShader()
@@ -601,8 +601,8 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                         """
             uniform float4 color;
             float4 main(float2 coord) { return color; }
-        """
-                    )
+        """,
+                    ),
                 )
                 .apply { uniform("color", input) }
                 .makeShader()
@@ -623,7 +623,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                         paint = paint,
                         saveLayerFlags =
                             Canvas.SaveLayerFlags(Canvas.SaveLayerFlagsSet.F16ColorType),
-                    )
+                    ),
                 )
                 SkiaPaint().use { sourcePaint ->
                     sourcePaint.shader = shader
@@ -647,8 +647,8 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                             ColorType.RGBA_F16,
                             ColorAlphaType.PREMUL,
                             ColorSpace.sRGB,
-                        )
-                    )
+                        ),
+                    ),
                 )
                 assertTrue(surface.readPixels(bitmap, readX, readY))
                 val bytes =
@@ -662,7 +662,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                                 ColorSpace.sRGB,
                             ),
                             readWidth * 8,
-                        )
+                        ),
                     )
                 val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
                 return FloatArray(readWidth * readHeight * 4) {

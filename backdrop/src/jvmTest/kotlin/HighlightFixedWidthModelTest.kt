@@ -67,7 +67,7 @@ class HighlightFixedWidthModelTest : SkikoGraphicsTest() {
             sample.position.x == 0f ||
                 sample.position.x == 1f ||
                 sample.position.y == 0f ||
-                sample.position.y == 1f
+                sample.position.y == 1f,
         )
     }
 

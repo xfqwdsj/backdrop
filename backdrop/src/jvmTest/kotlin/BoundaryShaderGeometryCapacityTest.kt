@@ -74,7 +74,7 @@ class BoundaryShaderGeometryCapacityTest : SkikoGraphicsTest() {
                   return half4(closest.x, closest.y, nearest.x, contained);
                 }
                 """
-                    .trimIndent()
+                    .trimIndent(),
             )
         shader.setFloatUniform("origin", 0f, 0f)
         shader.setFloatUniform("geometryScale", geometry.coordinateScale)

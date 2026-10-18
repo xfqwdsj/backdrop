@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -45,7 +44,6 @@ import top.ltfan.backdrop.shadow.Shadow
  * The effect region: how far a surface draws, how each side resolves, and where an exported
  * backdrop lands. Desktop tests run at density 1, so a dp and a px are the same number.
  */
-@OptIn(ExperimentalTestApi::class)
 class BackdropExtensionTest {
     @Test
     fun insetsExtendWhatTheSurfaceDraws() = runComposeUiTest {
@@ -108,7 +106,7 @@ class BackdropExtensionTest {
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
                             onDrawSurface = { resolved = it },
-                        )
+                        ),
                 )
             }
         }
@@ -140,7 +138,7 @@ class BackdropExtensionTest {
                             highlight = { Highlight.None },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -165,7 +163,7 @@ class BackdropExtensionTest {
                             highlight = { Highlight.None },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 ) {
                     Box(Modifier.size(100.dp).background(Color.Green).testTag("content"))
                 }
@@ -194,7 +192,7 @@ class BackdropExtensionTest {
                             shape = { RectangleShape },
                             insets = { BackdropInsets.all(10.dp) },
                             exportedBackdrop = exported,
-                        )
+                        ),
                 )
                 // Sits 10dp right and down of the producer, so its first pixels sample the marker.
                 Box(
@@ -205,7 +203,7 @@ class BackdropExtensionTest {
                             backdrop = exported,
                             shape = { RectangleShape },
                             effects = BackdropStyle.NoEffects,
-                        )
+                        ),
                 )
             }
         }
@@ -255,7 +253,7 @@ class BackdropExtensionTest {
                                     ),
                                 )
                             },
-                        )
+                        ),
                 )
             }
         }
@@ -292,7 +290,7 @@ class BackdropExtensionTest {
                         highlight = { Highlight.None },
                         shadow = { Shadow.None },
                         innerShadow = { InnerShadow.None },
-                    )
+                    ),
             )
         }
     }
@@ -318,7 +316,7 @@ class BackdropExtensionTest {
                             highlight = { Highlight.None },
                             shadow = { Shadow.None },
                             innerShadow = { InnerShadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -347,7 +345,7 @@ private val TriangleShape =
                     lineTo(size.width, size.height)
                     lineTo(0f, size.height)
                     close()
-                }
+                },
             )
     }
 

@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -27,7 +26,6 @@ import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class LayerBackdropReplacementRenderingTest {
     @Test
     fun epochChangeKeepsSamplingTheLayerInEveryFrame() = runComposeUiTest {
@@ -47,7 +45,7 @@ class LayerBackdropReplacementRenderingTest {
                                 effects = {},
                                 highlight = { Highlight.None },
                                 shadow = { Shadow.None },
-                            )
+                            ),
                     )
                 }
             }
@@ -88,7 +86,7 @@ class LayerBackdropReplacementRenderingTest {
                             effects = {},
                             highlight = { Highlight.None },
                             shadow = { Shadow.None },
-                        )
+                        ),
                 )
             }
         }
@@ -128,7 +126,7 @@ class LayerBackdropReplacementRenderingTest {
                                 shadow = { Shadow.None },
                                 exportedBackdrop = exported,
                                 onDrawSurface = { drawRect(Color.Yellow) },
-                            )
+                            ),
                     ) {
                         Box(Modifier.fillMaxSize().background(Color.Blue))
                         Box(
@@ -139,7 +137,7 @@ class LayerBackdropReplacementRenderingTest {
                                     effects = {},
                                     highlight = { Highlight.None },
                                     shadow = { Shadow.None },
-                                )
+                                ),
                         )
                     }
                 }

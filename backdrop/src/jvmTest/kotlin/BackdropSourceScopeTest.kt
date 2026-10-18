@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -23,7 +22,6 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.LayerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropSourceScopeTest {
     @Test
     fun finiteProceduralSourceExtendsItsOwnTexels() = runComposeUiTest {
@@ -41,7 +39,7 @@ class BackdropSourceScopeTest {
                         effects = {},
                         insets = { BackdropInsets.all(8.dp) },
                         exportedBackdrop = output,
-                    )
+                    ),
             )
         }
         waitForIdle()
@@ -79,7 +77,7 @@ class BackdropSourceScopeTest {
                             effects = {},
                             insets = { BackdropInsets.all(4.dp) },
                             exportedBackdrop = output,
-                        )
+                        ),
                 )
             }
             waitForIdle()
@@ -132,7 +130,7 @@ class BackdropSourceScopeTest {
                         { RectangleShape },
                         effects = {},
                         exportedBackdrop = output,
-                    )
+                    ),
             )
         }
         waitForIdle()

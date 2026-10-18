@@ -84,7 +84,7 @@ public fun BackdropEffectScope.opacity(@FloatRange(from = 0.0, to = 1.0) alpha: 
                 0f,
                 alpha,
                 0f,
-            )
+            ),
         )
     colorFilter(ColorMatrixColorFilter(colorMatrix))
 }
@@ -149,7 +149,7 @@ private fun colorControlsColorFilter(
                 0f,
                 1f,
                 0f,
-            )
+            ),
         )
     return ColorMatrixColorFilter(colorMatrix)
 }

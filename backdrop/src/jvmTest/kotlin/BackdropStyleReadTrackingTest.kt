@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -20,7 +19,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropStyleReadTrackingTest {
     @Test
     fun explicitProducersDoNotRereadReplacedStyles() = runComposeUiTest {
@@ -104,7 +102,7 @@ class BackdropStyleReadTrackingTest {
                             version.intValue
                             BackdropInsets.None
                         },
-                    )
+                    ),
             ) {
                 val modifier =
                     Modifier.size(40.dp)

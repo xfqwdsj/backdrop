@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -16,7 +15,6 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropMaskRenderingTest {
     @Test
     fun fillAndStrengthMultiplyForFlatAndProgressiveMasks() {

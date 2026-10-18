@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -28,7 +27,6 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 
-@OptIn(ExperimentalTestApi::class)
 class BackdropShapeRenderingTest {
     @Test
     fun customShapesShareTheSampledAndDirectRenderingOutline() {
@@ -45,7 +43,7 @@ class BackdropShapeRenderingTest {
                             lineTo(size.width, size.height)
                             lineTo(0f, size.height)
                             close()
-                        }
+                        },
                     )
             }
         for (insets in
@@ -77,7 +75,7 @@ class BackdropShapeRenderingTest {
                                 onDrawSurface = {
                                     drawRect(Color.Red, Offset(-80f, -80f), Size(240f, 240f))
                                 },
-                            )
+                            ),
                         )
                 }
             }

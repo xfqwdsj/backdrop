@@ -37,7 +37,7 @@ class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
                         CornerRadius(12f),
                         CornerRadius(6f),
                         CornerRadius(10f),
-                    )
+                    ),
                 ),
                 Outline.Rounded(
                     RoundRect(
@@ -49,7 +49,7 @@ class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
                         CornerRadius(12f),
                         CornerRadius.Zero,
                         CornerRadius(10f),
-                    )
+                    ),
                 ),
             )
         val points =
@@ -75,11 +75,11 @@ class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
     fun analyticUniformUpdatesReuseOneShaderForDifferentSizesAndRadii() {
         val first =
             HighlightBoundaryGeometry(
-                Outline.Rounded(RoundRect(Rect(2f, 3f, 34f, 25f), CornerRadius(7f)))
+                Outline.Rounded(RoundRect(Rect(2f, 3f, 34f, 25f), CornerRadius(7f))),
             )
         val second =
             HighlightBoundaryGeometry(
-                Outline.Rounded(RoundRect(Rect(4f, 1f, 48f, 39f), CornerRadius(14f)))
+                Outline.Rounded(RoundRect(Rect(4f, 1f, 48f, 39f), CornerRadius(14f))),
             )
         val source = first.shaderFunctions(1) + probeMain()
         assertEquals(source, second.shaderFunctions(1) + probeMain())
@@ -106,8 +106,8 @@ class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
                         CornerRadius(12f),
                         CornerRadius(0f),
                         CornerRadius(0f),
-                    )
-                )
+                    ),
+                ),
             )
         val elliptical =
             HighlightBoundaryGeometry(
@@ -121,12 +121,12 @@ class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
                         CornerRadius(8f, 6f),
                         CornerRadius(8f, 6f),
                         CornerRadius(8f, 6f),
-                    )
-                )
+                    ),
+                ),
             )
         val generic =
             HighlightBoundaryGeometry(
-                Outline.Generic(Path().apply { addRect(Rect(0f, 0f, 20f, 20f)) })
+                Outline.Generic(Path().apply { addRect(Rect(0f, 0f, 20f, 20f)) }),
             )
         assertFalse(invalid.isAnalytic)
         assertFalse(elliptical.isAnalytic)
@@ -150,8 +150,8 @@ class AnalyticHighlightGeometryTest : SkikoGraphicsTest() {
                         CornerRadius.Zero,
                         CornerRadius(90f),
                         CornerRadius.Zero,
-                    )
-                )
+                    ),
+                ),
             )
         val point = Offset(80f, 80f)
         assertTrue(boundary.isAnalytic)

@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -46,7 +45,6 @@ import top.ltfan.backdrop.highlight.toHighlightLinearExtendedSrgb
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class ProcessedBackdropColorResponseTest {
     @Test
     fun responseTracksProcessedSourceAndDisabledState() = runComposeUiTest {
@@ -95,12 +93,12 @@ class ProcessedBackdropColorResponseTest {
                                     drawBackdrop()
                                 },
                                 onDrawSurface = { drawRect(Color.Green) },
-                            )
+                            ),
                     )
                     Box(
                         Modifier.offset(120.dp, 40.dp)
                             .size(40.dp, 80.dp)
-                            .layerBackdrop(secondSource)
+                            .layerBackdrop(secondSource),
                     ) {
                         Box(Modifier.fillMaxSize().background(Color.Blue))
                     }
@@ -121,7 +119,7 @@ class ProcessedBackdropColorResponseTest {
                                 },
                                 shadow = { Shadow.None },
                                 innerShadow = { InnerShadow.None },
-                            )
+                            ),
                     )
                 }
             }

@@ -45,11 +45,11 @@ class MaskBlurSupportTest {
                             drawn = true
                             assertTrue(
                                 x + 0.5f >= source.left - support &&
-                                    x + 0.5f <= source.right + support
+                                    x + 0.5f <= source.right + support,
                             )
                             assertTrue(
                                 y + 0.5f >= source.top - support &&
-                                    y + 0.5f <= source.bottom + support
+                                    y + 0.5f <= source.bottom + support,
                             )
                         }
                     }

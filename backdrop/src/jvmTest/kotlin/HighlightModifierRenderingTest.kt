@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -28,7 +27,6 @@ import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class HighlightModifierRenderingTest {
     @Test
     fun plainKeepsFixedBandIndependentOfDirectionalResponse() {
@@ -39,7 +37,7 @@ class HighlightModifierRenderingTest {
                     style = HighlightStyle.Solid(Color.White),
                     direction = HighlightDirection.None,
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
         val preset =
             capture(
@@ -47,7 +45,7 @@ class HighlightModifierRenderingTest {
                     width = 8.dp,
                     style = HighlightStyle.Solid(Color.White),
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
 
         assertTrue(plain[80, 41].alpha > 0.05f && plain[41, 80].alpha > 0.05f)
@@ -63,7 +61,7 @@ class HighlightModifierRenderingTest {
                     style = HighlightStyle.TwoTone(Color.White),
                     direction = HighlightDirection(angle = 270f),
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
         val bottom =
             capture(
@@ -72,7 +70,7 @@ class HighlightModifierRenderingTest {
                     style = HighlightStyle.TwoTone(Color.White),
                     direction = HighlightDirection(angle = 90f),
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
 
         assertTrue(top[80, 41].red > top[80, 118].red + 0.5f)
@@ -89,7 +87,7 @@ class HighlightModifierRenderingTest {
                     style = HighlightStyle.Solid(Color.White),
                     direction = HighlightDirection.None,
                     colorResponse = HighlightColorResponse(amount = 0f),
-                )
+                ),
             )
 
         assertTrue(pixels[80, 48].alpha > 0f)
@@ -112,7 +110,7 @@ class HighlightModifierRenderingTest {
                                 highlight = { selected.value },
                                 shadow = { Shadow.None },
                                 innerShadow = { InnerShadow.None },
-                            )
+                            ),
                     )
                 }
             }

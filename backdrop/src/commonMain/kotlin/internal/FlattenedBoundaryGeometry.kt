@@ -180,7 +180,7 @@ internal class FlattenedBoundaryGeometry(path: Path) {
             bounds.left.isFinite() &&
                 bounds.top.isFinite() &&
                 bounds.right.isFinite() &&
-                bounds.bottom.isFinite()
+                bounds.bottom.isFinite(),
         )
         val iterator = PathIterator(flattenedPath, PathIterator.ConicEvaluation.AsConic)
         val points = FloatArray(8)

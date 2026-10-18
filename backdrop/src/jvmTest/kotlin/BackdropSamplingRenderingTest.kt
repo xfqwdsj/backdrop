@@ -99,7 +99,7 @@ class BackdropSamplingRenderingTest {
                         paint = effectPaint,
                         saveLayerFlags =
                             Canvas.SaveLayerFlags(Canvas.SaveLayerFlagsSet.F16ColorType),
-                    )
+                    ),
                 )
                 Paint().use { source ->
                     source.color = Color.WHITE

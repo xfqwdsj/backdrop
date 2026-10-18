@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
@@ -57,7 +56,6 @@ import top.ltfan.backdrop.interaction.interactionLightSource
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-@OptIn(ExperimentalTestApi::class)
 class SharedInteractionLightingRenderingTest {
     @Test
     fun nestedSourcesShareOnePhysicalPointerContribution() = runComposeUiTest {
@@ -69,12 +67,12 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.fillMaxSize().interactionLightSource {
                             InteractionLight.Config(color = Color.Red, radius = 100.dp)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
                                 InteractionLight.Config(color = Color.Blue, radius = 100.dp)
-                            }
+                            },
                         )
                     }
                 }
@@ -103,12 +101,12 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.fillMaxSize().interactionLightSource {
                             InteractionLight.Config(color = Color.Red, radius = 100.dp)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
                                 InteractionLight.Config(color = Color.Blue, radius = 100.dp)
-                            }
+                            },
                         )
                     }
                 }
@@ -135,13 +133,13 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.fillMaxSize().interactionLightSource {
                             InteractionLight.Config(color = Color.Red, radius = 100.dp)
-                        }
+                        },
                     ) {
                         if (showChild.value) {
                             Box(
                                 Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
                                     InteractionLight.Config(color = Color.Blue, radius = 100.dp)
-                                }
+                                },
                             )
                         }
                     }
@@ -172,7 +170,7 @@ class SharedInteractionLightingRenderingTest {
         lateinit var registry: InteractionRegistry
         val childLight =
             mutableStateOf<InteractionLight>(
-                InteractionLight.Config(color = Color.Blue, radius = 100.dp)
+                InteractionLight.Config(color = Color.Blue, radius = 100.dp),
             )
         setContent {
             ProvideInteractionLighting {
@@ -181,12 +179,12 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.fillMaxSize().interactionLightSource {
                             InteractionLight.Config(color = Color.Red, radius = 100.dp)
-                        }
+                        },
                     ) {
                         Box(
                             Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
                                 childLight.value
-                            }
+                            },
                         )
                     }
                 }
@@ -213,7 +211,7 @@ class SharedInteractionLightingRenderingTest {
         lateinit var registry: InteractionRegistry
         val parentLight =
             mutableStateOf<InteractionLight>(
-                InteractionLight.Config(color = Color.Red, radius = 100.dp)
+                InteractionLight.Config(color = Color.Red, radius = 100.dp),
             )
         setContent {
             ProvideInteractionLighting {
@@ -223,7 +221,7 @@ class SharedInteractionLightingRenderingTest {
                         Box(
                             Modifier.offset(20.dp, 20.dp).size(80.dp).interactionLightSource {
                                 InteractionLight.Config(color = Color.Blue, radius = 100.dp)
-                            }
+                            },
                         )
                     }
                 }
@@ -257,7 +255,7 @@ class SharedInteractionLightingRenderingTest {
                                 radius = 100.dp,
                                 releaseDuration = 120.milliseconds,
                             )
-                        }
+                        },
                     )
                 }
             }
@@ -301,7 +299,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Red, radius = 160.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -315,7 +313,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -355,7 +353,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Green, radius = 160.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -369,7 +367,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -397,10 +395,10 @@ class SharedInteractionLightingRenderingTest {
                     Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
                     Box(
                         Modifier.offset(20.dp, 100.dp).size(40.dp).interactionLightSource(
-                            parentSource
+                            parentSource,
                         ) {
                             InteractionLight.Config(color = Color.Blue, radius = 180.dp)
-                        }
+                        },
                     )
                     ProvideInteractionLighting(isolate = isolate.value) {
                         Box(
@@ -415,7 +413,7 @@ class SharedInteractionLightingRenderingTest {
                                     interactionLighting = {
                                         InteractionLighting.Config(interiorOpacity = .8f)
                                     },
-                                )
+                                ),
                         )
                     }
                 }
@@ -449,7 +447,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Red, radius = 180.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -464,7 +462,7 @@ class SharedInteractionLightingRenderingTest {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
                                 onDrawSurface = { drawRect(Color.Blue) },
-                            )
+                            ),
                     ) {
                         Box(Modifier.offset(30.dp, 30.dp).size(20.dp).background(Color.Green))
                     }
@@ -492,7 +490,7 @@ class SharedInteractionLightingRenderingTest {
         val source = MutableInteractionSource()
         val light =
             mutableStateOf<InteractionLight>(
-                InteractionLight.Config(color = Color.Red, radius = 160.dp)
+                InteractionLight.Config(color = Color.Red, radius = 160.dp),
             )
         val attached = mutableStateOf(true)
         val press = PressInteraction.Press(Offset(20f, 20f))
@@ -504,10 +502,10 @@ class SharedInteractionLightingRenderingTest {
                     if (attached.value) {
                         Box(
                             Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(
-                                source
+                                source,
                             ) {
                                 light.value
-                            }
+                            },
                         )
                     }
                     Box(
@@ -522,7 +520,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -572,10 +570,10 @@ class SharedInteractionLightingRenderingTest {
                     Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(
-                            if (useSecond.value) second else first
+                            if (useSecond.value) second else first,
                         ) {
                             InteractionLight.Config(color = Color.Red, radius = 160.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -589,7 +587,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -625,7 +623,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Yellow, radius = 160.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -639,7 +637,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -667,7 +665,7 @@ class SharedInteractionLightingRenderingTest {
                             .testTag("raw-source")
                             .interactionLightSource(interactionSource = null) {
                                 InteractionLight.Config(color = Color.Red, radius = 120.dp)
-                            }
+                            },
                     )
                     Box(
                         Modifier.offset(130.dp, 100.dp)
@@ -681,7 +679,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -723,7 +721,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Red, radius = 120.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(80.dp, 80.dp)
@@ -751,7 +749,7 @@ class SharedInteractionLightingRenderingTest {
                                         contourOpacity = .8f,
                                     )
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -780,7 +778,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(95.dp, 95.dp).size(20.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Red, radius = 180.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(80.dp, 80.dp)
@@ -810,7 +808,7 @@ class SharedInteractionLightingRenderingTest {
                                         contourOpacity = .8f,
                                     )
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -862,7 +860,7 @@ class SharedInteractionLightingRenderingTest {
                                 InteractionLight.Config(color = Color.Magenta, radius = 160.dp)
                             }
                             .focusable()
-                            .testTag("keyboard-source")
+                            .testTag("keyboard-source"),
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -876,14 +874,14 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                     Box(
                         Modifier.offset(10.dp, 10.dp)
                             .size(20.dp)
                             .focusRequester(otherFocus)
                             .focusable()
-                            .testTag("other-focus")
+                            .testTag("other-focus"),
                     )
                 }
             }
@@ -927,7 +925,7 @@ class SharedInteractionLightingRenderingTest {
         val interactionSource = mutableStateOf<MutableInteractionSource?>(externalSource)
         val light =
             mutableStateOf<InteractionLight>(
-                InteractionLight.Config(color = Color.Green, radius = 160.dp)
+                InteractionLight.Config(color = Color.Green, radius = 160.dp),
             )
         setContent {
             ProvideInteractionLighting {
@@ -940,7 +938,7 @@ class SharedInteractionLightingRenderingTest {
                             .focusRequester(focus)
                             .interactionLightSource(interactionSource.value) { light.value }
                             .focusable()
-                            .testTag("switching-focus-source")
+                            .testTag("switching-focus-source"),
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -954,7 +952,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1002,14 +1000,14 @@ class SharedInteractionLightingRenderingTest {
                             .interactionLightSource(interactionSource = null) {
                                 InteractionLight.Config(color = Color.Magenta, radius = 160.dp)
                             }
-                            .testTag("ancestor-key-source")
+                            .testTag("ancestor-key-source"),
                     ) {
                         Box(
                             Modifier.fillMaxSize()
                                 .focusRequester(focus)
                                 .focusable()
                                 .clickable {}
-                                .testTag("consuming-child")
+                                .testTag("consuming-child"),
                         )
                     }
                     Box(
@@ -1024,7 +1022,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1054,17 +1052,17 @@ class SharedInteractionLightingRenderingTest {
                 ProvideBackdropStyle(
                     interactionLighting = {
                         InteractionLighting.Config(interiorOpacity = .8f)
-                    }
+                    },
                 ) {
                     val backdrop = rememberLayerBackdrop()
                     Box(Modifier.size(220.dp).background(Color.Black).testTag("root")) {
                         Box(Modifier.fillMaxSize().layerBackdrop(backdrop))
                         Box(
                             Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(
-                                source
+                                source,
                             ) {
                                 InteractionLight.Config(color = Color.Red, radius = 160.dp)
-                            }
+                            },
                         )
                         Box(
                             Modifier.offset(100.dp, 80.dp)
@@ -1074,7 +1072,7 @@ class SharedInteractionLightingRenderingTest {
                                     { RectangleShape },
                                     effects = {},
                                     onDrawSurface = { drawRect(Color.Blue) },
-                                )
+                                ),
                         )
                     }
                 }
@@ -1102,7 +1100,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(80.dp, 80.dp).size(20.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Red, radius = 80.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(80.dp, 80.dp)
@@ -1117,7 +1115,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1154,7 +1152,7 @@ class SharedInteractionLightingRenderingTest {
                             .interactionLightSource(source) {
                                 InteractionLight.Config(color = Color.Red, radius = 12.dp)
                             }
-                            .testTag("delayed-source")
+                            .testTag("delayed-source"),
                     )
                     Box(
                         Modifier.fillMaxSize()
@@ -1167,7 +1165,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .9f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1205,7 +1203,7 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(20.dp, 80.dp).size(40.dp).interactionLightSource(source) {
                             InteractionLight.Config(color = Color.Red, radius = 160.dp)
-                        }
+                        },
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -1219,7 +1217,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1274,7 +1272,7 @@ class SharedInteractionLightingRenderingTest {
                                 )
                             }
                             .focusable()
-                            .testTag("external-focus-source")
+                            .testTag("external-focus-source"),
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -1288,7 +1286,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1344,14 +1342,14 @@ class SharedInteractionLightingRenderingTest {
                                 InteractionLight.Config(color = Color.Red, radius = 160.dp)
                             }
                             .focusable()
-                            .testTag("focus-history-source")
+                            .testTag("focus-history-source"),
                     )
                     Box(
                         Modifier.offset(10.dp, 10.dp)
                             .size(20.dp)
                             .focusRequester(otherFocus)
                             .focusable()
-                            .testTag("other-focus")
+                            .testTag("other-focus"),
                     )
                     Box(
                         Modifier.offset(100.dp, 80.dp)
@@ -1365,7 +1363,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .8f)
                                 },
-                            )
+                            ),
                     )
                 }
             }
@@ -1428,7 +1426,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .9f)
                                 },
-                            )
+                            ),
                     )
                     Column(Modifier.offset(20.dp, 20.dp).size(120.dp).verticalScroll(scrollState)) {
                         repeat(8) { index ->
@@ -1442,7 +1440,7 @@ class SharedInteractionLightingRenderingTest {
                                         interactionSource = rowSource,
                                         indication = null,
                                     ) {}
-                                    .testTag(if (index == 0) "scroll-row" else "scroll-row-$index")
+                                    .testTag(if (index == 0) "scroll-row" else "scroll-row-$index"),
                             )
                         }
                     }
@@ -1503,7 +1501,7 @@ class SharedInteractionLightingRenderingTest {
                                 interactionLighting = {
                                     InteractionLighting.Config(interiorOpacity = .9f)
                                 },
-                            )
+                            ),
                     )
                     Box(
                         Modifier.offset(20.dp, 30.dp)
@@ -1511,7 +1509,7 @@ class SharedInteractionLightingRenderingTest {
                             .interactionLightSource(source) {
                                 InteractionLight.Config(color = Color.Red, radius = 24.dp)
                             }
-                            .testTag("touch-source")
+                            .testTag("touch-source"),
                     )
                 }
             }
@@ -1562,17 +1560,19 @@ class SharedInteractionLightingRenderingTest {
                 ProvideInteractionLighting {
                     val backdrop = rememberLayerBackdrop()
                     Box(
-                        Modifier.size(300.dp, 240.dp).background(Color.Black).testTag("bright-root")
+                        Modifier.size(300.dp, 240.dp)
+                            .background(Color.Black)
+                            .testTag("bright-root"),
                     ) {
                         Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                             Box(Modifier.fillMaxSize().background(Color(.9f, .9f, .9f)))
                         }
                         Box(
                             Modifier.offset(50.dp, 100.dp).size(40.dp).interactionLightSource(
-                                source
+                                source,
                             ) {
                                 InteractionLight.Config(color = lightColor.value, radius = 160.dp)
-                            }
+                            },
                         )
                         Box(
                             Modifier.offset(90.dp, 80.dp)
@@ -1586,7 +1586,7 @@ class SharedInteractionLightingRenderingTest {
                                     interactionLighting = {
                                         InteractionLighting.Config(interiorOpacity = .15f)
                                     },
-                                )
+                                ),
                         )
                     }
                 }
@@ -1659,7 +1659,7 @@ class SharedInteractionLightingRenderingTest {
                                         contourOpacity = .8f,
                                     )
                                 },
-                            )
+                            ),
                     )
                     Box(
                         Modifier.offset(220.dp, 60.dp)
@@ -1683,22 +1683,22 @@ class SharedInteractionLightingRenderingTest {
                                         contourOpacity = .8f,
                                     )
                                 },
-                            )
+                            ),
                     )
                     if (sourceAttached.value) {
                         Box(
                             Modifier.offset(40.dp, 90.dp).size(20.dp).interactionLightSource(
-                                leftSource
+                                leftSource,
                             ) {
                                 sourceLight.value
-                            }
+                            },
                         )
                         Box(
                             Modifier.offset(200.dp, 90.dp).size(20.dp).interactionLightSource(
-                                rightSource
+                                rightSource,
                             ) {
                                 sourceLight.value
-                            }
+                            },
                         )
                     }
                 }

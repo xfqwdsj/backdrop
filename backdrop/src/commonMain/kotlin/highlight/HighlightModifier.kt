@@ -209,7 +209,7 @@ internal class HighlightNode(
             highlight.width.value > 0f &&
                 highlight.colorResponse.amount > 0f &&
                 highlight.style !== HighlightStyle.None &&
-                isRuntimeShaderSupported()
+                isRuntimeShaderSupported(),
         )
         drawContent()
         if (highlight.width.value == 0f || highlight.style === HighlightStyle.None) {
@@ -593,17 +593,17 @@ internal class HighlightNode(
             pixels[offset] =
                 encodeHighlightExtendedSrgb(
                     (red / totalWeight * interactionAlpha + baseRed * (1f - interactionAlpha)) /
-                        alpha
+                        alpha,
                 ) * alpha
             pixels[offset + 1] =
                 encodeHighlightExtendedSrgb(
                     (green / totalWeight * interactionAlpha + baseGreen * (1f - interactionAlpha)) /
-                        alpha
+                        alpha,
                 ) * alpha
             pixels[offset + 2] =
                 encodeHighlightExtendedSrgb(
                     (blue / totalWeight * interactionAlpha + baseBlue * (1f - interactionAlpha)) /
-                        alpha
+                        alpha,
                 ) * alpha
             pixels[offset + 3] = alpha
         }

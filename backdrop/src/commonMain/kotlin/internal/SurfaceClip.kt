@@ -48,7 +48,7 @@ internal fun DrawScope.clipToExtendedShape(
                     rect.topRightCornerRadius,
                     rect.bottomRightCornerRadius,
                     rect.bottomLeftCornerRadius,
-                )
+                ),
             )
             clipPath(path, block = block)
         }
@@ -75,7 +75,7 @@ internal fun DrawScope.clipToExtendedShape(
                                     rect.bottomRightCornerRadius,
                                     rect.bottomLeftCornerRadius,
                                 )
-                            }
+                            },
                         )
                 }
                 clipPath(path, block = block)

@@ -8,3 +8,14 @@
 /dataSources.local.xml
 # Copilot data migration
 copilot.data.migration.*.xml
+# Generated files
+runConfigurations/
+AndroidProjectSystem.xml
+deploymentTargetSelector.xml
+deviceManager.xml
+gradle.xml
+kotlinc.xml
+misc.xml
+runConfigurations.xml
+vcs.xml
+xcode.xml

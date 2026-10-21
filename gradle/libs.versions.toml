@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.4.21"
-agp = "9.3.3"
+agp = "9.4.1"
 compose = "1.13.0-alpha02"
 annotations = "26.1.0"
 dslUtilities = "2.2.0"

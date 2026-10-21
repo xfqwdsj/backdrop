@@ -17,7 +17,8 @@ arbitrary path outlines are not supported by its signed-distance model. Highligh
 custom outline does not imply lens support for that outline.
 
 Check [platform capabilities](platforms-and-hdr.md) when an effect is unavailable. In particular,
-progressive blur falls back to uniform blur when runtime shaders are unavailable.
+`progressiveBlur` preserves its input and requests no coverage when runtime shaders are
+unavailable. Select an approximation explicitly when the component needs one.
 
 ## Keep coverage, sampling, and layout separate
 
@@ -69,6 +70,93 @@ progressive blur evaluates it directly. Retain `BackdropFillRampCache` for repea
 or remember the brush from `ramp.brush(...)` instead of allocating its color list each frame.
 `clipToGrownShape` matches the extended surface clip: rounded corners keep their radius and custom
 shapes resolve against the extended size.
+
+## Choose a progressive blur algorithm
+
+`effects { progressiveBlur(radius, edge, ramp) }` evaluates a spatially varying Gaussian blur
+in two runtime-shader passes. `layeredProgressiveBlur(radius, edge, ramp, levels = 8)` is an
+image-scope operation: it independently blurs the current image at uniformly spaced radii and
+mixes adjacent levels with premultiplied weights. The level count includes the unchanged input.
+More levels can increase processing and layer costs; levels with zero weight across the ramp
+are omitted. Choose the count for the consuming component and measure its rendering cost. Native
+uniform blur and the two-pass spatial shader have different kernels, so increasing the count does
+not guarantee pixel equality.
+
+```kotlin
+import top.ltfan.backdrop.isRenderEffectSupported
+import top.ltfan.backdrop.isRuntimeShaderSupported
+import top.ltfan.backdrop.effects.layeredProgressiveBlur
+import top.ltfan.backdrop.effects.progressiveBlur
+
+// Inside a render declaration:
+if (isRuntimeShaderSupported()) {
+    effects { progressiveBlur(radius, edge, ramp) }
+} else if (isRenderEffectSupported()) {
+    layeredProgressiveBlur(radius, edge, ramp, levels = 8)
+}
+```
+
+This is a caller-selected route, not an automatic library policy. Backdrop supplies no unified blur
+enable switch or theme fallback. Consumers own settings, animations, alternative fills and algorithm
+selection. Both algorithms preserve their input and request no ramp coverage when their required
+capability is absent or the radius is zero. Radius, endpoint intensities and the layered level count
+are validated before these early returns; anchors are resolved only when the algorithm runs.
+
+The layered algorithm reads the result before the call, including any previous effects or painting.
+Every level reads that same result; blur levels are not serial blur stages. Gradient weights sample
+the shared curve using `ramp.stops`, with level crossings inserted so only adjacent levels mix.
+Constant-weight intervals retain their endpoints without storing redundant intermediate colors,
+so `ramp.stops` is the initial curve sample count rather than the final gradient stop count.
+Weights are complementary before color and render-target quantization.
+`levels` controls blur radii independently of gradient precision. Logical directions, anchors and
+coverage follow the same ramp geometry as the shader algorithm.
+
+Neither algorithm applies a separate alpha fade. Blur can still redistribute the source's alpha.
+Extended coverage can still contain source pixels where blur intensity reaches zero. Apply a
+separate mask when that area should disappear.
+Existing graph operations also provide other visual alternatives. In the following render-declaration
+fragment, `rampCache` is a `BackdropFillRampCache` retained by the consuming component:
+
+```kotlin
+val original = current
+val softened = image {
+    replace(original)
+    effects {
+        blur(radius)
+        coverRamp(ramp, edge)
+    }
+}
+val coverage = image {
+    effects { coverRamp(ramp, edge) }
+    paint { room ->
+        // This translates the surface ramp to the expanded recording coordinates.
+        val origin = room.extension.originInNode
+        translate(origin.x, origin.y) {
+            drawBackdropFill(
+                ramped = true,
+                color = Color.White,
+                ramp = ramp,
+                domain = Size(
+                    room.size.width + room.extension.left + room.extension.right,
+                    room.size.height + room.extension.top + room.extension.bottom,
+                ),
+                cache = rampCache,
+                edge = edge,
+                surfaceSize = room.size,
+                leadingInset = if (edge.side(layoutDirection).isVertical)
+                    room.extension.top else room.extension.left,
+            )
+        }
+    }
+}
+replace(softened)
+mask(coverage) // Fades the uniformly blurred image's coverage.
+// Alternatively: mix(original, softened, coverage) retains an original-image contribution.
+```
+
+The examples use the existing `mask` and `mix` APIs. They change coverage or interpolate two images;
+they do not change the blur radius at each pixel. The component decides whether either appearance
+is an appropriate substitute. See [Render graphs](render-graphs.md) for their composition semantics.
 
 ## Custom effects
 

@@ -157,3 +157,13 @@ drawn after children. Exported pixels exclude children unless the source itself 
 An explicit render declaration replaces the inherited one completely; its `NoEffects` is an empty
 render declaration that leaves the original input selected. For fixed-order appearance without an
 effect interface, use [the parameterized surface API](styles-and-decorations.md).
+
+## Compose progressive blur alternatives
+
+`layeredProgressiveBlur` operates on the current image, independently blurring it at several radii
+before mixing adjacent levels. It belongs to the image DSL because it needs branches and masks;
+`effects { progressiveBlur(...) }` remains the runtime-shader algorithm in a serial effect chain.
+Both share ramp geometry and leave alpha fading to the caller. Existing `mask` and `mix` operations
+can instead fade a uniform blur or interpolate it with the original image. See
+[Effects and sampling](effects-and-sampling.md#choose-a-progressive-blur-algorithm) for caller-selected
+routes, capability requirements and examples.

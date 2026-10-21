@@ -16,9 +16,13 @@ Common code selects effects through `isRenderEffectSupported()` and `isRuntimeSh
 
 These are the gates implemented by [Android Platform](../backdrop/src/androidMain/kotlin/Platform.kt)
 and [Skiko Platform](../backdrop/src/skikoMain/kotlin/Platform.kt), rather than guarantees that an
-output surface can display HDR. Unsupported render effects are omitted. Progressive blur falls
-back to uniform blur without runtime shaders; lens is omitted. Finite source boundaries use
-transparent exterior pixels without their shader extension. Static highlight emission is
+output surface can display HDR. Unsupported render effects are omitted. Shader progressive blur
+preserves its input and requests no ramp coverage without runtime shaders; lens is omitted. The explicitly selected `layeredProgressiveBlur` approximation needs
+render effects but no runtime shaders, so it also works on Android API 31–32. It preserves its
+input without requesting coverage when render effects are unavailable. Consumers select algorithms
+and any mask, fill or other fallback; Backdrop has no unified blur-enable Local.
+
+Finite source boundaries use transparent exterior pixels without their shader extension. Static highlight emission is
 visible, and interior interaction lighting has an SDR mesh fallback.
 
 ## Preserve extended-range color

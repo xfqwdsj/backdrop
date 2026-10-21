@@ -2,7 +2,9 @@ package top.ltfan.backdrop.effects
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.ceil
 import kotlin.math.exp
 import top.ltfan.backdrop.BackdropAxis
@@ -35,64 +37,37 @@ public fun progressiveBackdropStrength(
  *
  * Radius must be finite and non-negative. Ramp endpoint intensities must be finite and in `0..1`,
  * and anchors must resolve to a finite increasing span so sampling bounds remain well-defined. The
- * shader evaluates the shared curve per pixel and falls back to uniform [blur] when runtime shaders
- * are unavailable.
+ * shader evaluates the shared curve per pixel. When runtime shaders are unavailable, this operation
+ * preserves its input and requests no coverage. Zero radius behaves the same way. Radius and
+ * endpoint intensities are validated before either early return; anchors are resolved only when the
+ * shader algorithm runs.
  */
 public fun BackdropEffectScope.progressiveBlur(
     radius: Float,
     edge: BackdropEdge,
     ramp: BackdropRamp = BackdropRamp(),
 ) {
-    require(radius.isFinite() && radius >= 0f) {
-        "Progressive blur radius must be finite and non-negative"
-    }
-    require(
-        ramp.from.isFinite() && ramp.from in 0f..1f && ramp.to.isFinite() && ramp.to in 0f..1f,
-    ) {
-        "Progressive blur intensities must be finite and within 0..1"
-    }
-    val curve = ramp.curve
-    if (radius == 0f) return
+    progressiveBlurImpl(radius, edge, ramp, isRuntimeShaderSupported())
+}
 
-    val side = edge.side(layoutDirection)
-    val vertical = side.isVertical
-    val axis = if (vertical) 1f else 0f
+internal fun BackdropEffectScope.progressiveBlurImpl(
+    radius: Float,
+    edge: BackdropEdge,
+    ramp: BackdropRamp,
+    supported: Boolean,
+) {
+    validateProgressiveBlur(radius, ramp)
+    val curve = ramp.curve
     val startIntensity = ramp.from
     val endIntensity = ramp.to
-    // The ramp answers on the axis a surface reports: 0 where the scrolled content passes it,
-    // positive towards the surface's own far edge. Whatever it reaches past the surface is the room
-    // this effect covers.
-    val thickness = if (vertical) size.height else size.width
-    if (!thickness.isFinite() || thickness <= 0f) return
-    val axisOfSurface =
-        BackdropAxis(
-            edge = side,
-            occupied = 0f..thickness,
-            content = 0f..thickness,
-            density = density,
-            fontScale = fontScale,
-        )
-    val span = ramp.span(axisOfSurface)
-    require(
-        span.start.isFinite() && span.endInclusive.isFinite() && span.start < span.endInclusive,
-    ) {
-        "Progressive blur ramp anchors must be finite and distinct"
-    }
-    val pastContentSide = maxOf(0f, -span.start)
-    val pastFarSide = maxOf(0f, span.endInclusive - thickness)
-    val covered = coveredInsets(side, pastContentSide, pastFarSide)
-    cover(covered)
-    if (!isRuntimeShaderSupported()) {
-        blur(radius)
-        return
-    }
+    if (radius == 0f || !supported) return
 
-    val (start, end) = backdropRampEnds(ramp, edge, size, layoutDirection, Offset.Zero)
-    val anchorStart = if (vertical) start.y else start.x
-    val anchorEnd = if (vertical) end.y else end.x
-    require(anchorStart.isFinite() && anchorEnd.isFinite() && anchorStart != anchorEnd) {
-        "Progressive blur ramp anchors must be finite and distinct"
-    }
+    val geometry = progressiveBlurGeometry(size, layoutDirection, edge, ramp) ?: return
+    val vertical = geometry.side.isVertical
+    val axis = if (vertical) 1f else 0f
+    cover(geometry.coverage)
+    val anchorStart = if (vertical) geometry.start.y else geometry.start.x
+    val anchorEnd = if (vertical) geometry.end.y else geometry.end.x
     val verticalSampling =
         progressiveBlurSampling(true, vertical, radius, ramp, anchorStart, anchorEnd)
     runtimeShaderEffect(
@@ -185,8 +160,8 @@ private val ProgressiveBlurHorizontalShader: String by lazy {
 }
 
 /**
- * A separable Gaussian whose radius is driven per pixel by a smoothstep ramp mask. The mask value
- * is derived from the coordinate so the two passes share the ramp without an extra shader input.
+ * A separable Gaussian whose radius follows the shared ramp curve at each pixel. Intensity is
+ * derived from the coordinate so both passes share the ramp without an extra shader input.
  */
 private fun progressiveBlurShader(vertical: Boolean): String =
     """
@@ -208,10 +183,8 @@ vec4 blur(vec2 coord, float radius) {
     return content.eval(coord);
   }
 
-  // The radius follows the ramp, which reaches nothing at the edge of the area the effect covers:
-  // sampling out to the next whole pixel and taking the spread from the radius itself lets the
-  // Neighbour weights decrease with the radius, tapering the blur continuously through
-  // the fading mask edge.
+  // The local radius determines Gaussian spread, while tap selection rounds upward
+  // to cover fractional radii.
   float r = ceil(radius);
 
   float sigma = max(radius / 2.0, 1e-4);
@@ -318,3 +291,56 @@ private fun Density.coveredInsets(
         BackdropSide.Right ->
             BackdropInsets(left = pastContentSide.toDp(), right = pastFarSide.toDp())
     }
+
+internal fun validateProgressiveBlur(radius: Float, ramp: BackdropRamp) {
+    require(radius.isFinite() && radius >= 0f) {
+        "Progressive blur radius must be finite and non-negative"
+    }
+    require(
+        ramp.from.isFinite() && ramp.from in 0f..1f && ramp.to.isFinite() && ramp.to in 0f..1f,
+    ) {
+        "Progressive blur intensities must be finite and within 0..1"
+    }
+}
+
+internal data class ProgressiveBlurGeometry(
+    val side: BackdropSide,
+    val start: Offset,
+    val end: Offset,
+    val coverage: BackdropInsets,
+)
+
+internal fun Density.progressiveBlurGeometry(
+    size: Size,
+    layoutDirection: LayoutDirection,
+    edge: BackdropEdge,
+    ramp: BackdropRamp,
+): ProgressiveBlurGeometry? {
+    val side = edge.side(layoutDirection)
+    val thickness = if (side.isVertical) size.height else size.width
+    if (!thickness.isFinite() || thickness <= 0f) return null
+    val span = ramp.span(BackdropAxis(side, 0f..thickness, 0f..thickness, density, fontScale))
+    require(
+        span.start.isFinite() && span.endInclusive.isFinite() && span.start < span.endInclusive,
+    ) {
+        "Progressive blur ramp anchors must be finite and ordered"
+    }
+    // Freeze the resolved span so a custom anchor producer is evaluated once per operation.
+    val resolved = ramp.copy(anchors = { span })
+    val (start, end) = backdropRampEnds(resolved, edge, size, layoutDirection, Offset.Zero)
+    require(
+        start.x.isFinite() &&
+            start.y.isFinite() &&
+            end.x.isFinite() &&
+            end.y.isFinite() &&
+            start != end,
+    ) {
+        "Progressive blur ramp anchors must be finite and distinct"
+    }
+    return ProgressiveBlurGeometry(
+        side,
+        start,
+        end,
+        coveredInsets(side, maxOf(0f, -span.start), maxOf(0f, span.endInclusive - thickness)),
+    )
+}

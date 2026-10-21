@@ -33,7 +33,7 @@ duplicated documentation inventories.
   that contract. Prefer immutable `val` properties; annotate public types the compiler cannot infer.
   Use `@Stable` for snapshot-backed mutable behavior and `@Immutable` only when public properties
   never change. Do not annotate unsignalled mutable drawing scopes, shaders, or caches as stable.
-- `Backdrop` remains `@Stable`: `LayerBackdrop.graphicsLayer` is snapshot-backed and replaceable.
+- `Backdrop` is `@Stable`: `LayerBackdrop.graphicsLayer` is snapshot-backed and replaceable.
 - Sources use `top.ltfan.backdrop[.sub]` under `backdrop/src/<sourceSet>/kotlin/`, omitting the
   `top/ltfan/backdrop` directory prefix. Remaining package segments match directories. Tests live at
   the test source-set root in `top.ltfan.backdrop` and import production subpackages.
@@ -47,8 +47,10 @@ duplicated documentation inventories.
   reason for surprising behavior; omit change history and ungrounded negative claims. Overviews
   describe responsibilities and contracts rather than inventories of current features or internals.
   Keep member-specific details with the member that defines them.
-- Type-name factories intentionally follow Compose naming. Do not fix their lint findings or weak
-  warnings about inlining a local alias.
+- Type-name factories copy the name of the type they construct. An exact match between the function
+  name and declared return type name needs no naming suppression. When the names differ, verify
+  that the returned type is compatible with the named type, then locally suppress `FunctionName`.
+  Use ordinary lower-camel-case names for functions that do not construct a corresponding type.
 
 ## Rendering invariants
 
@@ -62,10 +64,12 @@ duplicated documentation inventories.
 - Preserve delayed visual producers and use-position style lookup. Only inherited fields read
   defaults; snapshot reads belong in drawing or effect observation. Position changes update
   coordinate-dependent sampling without resolving the effect chain; geometry changes resolve it.
-- Preserve `null` inheritance, explicit replacement, decoration `None`, and `BackdropStyle.NoEffects`.
-  Zero-alpha configurations remain configurations. Disabled decorations keep observation, release
-  drawing layers, and reset layer-dependent caches. `drawPlainBackdrop` consumes effects and insets,
-  with source, shape, callbacks, and layer control supplied by the caller.
+- Preserve `null` style inheritance, explicit render replacement, `BackdropRenderStyle.NoEffects`, and the fixed-order
+  `BackdropStyle.NoEffects` appearance.
+  Treat zero-alpha values as configured primitives. Omitted primitives keep declaration observation,
+  release renderer resources, and reset layer-dependent caches. The caller owns source, shape,
+  graph ordering, foreground, export selection, and layer control. Never read rendered pixels back
+  to implement graph operations.
 - Configure surface isolation during placement from measured geometry. Layer-property and render
   epoch observations invalidate placement.
 - Highlights evaluate one nearest-contour response with independent width and strength curves.

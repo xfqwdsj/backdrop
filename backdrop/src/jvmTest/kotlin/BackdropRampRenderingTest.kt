@@ -47,97 +47,119 @@ class BackdropRampRenderingTest {
                         Box(
                             Modifier.offset(50.dp, 50.dp)
                                 .size(80.dp, 80.dp)
-                                .drawPlainBackdrop(
-                                    bg,
-                                    { RectangleShape },
+                                .renderBackdrop(
+                                    backdrop = bg,
+                                    shape = { RectangleShape },
                                     insets = { BackdropInsets(top = inset.dp) },
-                                    effects = {
-                                        if (mask.value) coverRamp(ramp, edge)
-                                        else {
-                                            val actual = this
-                                            val inspection =
-                                                object : BackdropEffectScopeImpl() {
-                                                    override val shape: Shape
-                                                        get() = RectangleShape
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {
+                                                if (mask.value) coverRamp(ramp, edge)
+                                                else {
+                                                    val actual = this
+                                                    val inspection =
+                                                        object : BackdropEffectScopeImpl() {
+                                                            override val shape: Shape
+                                                                get() = RectangleShape
 
-                                                    override fun obtainRuntimeShader(
-                                                        key: String,
-                                                        string: String,
-                                                    ): RuntimeShader {
-                                                        // Expose the intensity computed by the
-                                                        // actual production shader, retaining its
-                                                        // coordinate, anchors and curve
-                                                        // calculations verbatim.
-                                                        val inspected =
-                                                            string.replace(
-                                                                "return blur(coord, mix(0.0, blurRadius, intensity));",
-                                                                "return vec4(intensity, intensity, intensity, 1.0);",
+                                                            override fun obtainRuntimeShader(
+                                                                key: String,
+                                                                string: String,
+                                                            ): RuntimeShader {
+                                                                // Expose the intensity
+                                                                // computed by the
+                                                                // actual production shader,
+                                                                // retaining its
+                                                                // coordinate, anchors and
+                                                                // curve
+                                                                // calculations verbatim.
+                                                                val inspected =
+                                                                    string.replace(
+                                                                        "return blur(coord, mix(0.0, blurRadius, intensity));",
+                                                                        "return vec4(intensity, intensity, intensity, 1.0);",
+                                                                    )
+                                                                return actual.obtainRuntimeShader(
+                                                                    key,
+                                                                    inspected,
+                                                                )
+                                                            }
+                                                        }
+                                                    inspection.size = size
+                                                    inspection.density = density
+                                                    inspection.fontScale = fontScale
+                                                    inspection.layoutDirection = layoutDirection
+                                                    inspection.resolveEffects(
+                                                        effects = {
+                                                            progressiveBlur(
+                                                                16.dp.toPx(),
+                                                                edge,
+                                                                ramp,
                                                             )
-                                                        return actual.obtainRuntimeShader(
-                                                            key,
-                                                            inspected,
+                                                            effect(
+                                                                OffsetEffect(0f, 0f),
+                                                                BackdropSampling.outsets(
+                                                                    12f,
+                                                                    12f,
+                                                                    12f,
+                                                                    12f,
+                                                                ),
+                                                            )
+                                                        },
+                                                        requested = BackdropInsets(top = inset.dp),
+                                                    )
+                                                    cover(inspection.cover)
+                                                    val room = inspection.extension
+                                                    effect(
+                                                        requireNotNull(
+                                                            inspection.renderEffect,
+                                                        ),
+                                                        sampling = {
+                                                            Rect(
+                                                                -room.left,
+                                                                -room.top,
+                                                                size.width + room.right,
+                                                                size.height + room.bottom,
+                                                            )
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                            paintSurface { room ->
+                                                if (mask.value) {
+                                                    translate(
+                                                        room.extension.originInNode.x,
+                                                        room.extension.originInNode.y,
+                                                    ) {
+                                                        drawBackdropFill(
+                                                            true,
+                                                            Color.White,
+                                                            ramp,
+                                                            Size(
+                                                                room.size.width +
+                                                                    room.extension.left +
+                                                                    room.extension.right,
+                                                                room.size.height +
+                                                                    room.extension.top +
+                                                                    room.extension.bottom,
+                                                            ),
+                                                            BackdropFillRampCache(),
+                                                            edge,
+                                                            room.size,
+                                                            if (
+                                                                edge
+                                                                    .side(layoutDirection)
+                                                                    .isVertical
+                                                            )
+                                                                room.extension.top
+                                                            else room.extension.left,
                                                         )
                                                     }
                                                 }
-                                            inspection.size = size
-                                            inspection.density = density
-                                            inspection.fontScale = fontScale
-                                            inspection.layoutDirection = layoutDirection
-                                            inspection.resolveEffects(
-                                                effects = {
-                                                    progressiveBlur(16.dp.toPx(), edge, ramp)
-                                                    effect(
-                                                        OffsetEffect(0f, 0f),
-                                                        BackdropSampling.outsets(
-                                                            12f,
-                                                            12f,
-                                                            12f,
-                                                            12f,
-                                                        ),
-                                                    )
-                                                },
-                                                requested = BackdropInsets(top = inset.dp),
-                                            )
-                                            cover(inspection.cover)
-                                            val room = inspection.extension
-                                            effect(
-                                                requireNotNull(inspection.renderEffect),
-                                                sampling = {
-                                                    Rect(
-                                                        -room.left,
-                                                        -room.top,
-                                                        size.width + room.right,
-                                                        size.height + room.bottom,
-                                                    )
-                                                },
-                                            )
-                                        }
-                                    },
-                                    onDrawSurface = { room ->
-                                        if (mask.value) {
-                                            translate(
-                                                room.extension.originInNode.x,
-                                                room.extension.originInNode.y,
-                                            ) {
-                                                drawBackdropMask(
-                                                    true,
-                                                    Color.White,
-                                                    ramp,
-                                                    Size(
-                                                        room.size.width +
-                                                            room.extension.left +
-                                                            room.extension.right,
-                                                        room.size.height +
-                                                            room.extension.top +
-                                                            room.extension.bottom,
-                                                    ),
-                                                    BackdropMaskRampCache(),
-                                                    edge,
-                                                    room.size,
-                                                    if (edge.side(layoutDirection).isVertical)
-                                                        room.extension.top
-                                                    else room.extension.left,
-                                                )
                                             }
                                         }
                                     },

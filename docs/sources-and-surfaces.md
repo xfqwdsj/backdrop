@@ -27,7 +27,7 @@ answers which pixels an effect needs. Increasing sampling room does not invent s
 Layer sources use `TileMode.Clamp` by default. This repeats the boundary texel, including its alpha
 and extended-range RGB. Select `Decal` for transparent exterior pixels, `Repeated` for repetition,
 or `Mirror` for mirrored repetition. Each member of a combined source keeps its own policy.
-Transparency inside a source remains transparency under every policy.
+Every tile policy preserves transparency inside the source.
 
 ```kotlin
 val backdrop = rememberLayerBackdrop(tileMode = TileMode.Decal)
@@ -50,39 +50,34 @@ See [BackdropDrawScope](../backdrop/src/commonMain/kotlin/BackdropDrawScope.kt) 
 
 ## Draw a surface
 
-Use `drawBackdrop` for a surface that combines source processing with decorative styling.
-`drawPlainBackdrop` provides the processing and callback path; it inherits effects and insets
-without receiving decorative styling or interaction light. Both leave component geometry and
-foreground drawing under the caller's control.
+`Modifier.renderBackdrop` maps the source into receiver coordinates and evaluates an explicit
+[render graph](render-graphs.md). Select a processed image with `replace(image)`, composite images with `draw(image)`,
+and paint with `paint` or `paintSurface`. Call `source()` followed by
+`drawWithContent { drawContent, room -> ... }` to customize source drawing before processing;
+invoke `drawContent()` inside that callback to include the source. These drawing operations receive
+surface-local coordinates and `BackdropRoom`, including the full sampling extension.
 
-Within the surface draw node, drawing proceeds in this order:
+The selected result draws behind children. Children retain the original shape clip.
+`foreground { ... }` draws an explicit transparent-based result above them. Primitive placement is
+part of this declaration, so highlights and shadows have no hidden order.
 
-1. `onDrawBehind` paints behind the processed source.
-2. `onDrawBackdrop` receives a lambda that draws the source into its effect layer. Invoke that
-   lambda to retain source drawing when customizing this callback.
-3. `onDrawSurface` paints over the processed result, for example a tint or mask.
-4. Interior interaction lighting illuminates the surface below foreground content.
-5. The receiver's own content draws inside the original shape.
-6. `onDrawFront` paints above that content.
-
-Callbacks draw in surface-local coordinates and receive `BackdropRoom`: use its `size` when
-positioning relative to the component, and its `extension` when accounting for extra recording room.
-The callback region includes visible effect coverage; the content retains the original shape.
-
-Both modifiers isolate compositing offscreen so overlapping parts receive group alpha once.
-Compositing bounds include effect extension and outer-shadow support. Layout size and hit testing
-stay unchanged. Caller transforms and larger layer outsets are retained; caller clipping can still
-cut off extended drawing.
+The modifier isolates compositing offscreen. `backgroundAlpha` applies once to the complete
+background result; children and foreground have independent opacity. Compositing bounds include visible
+effect coverage and outer-shadow support. Layout size and hit testing use the measured surface bounds. Caller
+transforms and larger layer outsets are retained; caller clipping can cut off extended drawing.
 
 ## Export a processed surface
 
-Pass another remembered `LayerBackdrop` as `exportedBackdrop` to sample a surface from subsequent
-receivers. The export records the processed backdrop and the behind, surface, and front callbacks,
-plus interior interaction lighting. It excludes the receiver's child content and the separate
-highlight/shadow decorations. Its source domain is the drawn region, excluding unused sampling
-padding; this keeps boundary policies tied to visible content.
+Pass a remembered `LayerBackdrop` as `exportedBackdrop` to sample a result from subsequent receivers.
+The default export is the background result after background alpha, excluding children and foreground.
+`export(image)` selects another graph image explicitly. Decorations are included when present in
+that selected image. The exported layer is a finite source: its domain is the selected output's
+bounds translated into layer-storage coordinates, then rounded outward to whole pixels. Left and
+top use floor; right and bottom use ceiling. This includes every pixel touched by fractional
+coverage, such as insets converted at a non-integer density. An empty output exports an empty
+domain. Unused sampling padding stays outside that domain even when the recording buffer is larger.
 
-[DrawBackdropModifier](../backdrop/src/commonMain/kotlin/DrawBackdropModifier.kt) owns this ordering.
-For diagnosing empty or stale output, inspect source attachment and recording, coordinate mapping,
+[RenderBackdropModifier](../backdrop/src/commonMain/kotlin/RenderBackdropModifier.kt) owns presentation
+and export. For empty or stale output, inspect source attachment and recording, coordinate mapping,
 and caller clipping before adjusting effect strength. See
 [development](development.md#choose-regression-coverage) for choosing regression coverage.

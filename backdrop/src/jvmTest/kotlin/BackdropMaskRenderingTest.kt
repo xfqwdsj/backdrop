@@ -15,17 +15,17 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-class BackdropMaskRenderingTest {
+class BackdropFillRenderingTest {
     @Test
     fun fillAndStrengthMultiplyForFlatAndProgressiveMasks() {
         for (ramped in listOf(false, true)) for (gradient in listOf(false, true)) runComposeUiTest {
             val fill = Color.Blue.copy(alpha = .5f)
             setContent {
                 Canvas(Modifier.size(80.dp).testTag("root")) {
-                    val cache = BackdropMaskRampCache()
+                    val cache = BackdropFillRampCache()
                     val ramp = BackdropRamp(from = 1f, to = 1f)
                     if (gradient)
-                        drawBackdropMask(
+                        drawBackdropFill(
                             ramped,
                             Brush.linearGradient(listOf(fill, fill)),
                             ramp,
@@ -37,7 +37,7 @@ class BackdropMaskRenderingTest {
                             alpha = .4f,
                         )
                     else
-                        drawBackdropMask(
+                        drawBackdropFill(
                             ramped,
                             fill,
                             ramp,

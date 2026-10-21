@@ -2,6 +2,7 @@ import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -11,6 +12,7 @@ plugins {
     alias(libs.plugins.spotless)
     alias(libs.plugins.dokka)
     alias(libs.plugins.mavenPublish)
+    alias(libs.plugins.ksp)
     signing
 }
 
@@ -53,11 +55,13 @@ kotlin {
 
     sourceSets {
         commonMain {
+            kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 api(libs.compose.foundation)
                 api(libs.compose.ui)
                 api(libs.compose.ui.graphics)
                 implementation(libs.annotations)
+                api(libs.dslUtilities)
             }
         }
 
@@ -90,6 +94,24 @@ kotlin {
             dependsOn(skikoMain)
         }
     }
+}
+
+dependencies {
+    add("kspCommonMainMetadata", libs.dslUtilities.ksp)
+}
+
+tasks.configureEach {
+    if (name.startsWith("ksp") && name != "kspCommonMainKotlinMetadata") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+}
+
+tasks.withType<KotlinCompilationTask<*>>().configureEach {
+    dependsOn("kspCommonMainKotlinMetadata")
+}
+
+tasks.configureEach {
+    if (name.contains("sourcesJar", ignoreCase = true)) dependsOn("kspCommonMainKotlinMetadata")
 }
 
 spotless {

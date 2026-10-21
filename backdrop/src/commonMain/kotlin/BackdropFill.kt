@@ -7,12 +7,12 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.isSpecified
 
 /**
- * A surface mask with one fill source and an optional progressive ramp. A null [brush] delegates
+ * A surface fill with one fill source and an optional progressive ramp. A null [brush] delegates
  * the fill to the consumer's theme. [alpha] multiplies the fill's own opacity; null delegates that
- * strength to the consumer. The ramp controls the mask independently of the blur.
+ * strength to the consumer. The ramp controls the fill independently of the blur.
  */
 @Immutable
-public data class BackdropMask(
+public data class BackdropFill(
     public val brush: Brush? = null,
     public val alpha: Float? = null,
     public val ramp: BackdropRamp? = null,

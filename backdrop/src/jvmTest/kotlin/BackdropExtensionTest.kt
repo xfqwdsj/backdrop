@@ -36,9 +36,8 @@ import top.ltfan.backdrop.backdrops.LayerBackdrop
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
-import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.shadow.shadow
 
 /**
  * The effect region: how far a surface draws, how each side resolves, and where an exported
@@ -94,18 +93,26 @@ class BackdropExtensionTest {
             Box(Modifier.size(200.dp).background(Color.Black).testTag("root"), Alignment.Center) {
                 Box(
                     Modifier.size(100.dp)
-                        .drawBackdrop(
+                        .renderBackdrop(
                             backdrop = SolidBackdrop,
                             shape = { RectangleShape },
-                            effects = {
-                                // A blur reads its finite Gaussian kernel past each output edge.
-                                blur(16f, TileMode.Decal)
-                            },
                             insets = { BackdropInsets.all(4.dp) },
-                            highlight = { Highlight.None },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
-                            onDrawSurface = { resolved = it },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {
+                                        // A blur reads its finite Gaussian kernel past each
+                                        // output edge.
+                                        blur(16f, TileMode.Decal)
+                                    }
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                    paintSurface { resolved = it }
+                                }
+                                foreground {}
+                            },
                         ),
                 )
             }
@@ -125,19 +132,26 @@ class BackdropExtensionTest {
     @Test
     fun samplingHeadroomStaysInvisible() = runComposeUiTest {
         // The blur asks for 16 on each side while the caller asks to show 4: the extra room is for
-        // sampling, so the surface still ends where the request does.
+        // sampling; the request defines the surface boundary.
         setContent {
             Box(Modifier.size(200.dp).background(Color.Black).testTag("root"), Alignment.Center) {
                 Box(
                     Modifier.size(100.dp)
-                        .drawBackdrop(
+                        .renderBackdrop(
                             backdrop = SolidBackdrop,
                             shape = { RectangleShape },
-                            effects = { blur(16f, TileMode.Decal) },
                             insets = { BackdropInsets.all(4.dp) },
-                            highlight = { Highlight.None },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects { blur(16f, TileMode.Decal) }
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
                         ),
                 )
             }
@@ -156,13 +170,19 @@ class BackdropExtensionTest {
             Box(Modifier.size(200.dp).background(Color.Black), Alignment.Center) {
                 Box(
                     Modifier.size(100.dp)
-                        .drawBackdrop(
+                        .renderBackdrop(
                             backdrop = SolidBackdrop,
                             shape = { RoundedCornerShape(40.dp) },
-                            effects = BackdropStyle.NoEffects,
-                            highlight = { Highlight.None },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
                         ),
                 ) {
                     Box(Modifier.size(100.dp).background(Color.Green).testTag("content"))
@@ -187,11 +207,20 @@ class BackdropExtensionTest {
                 // The backdrop marks the producer's own 10..20 square, so a sampled offset shows.
                 Box(
                     Modifier.size(60.dp)
-                        .drawPlainBackdrop(
+                        .renderBackdrop(
                             backdrop = MarkerBackdrop,
                             shape = { RectangleShape },
                             insets = { BackdropInsets.all(10.dp) },
                             exportedBackdrop = exported,
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                            },
                         ),
                 )
                 // Sits 10dp right and down of the producer, so its first pixels sample the marker.
@@ -199,10 +228,18 @@ class BackdropExtensionTest {
                     Modifier.size(20.dp)
                         .offset(x = 10.dp, y = 10.dp)
                         .testTag("consumer")
-                        .drawPlainBackdrop(
+                        .renderBackdrop(
                             backdrop = exported,
                             shape = { RectangleShape },
-                            effects = BackdropStyle.NoEffects,
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                            },
                         ),
                 )
             }
@@ -224,34 +261,46 @@ class BackdropExtensionTest {
                 Box(
                     Modifier.offset(80.dp, 80.dp)
                         .size(80.dp)
-                        .drawBackdrop(
-                            background,
-                            { RectangleShape },
-                            effects = {},
+                        .renderBackdrop(
+                            backdrop = background,
+                            shape = { RectangleShape },
                             insets = {
                                 if (extended.value) BackdropInsets.all(24.dp)
                                 else BackdropInsets.None
                             },
-                            highlight = { Highlight.None },
-                            innerShadow = { InnerShadow.None },
-                            shadow = {
-                                if (shadowed.value)
-                                    Shadow.Config(
-                                        radius = 8.dp,
-                                        offset = DpOffset((-16).dp, (-16).dp),
-                                        color = Color.White,
-                                    )
-                                else Shadow.None
-                            },
-                            onDrawSurface = { room ->
-                                drawRect(
-                                    Color.Red,
-                                    room.extension.originInNode,
-                                    Size(
-                                        size.width + room.extension.left + room.extension.right,
-                                        size.height + room.extension.top + room.extension.bottom,
-                                    ),
-                                )
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    val shadowConfig =
+                                        if (shadowed.value)
+                                            Shadow(
+                                                radius = 8.dp,
+                                                offset = DpOffset((-16).dp, (-16).dp),
+                                                color = Color.White,
+                                            )
+                                        else null
+                                    if (shadowConfig != null) shadow(shadowConfig)
+                                    draw(material)
+                                    paintSurface { room ->
+                                        drawRect(
+                                            Color.Red,
+                                            room.extension.originInNode,
+                                            Size(
+                                                size.width +
+                                                    room.extension.left +
+                                                    room.extension.right,
+                                                size.height +
+                                                    room.extension.top +
+                                                    room.extension.bottom,
+                                            ),
+                                        )
+                                    }
+                                }
+                                foreground {}
                             },
                         ),
                 )
@@ -282,14 +331,20 @@ class BackdropExtensionTest {
         Box(Modifier.size(200.dp).background(Color.Black).testTag("root"), Alignment.Center) {
             Box(
                 Modifier.size(100.dp)
-                    .drawBackdrop(
+                    .renderBackdrop(
                         backdrop = SolidBackdrop,
                         shape = { RectangleShape },
-                        effects = BackdropStyle.NoEffects,
                         insets = insets,
-                        highlight = { Highlight.None },
-                        shadow = { Shadow.None },
-                        innerShadow = { InnerShadow.None },
+                        render = {
+                            val material = image {
+                                source()
+                                clipSurface()
+                            }
+                            group {
+                                draw(material)
+                            }
+                            foreground {}
+                        },
                     ),
             )
         }
@@ -309,13 +364,19 @@ class BackdropExtensionTest {
             Box(Modifier.size(200.dp).background(Color.Black).testTag("root"), Alignment.Center) {
                 Box(
                     Modifier.size(100.dp)
-                        .drawBackdrop(
+                        .renderBackdrop(
                             backdrop = SolidBackdrop,
                             shape = { TriangleShape },
-                            effects = BackdropStyle.NoEffects,
-                            highlight = { Highlight.None },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
                         ),
                 )
             }

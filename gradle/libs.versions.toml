@@ -1,11 +1,13 @@
 [versions]
 kotlin = "2.4.21"
-agp = "9.1.1"
+agp = "9.3.3"
 compose = "1.13.0-alpha02"
 annotations = "26.1.0"
+dslUtilities = "2.2.0"
 spotless = "8.10.4"
 dokka = "2.2.0"
 mavenPublish = "0.37.0"
+ksp = "2.3.12"
 
 [libraries]
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
@@ -13,8 +15,11 @@ compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
 compose-ui-graphics = { module = "org.jetbrains.compose.ui:ui-graphics", version.ref = "compose" }
 compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "compose" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
+dslUtilities = { module = "top.ltfan.dslutilities:dsl-utilities", version.ref = "dslUtilities" }
+dslUtilities-ksp = { module = "top.ltfan.dslutilities:dsl-utilities-ksp", version.ref = "dslUtilities" }
 
 [plugins]
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 compose = { id = "org.jetbrains.compose", version.ref = "compose" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

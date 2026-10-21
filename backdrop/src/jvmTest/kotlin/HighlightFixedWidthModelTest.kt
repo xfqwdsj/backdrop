@@ -10,9 +10,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightAngularCut
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightEmission
-import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
@@ -28,7 +28,7 @@ class HighlightFixedWidthModelTest : SkikoGraphicsTest() {
                 Size(32f, 32f),
                 widthPx = 2f,
                 falloff = Highlight().falloff,
-                direction = HighlightDirection.None,
+                direction = HighlightDirection.Uniform,
                 style = HighlightStyle.Solid(Color.White),
                 exclusions = emptySet(),
             )
@@ -57,7 +57,7 @@ class HighlightFixedWidthModelTest : SkikoGraphicsTest() {
             Size(1f, 1f),
             widthPx = 2f,
             falloff = Highlight().falloff,
-            direction = HighlightDirection.None,
+            direction = HighlightDirection.Uniform,
             style = style,
             exclusions = emptySet(),
         )
@@ -80,7 +80,7 @@ class HighlightFixedWidthModelTest : SkikoGraphicsTest() {
                 Size(4f, 4f),
                 widthPx = width,
                 falloff = Highlight().falloff,
-                direction = HighlightDirection.None,
+                direction = HighlightDirection.Uniform,
                 style = HighlightStyle.Solid(Color.White),
                 exclusions = emptySet(),
             )[(1 * 4 + 0) * 4 + 3]
@@ -104,10 +104,10 @@ class HighlightFixedWidthModelTest : SkikoGraphicsTest() {
                 Size(12f, 12f),
                 widthPx = 2f,
                 falloff = Highlight().falloff,
-                direction = HighlightDirection.None,
+                direction = HighlightDirection.Uniform,
                 style =
                     HighlightStyle.Solid(Color(2f, 1f, .5f, colorSpace = ColorSpaces.ExtendedSrgb)),
-                exclusions = setOf(HighlightExclusion.Top),
+                exclusions = setOf(HighlightAngularCut(270f)),
             )
         assertEquals(0f, pixels[(5 * 12 + 5) * 4 + 3], .001f)
         assertTrue(pixels[(5 * 12 + 3) * 4 + 3] > 0f)

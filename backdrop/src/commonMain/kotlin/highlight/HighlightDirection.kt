@@ -7,15 +7,26 @@ import top.ltfan.backdrop.BackdropCurve
 /** Directional emission measured against each boundary's outward normal. */
 @Immutable
 public sealed interface HighlightDirection {
-    @Immutable public data object None : HighlightDirection
+    @Immutable public data object Uniform : HighlightDirection
 
     @Immutable
-    public data class Config(
+    public data class Incidence(
         public val angle: Float = 90f,
         public val mode: Mode = Mode.Double,
         public val strength: HighlightResponse = HighlightResponse(.35f, 1f, DefaultDirectionCurve),
         public val widthScale: HighlightResponse =
             HighlightResponse(.6f, 1f, DefaultDirectionCurve),
+    ) : HighlightDirection {
+        init {
+            require(angle.isFinite()) { "angle must be finite" }
+        }
+    }
+
+    /** Relative angle curves rotated by the direction angle. */
+    @Immutable
+    public data class Angular(
+        public val profile: HighlightAngleProfile,
+        public val angle: Float = 90f,
     ) : HighlightDirection {
         init {
             require(angle.isFinite()) { "angle must be finite" }
@@ -37,58 +48,63 @@ public fun HighlightDirection(
     mode: HighlightDirection.Mode = HighlightDirection.Mode.Double,
     strength: HighlightResponse = HighlightResponse(.35f, 1f, DefaultDirectionCurve),
     widthScale: HighlightResponse = HighlightResponse(.6f, 1f, DefaultDirectionCurve),
-): HighlightDirection.Config = HighlightDirection.Config(angle, mode, strength, widthScale)
+): HighlightDirection.Incidence = HighlightDirection.Incidence(angle, mode, strength, widthScale)
 
-/** A boundary region where a highlight is hidden, measured from its local outward normal. */
+/** Centered angular cuts prepared from public relative ranges. */
 @Immutable
-public sealed interface HighlightExclusion {
-    @Immutable public data object Left : HighlightExclusion
-
-    @Immutable public data object Top : HighlightExclusion
-
-    @Immutable public data object Right : HighlightExclusion
-
-    @Immutable public data object Bottom : HighlightExclusion
-
-    @Immutable
-    public data class Direction(
-        public val angle: Float,
-        public val halfAngle: Float = 45f,
-        public val featherAngle: Float = 5f,
-    ) : HighlightExclusion {
-        init {
-            require(angle.isFinite()) { "angle must be finite" }
-            require(halfAngle.isFinite() && halfAngle in 0f..180f) {
-                "halfAngle must be finite and between 0 and 180"
-            }
-            require(
-                featherAngle.isFinite() && featherAngle >= 0f && halfAngle + featherAngle <= 180f,
-            ) {
-                "featherAngle must be finite, non-negative, and fit within 180 degrees"
-            }
+internal data class HighlightAngularCut(
+    val angle: Float,
+    val halfAngle: Float = 45f,
+    val featherAngle: Float = 5f,
+) {
+    init {
+        require(angle.isFinite()) { "angle must be finite" }
+        require(halfAngle.isFinite() && halfAngle in 0f..180f) {
+            "halfAngle must be finite and within 0..180"
+        }
+        require(featherAngle.isFinite() && featherAngle >= 0f && halfAngle + featherAngle <= 180f) {
+            "featherAngle must fit within 180 degrees"
         }
     }
 }
 
-internal fun HighlightExclusion.asDirection(): HighlightExclusion.Direction =
-    when (this) {
-        HighlightExclusion.Left -> HighlightExclusion.Direction(180f)
-        HighlightExclusion.Top -> HighlightExclusion.Direction(270f)
-        HighlightExclusion.Right -> HighlightExclusion.Direction(0f)
-        HighlightExclusion.Bottom -> HighlightExclusion.Direction(90f)
-        is HighlightExclusion.Direction -> this
-    }
-
-internal fun Set<HighlightExclusion>.shaderValues(): FloatArray {
+internal fun Set<HighlightAngularCut>.shaderValues(): FloatArray {
     val values = FloatArray(size * 3)
     forEachIndexed { index, item ->
-        val direction = item.asDirection()
         val radians = (PI / 180.0).toFloat()
-        values[index * 3] = normalizedAngle(direction.angle) * radians
-        values[index * 3 + 1] = direction.halfAngle * radians
-        values[index * 3 + 2] = direction.featherAngle * radians
+        values[index * 3] = normalizedAngle(item.angle) * radians
+        values[index * 3 + 1] = item.halfAngle * radians
+        values[index * 3 + 2] = item.featherAngle * radians
     }
     return values
 }
 
 internal fun normalizedAngle(angle: Float): Float = ((angle % 360f) + 360f) % 360f
+
+internal val HighlightDirection.angle: Float
+    get() =
+        when (this) {
+            HighlightDirection.Uniform -> 0f
+            is HighlightDirection.Incidence -> angle
+            is HighlightDirection.Angular -> angle
+        }
+
+internal val HighlightDirection.maximumWidthScale: Float
+    get() =
+        when (this) {
+            HighlightDirection.Uniform -> 1f
+            is HighlightDirection.Incidence -> maxOf(widthScale.from, widthScale.to)
+            is HighlightDirection.Angular -> profile.maximumWidthScale
+        }
+
+/** Uses the normal-incidence response, rotated by [angle]. */
+public fun HighlightScope.incidence(
+    angle: Float = 90f,
+    mode: HighlightDirection.Mode = HighlightDirection.Mode.Double,
+    strength: HighlightResponse =
+        (Highlight.Default.direction as HighlightDirection.Incidence).strength,
+    widthScale: HighlightResponse =
+        (Highlight.Default.direction as HighlightDirection.Incidence).widthScale,
+) {
+    direction = HighlightDirection(angle, mode, strength, widthScale)
+}

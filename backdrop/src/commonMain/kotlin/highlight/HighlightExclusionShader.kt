@@ -11,7 +11,12 @@ float exclusionWeight(float2 normal) {
   float weight = 1.0;
   for (int i = 0; i < $exclusionCount; ++i) {
     float3 exclusion = exclusions[i];
-    float difference = acos(clamp(dot(normal, float2(cos(exclusion.x), sin(exclusion.x))), -1.0, 1.0));
+    float2 direction = float2(cos(exclusion.x), sin(exclusion.x));
+    float2 relative = float2(dot(direction, normal), direction.x * normal.y - direction.y * normal.x);
+    float angle = atan(relative.y, relative.x);
+    float2 estimate = float2(cos(angle), sin(angle));
+    angle += (estimate.x * relative.y - estimate.y * relative.x) / dot(estimate, relative);
+    float difference = abs(angle);
     float allowed = difference <= exclusion.y
         ? 0.0
         : (exclusion.z > 0.0 ? smoothstep(exclusion.y, exclusion.y + exclusion.z, difference) : 1.0);

@@ -67,13 +67,25 @@ class BackdropShapeRenderingTest {
                         }
                     else
                         Box(
-                            modifier.drawPlainBackdrop(
-                                background,
-                                { shape },
-                                effects = {},
+                            modifier.renderBackdrop(
+                                backdrop = background,
+                                shape = { shape },
                                 insets = { insets },
-                                onDrawSurface = {
-                                    drawRect(Color.Red, Offset(-80f, -80f), Size(240f, 240f))
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                        paintSurface {
+                                            drawRect(
+                                                Color.Red,
+                                                Offset(-80f, -80f),
+                                                Size(240f, 240f),
+                                            )
+                                        }
+                                    }
                                 },
                             ),
                         )

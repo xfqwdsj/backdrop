@@ -30,10 +30,9 @@ import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightEmission
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
 
 class CustomHighlightStyleTest {
     @Test
@@ -49,18 +48,28 @@ class CustomHighlightStyleTest {
                 Box(
                     Modifier.offset(40.dp, 40.dp)
                         .size(80.dp)
-                        .drawBackdrop(
-                            backdrop,
-                            { RectangleShape },
-                            highlight = {
-                                Highlight(
-                                    width = 5.dp,
-                                    style = style,
-                                    colorResponse = HighlightColorResponse(amount = 0f),
-                                )
+                        .renderBackdrop(
+                            backdrop = backdrop,
+                            shape = { RectangleShape },
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {
+                                    highlight(
+                                        Highlight(
+                                            width = 5.dp,
+                                            style = style,
+                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                        ),
+                                        colorSource = material,
+                                    )
+                                }
                             },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
                         ),
                 )
             }

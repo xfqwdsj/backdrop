@@ -24,9 +24,8 @@ internal actual fun RenderEffect?.chain(other: RenderEffect): RenderEffect {
     }
 }
 
-@Suppress("FunctionName")
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-internal actual fun RuntimeShaderEffect(
+internal actual fun createRuntimeShaderEffect(
     runtimeShader: RuntimeShader,
     uniformShaderName: String,
     inputBounds: Rect?,
@@ -38,9 +37,8 @@ internal actual fun RuntimeShaderEffect(
         .asComposeRenderEffect()
 }
 
-@Suppress("FunctionName")
 @RequiresApi(Build.VERSION_CODES.S)
-internal actual fun ColorFilterEffect(
+internal actual fun createColorFilterEffect(
     renderEffect: RenderEffect?,
     colorFilter: ColorFilter,
 ): RenderEffect {

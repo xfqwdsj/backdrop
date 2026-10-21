@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
@@ -44,17 +45,16 @@ import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.interaction.InteractionLight
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.interaction.InteractionRegistry
 import top.ltfan.backdrop.interaction.LocalInteractionRegistry
 import top.ltfan.backdrop.interaction.ProvideInteractionLighting
+import top.ltfan.backdrop.interaction.interactionLight
 import top.ltfan.backdrop.interaction.interactionLightSource
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
 
 class SharedInteractionLightingRenderingTest {
     @Test
@@ -304,14 +304,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -358,14 +369,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -404,14 +426,25 @@ class SharedInteractionLightingRenderingTest {
                         Box(
                             Modifier.offset(100.dp, 100.dp)
                                 .size(80.dp)
-                                .drawBackdrop(
-                                    backdrop,
-                                    { RectangleShape },
-                                    highlight = { Highlight.None },
-                                    shadow = { Shadow.None },
-                                    innerShadow = { InnerShadow.None },
-                                    interactionLighting = {
-                                        InteractionLighting.Config(interiorOpacity = .8f)
+                                .renderBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { RectangleShape },
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+
+                                            interactionLight(
+                                                InteractionLighting.Config(
+                                                    interiorOpacity = .8f,
+                                                ),
+                                                blendMode = BlendMode.Plus,
+                                            )
+                                        }
+                                        foreground {}
                                     },
                                 ),
                         )
@@ -452,16 +485,27 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                        paintSurface { drawRect(Color.Blue) }
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
-                                onDrawSurface = { drawRect(Color.Blue) },
                             ),
                     ) {
                         Box(Modifier.offset(30.dp, 30.dp).size(20.dp).background(Color.Green))
@@ -511,14 +555,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -578,14 +633,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -628,14 +694,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -670,14 +747,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(130.dp, 100.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -726,28 +814,45 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(80.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = {
-                                    Highlight(
-                                        width = 10.dp,
-                                        style = HighlightStyle.Solid(Color.White),
-                                        direction =
-                                            HighlightDirection(
-                                                strength = HighlightResponse(0f, 0f),
-                                                widthScale = HighlightResponse(1f, 1f),
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = 0f,
+                                                contourOpacity = .8f,
                                             ),
-                                        opacity = 1f,
-                                    )
-                                },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(
-                                        interiorOpacity = 0f,
-                                        contourOpacity = .8f,
-                                    )
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {
+                                        highlight(
+                                            Highlight(
+                                                width = 10.dp,
+                                                style = HighlightStyle.Solid(Color.White),
+                                                direction =
+                                                    HighlightDirection(
+                                                        strength = HighlightResponse(0f, 0f),
+                                                        widthScale = HighlightResponse(1f, 1f),
+                                                    ),
+                                                opacity = 1f,
+                                            ),
+                                            colorSource = material,
+                                            interactionLighting =
+                                                InteractionLighting.Config(
+                                                    interiorOpacity = 0f,
+                                                    contourOpacity = .8f,
+                                                ),
+                                        )
+                                    }
                                 },
                             ),
                     )
@@ -769,7 +874,7 @@ class SharedInteractionLightingRenderingTest {
     fun sharedLightColorsTwoToneBlackSideAndExclusionsStillMaskTheContour() = runComposeUiTest {
         val source = MutableInteractionSource()
         val press = PressInteraction.Press(Offset(10f, 10f))
-        val exclusions = mutableStateOf(emptySet<HighlightExclusion>())
+        val exclusions = mutableStateOf(emptySet<ClosedFloatingPointRange<Float>>())
         setContent {
             ProvideInteractionLighting {
                 val backdrop = rememberLayerBackdrop()
@@ -783,30 +888,47 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(80.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = {
-                                    Highlight(
-                                        width = 10.dp,
-                                        style = HighlightStyle.TwoTone(Color.White),
-                                        direction =
-                                            HighlightDirection(
-                                                angle = 270f,
-                                                strength = HighlightResponse(0f, 0f),
-                                                widthScale = HighlightResponse(1f, 1f),
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = 0f,
+                                                contourOpacity = .8f,
                                             ),
-                                        opacity = 1f,
-                                        exclusions = exclusions.value,
-                                    )
-                                },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(
-                                        interiorOpacity = 0f,
-                                        contourOpacity = .8f,
-                                    )
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {
+                                        highlight(
+                                            Highlight(
+                                                width = 10.dp,
+                                                style = HighlightStyle.TwoTone(Color.White),
+                                                direction =
+                                                    HighlightDirection(
+                                                        angle = 270f,
+                                                        strength = HighlightResponse(0f, 0f),
+                                                        widthScale = HighlightResponse(1f, 1f),
+                                                    ),
+                                                opacity = 1f,
+                                                disabledAngles = exclusions.value,
+                                            ),
+                                            colorSource = material,
+                                            interactionLighting =
+                                                InteractionLighting.Config(
+                                                    interiorOpacity = 0f,
+                                                    contourOpacity = .8f,
+                                                ),
+                                        )
+                                    }
                                 },
                             ),
                     )
@@ -830,7 +952,7 @@ class SharedInteractionLightingRenderingTest {
             "the top side is lit before exclusion",
         )
 
-        runOnIdle { exclusions.value = setOf(HighlightExclusion.Top) }
+        runOnIdle { exclusions.value = setOf(0f..45f, 315f..360f) }
         waitForIdle()
         val masked = sample()
         assertTrue(
@@ -865,14 +987,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -943,14 +1076,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1013,14 +1157,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1049,9 +1204,12 @@ class SharedInteractionLightingRenderingTest {
         val press = PressInteraction.Press(Offset(20f, 20f))
         setContent {
             ProvideInteractionLighting {
-                ProvideBackdropStyle(
-                    interactionLighting = {
-                        InteractionLighting.Config(interiorOpacity = .8f)
+                ProvideBackdropRenderStyle(
+                    render = {
+                        interactionLight(
+                            InteractionLighting.Config(interiorOpacity = .8f),
+                            blendMode = BlendMode.Plus,
+                        )
                     },
                 ) {
                     val backdrop = rememberLayerBackdrop()
@@ -1067,11 +1225,20 @@ class SharedInteractionLightingRenderingTest {
                         Box(
                             Modifier.offset(100.dp, 80.dp)
                                 .size(80.dp)
-                                .drawPlainBackdrop(
-                                    backdrop,
-                                    { RectangleShape },
-                                    effects = {},
-                                    onDrawSurface = { drawRect(Color.Blue) },
+                                .renderBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { RectangleShape },
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                            paintSurface { drawRect(Color.Blue) }
+                                        }
+                                    },
                                 ),
                         )
                     }
@@ -1105,15 +1272,26 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(80.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RoundedCornerShape(30.dp) },
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RoundedCornerShape(30.dp) },
                                 insets = { BackdropInsets.all(20.dp) },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1156,14 +1334,25 @@ class SharedInteractionLightingRenderingTest {
                     )
                     Box(
                         Modifier.fillMaxSize()
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .9f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .9f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1208,14 +1397,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1277,14 +1477,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1354,14 +1565,25 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(100.dp, 80.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .8f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1417,14 +1639,25 @@ class SharedInteractionLightingRenderingTest {
                     }
                     Box(
                         Modifier.fillMaxSize()
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .9f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .9f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1492,14 +1725,25 @@ class SharedInteractionLightingRenderingTest {
                     }
                     Box(
                         Modifier.fillMaxSize()
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(interiorOpacity = .9f)
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = .9f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {}
                                 },
                             ),
                     )
@@ -1577,14 +1821,25 @@ class SharedInteractionLightingRenderingTest {
                         Box(
                             Modifier.offset(90.dp, 80.dp)
                                 .size(140.dp, 120.dp)
-                                .drawBackdrop(
-                                    backdrop,
-                                    { RectangleShape },
-                                    highlight = { Highlight.None },
-                                    shadow = { Shadow.None },
-                                    innerShadow = { InnerShadow.None },
-                                    interactionLighting = {
-                                        InteractionLighting.Config(interiorOpacity = .15f)
+                                .renderBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { RectangleShape },
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+
+                                            interactionLight(
+                                                InteractionLighting.Config(
+                                                    interiorOpacity = .15f,
+                                                ),
+                                                blendMode = BlendMode.Plus,
+                                            )
+                                        }
+                                        foreground {}
                                     },
                                 ),
                         )
@@ -1640,48 +1895,82 @@ class SharedInteractionLightingRenderingTest {
                     Box(
                         Modifier.offset(60.dp, 60.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                blackBackdrop,
-                                { RectangleShape },
-                                highlight = {
-                                    Highlight(
-                                        width = 10.dp,
-                                        style = HighlightStyle.Solid(Color.Transparent),
-                                        colorResponse = HighlightColorResponse(amount = 0f),
-                                        direction = HighlightDirection.None,
-                                    )
-                                },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(
-                                        interiorOpacity = 0f,
-                                        contourOpacity = .8f,
-                                    )
+                            .renderBackdrop(
+                                backdrop = blackBackdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = 0f,
+                                                contourOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {
+                                        highlight(
+                                            Highlight(
+                                                width = 10.dp,
+                                                style = HighlightStyle.Solid(Color.Transparent),
+                                                colorResponse = HighlightColorResponse(amount = 0f),
+                                                direction = HighlightDirection.Uniform,
+                                            ),
+                                            colorSource = material,
+                                            interactionLighting =
+                                                InteractionLighting.Config(
+                                                    interiorOpacity = 0f,
+                                                    contourOpacity = .8f,
+                                                ),
+                                        )
+                                    }
                                 },
                             ),
                     )
                     Box(
                         Modifier.offset(220.dp, 60.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                brightBackdrop,
-                                { RectangleShape },
-                                highlight = {
-                                    Highlight(
-                                        width = 10.dp,
-                                        style = HighlightStyle.Solid(Color.Transparent),
-                                        colorResponse = HighlightColorResponse(amount = 0f),
-                                        direction = HighlightDirection.None,
-                                    )
-                                },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
-                                interactionLighting = {
-                                    InteractionLighting.Config(
-                                        interiorOpacity = 0f,
-                                        contourOpacity = .8f,
-                                    )
+                            .renderBackdrop(
+                                backdrop = brightBackdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+
+                                        interactionLight(
+                                            InteractionLighting.Config(
+                                                interiorOpacity = 0f,
+                                                contourOpacity = .8f,
+                                            ),
+                                            blendMode = BlendMode.Plus,
+                                        )
+                                    }
+                                    foreground {
+                                        highlight(
+                                            Highlight(
+                                                width = 10.dp,
+                                                style = HighlightStyle.Solid(Color.Transparent),
+                                                colorResponse = HighlightColorResponse(amount = 0f),
+                                                direction = HighlightDirection.Uniform,
+                                            ),
+                                            colorSource = material,
+                                            interactionLighting =
+                                                InteractionLighting.Config(
+                                                    interiorOpacity = 0f,
+                                                    contourOpacity = .8f,
+                                                ),
+                                        )
+                                    }
                                 },
                             ),
                     )

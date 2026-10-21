@@ -1,29 +1,19 @@
 package top.ltfan.backdrop.highlight
 
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
-import androidx.compose.ui.node.DrawModifierNode
-import androidx.compose.ui.node.ModifierNodeElement
-import androidx.compose.ui.node.ObserverModifierNode
-import androidx.compose.ui.node.currentValueOf
-import androidx.compose.ui.node.invalidateDraw
-import androidx.compose.ui.node.observeReads
-import androidx.compose.ui.node.requireGraphicsContext
-import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.PI
 import kotlin.math.ceil
@@ -31,18 +21,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import top.ltfan.backdrop.BackdropCurve
-import top.ltfan.backdrop.LocalBackdropRenderEpoch
-import top.ltfan.backdrop.LocalBackdropStyle
+import top.ltfan.backdrop.BackdropPrimitiveResources
 import top.ltfan.backdrop.ProcessedBackdropFrame
 import top.ltfan.backdrop.RuntimeShaderCacheImpl
 import top.ltfan.backdrop.highlightBandProfile
 import top.ltfan.backdrop.interaction.InteractionLightUniforms
-import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.interaction.interactionFieldResponse
 import top.ltfan.backdrop.interaction.interactionLightWeight
 import top.ltfan.backdrop.interaction.isFiniteForRendering
-import top.ltfan.backdrop.internal.RuntimeShaderEffect
-import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.internal.blur
 import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.internal.highlightCurveVariant
@@ -58,54 +44,6 @@ internal fun boundaryUniformCapacity(candidateCount: Int): Int {
     return capacity
 }
 
-internal class HighlightElement(
-    val shapeProvider: ShapeProvider,
-    val highlight: (() -> Highlight)?,
-    val processedFrame: ProcessedBackdropFrame,
-    val interactionLighting: (() -> InteractionLighting)?,
-) : ModifierNodeElement<HighlightNode>() {
-
-    override fun create(): HighlightNode {
-        return HighlightNode(shapeProvider, highlight, processedFrame, interactionLighting)
-    }
-
-    override fun update(node: HighlightNode) {
-        node.shapeProvider = shapeProvider
-        node.highlight = highlight
-        node.processedFrame = processedFrame
-        node.interactionLighting = interactionLighting
-        node.onObservedReadsChanged()
-        node.invalidateDraw()
-    }
-
-    override fun InspectorInfo.inspectableProperties() {
-        name = "highlight"
-        properties["shapeProvider"] = shapeProvider
-        properties["highlight"] = highlight
-        properties["interactionLighting"] = interactionLighting
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is HighlightElement) return false
-
-        if (shapeProvider != other.shapeProvider) return false
-        if (highlight != other.highlight) return false
-        if (processedFrame !== other.processedFrame) return false
-        if (interactionLighting != other.interactionLighting) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = shapeProvider.hashCode()
-        result = 31 * result + highlight.hashCode()
-        result = 31 * result + processedFrame.hashCode()
-        result = 31 * result + interactionLighting.hashCode()
-        return result
-    }
-}
-
 private class StaticShaderSignature(
     val geometryKey: String,
     val segmentCapacity: Int,
@@ -116,6 +54,7 @@ private class StaticShaderSignature(
     val exclusionCount: Int,
     val sampledColor: Boolean,
     val interactionCapacity: Int,
+    val angularCapacity: Int,
 ) {
     fun matches(
         geometryKey: String,
@@ -127,6 +66,7 @@ private class StaticShaderSignature(
         exclusionCount: Int,
         sampledColor: Boolean,
         interactionCapacity: Int,
+        angularCapacity: Int,
     ): Boolean =
         this.geometryKey == geometryKey &&
             this.segmentCapacity == segmentCapacity &&
@@ -136,7 +76,8 @@ private class StaticShaderSignature(
             this.transformSource == transformSource &&
             this.exclusionCount == exclusionCount &&
             this.sampledColor == sampledColor &&
-            this.interactionCapacity == interactionCapacity
+            this.interactionCapacity == interactionCapacity &&
+            this.angularCapacity == angularCapacity
 }
 
 private data class CpuFallbackKey(
@@ -147,23 +88,16 @@ private data class CpuFallbackKey(
     val falloff: BackdropCurve,
     val style: HighlightStyle,
     val direction: HighlightDirection,
-    val exclusions: Set<HighlightExclusion>,
+    val exclusions: Set<HighlightAngularCut>,
 )
 
-internal class HighlightNode(
-    var shapeProvider: ShapeProvider,
-    var highlight: (() -> Highlight)?,
-    var processedFrame: ProcessedBackdropFrame,
-    var interactionLighting: (() -> InteractionLighting)?,
-) : DrawModifierNode, CompositionLocalConsumerModifierNode, ObserverModifierNode, Modifier.Node() {
-
-    override val shouldAutoInvalidate: Boolean = false
-
+/** Generates contour pixels into receiver-owned layers. */
+internal class HighlightRenderer(private val resources: BackdropPrimitiveResources) {
+    private var processedFrame = ProcessedBackdropFrame()
     private var highlightLayer: GraphicsLayer? = null
     private var boundaryOutline: Outline? = null
     private var boundaryGeometry: HighlightBoundaryGeometry? = null
     private var surfaceSize = Size.Zero
-    private var renderEpoch = 0
     private val staticShaderKeys = mutableMapOf<StaticShaderSignature, String>()
     private var nextStaticShaderKey = 0
     private var staticShaderSignature: StaticShaderSignature? = null
@@ -182,57 +116,34 @@ internal class HighlightNode(
 
     private val runtimeShaderCache = RuntimeShaderCacheImpl()
 
-    override fun ContentDrawScope.draw() {
-        val highlight = (highlight ?: currentValueOf(LocalBackdropStyle).highlight)()
-        if (highlight !is Highlight.Config || highlight.opacity == 0f) {
-            processedFrame.begin(false)
-            releaseDrawingLayers()
-            return drawContent()
-        }
-        if (size.minDimension <= 0f) {
-            processedFrame.begin(false)
-            releaseDrawingLayers()
-            return drawContent()
-        }
-        if (surfaceSize != size) {
-            surfaceSize = size
+    fun draw(
+        scope: DrawScope,
+        highlight: Highlight.Config,
+        outline: Outline,
+        frame: ProcessedBackdropFrame,
+        contourOpacity: Float = 0f,
+    ) {
+        processedFrame = frame
+        if (surfaceSize != scope.size) {
+            surfaceSize = scope.size
             boundaryOutline = null
             boundaryGeometry = null
-            onObservedReadsChanged()
         }
-        val epoch = currentValueOf(LocalBackdropRenderEpoch)
-        if (epoch != renderEpoch) {
-            renderEpoch = epoch
-            releaseOutputLayer()
+        var capacity = 0
+        if (contourOpacity > 0f) {
+            capacity = 4
+            while (capacity < frame.interactionLights.size) capacity *= 2
         }
-        processedFrame.begin(
-            highlight.width.value > 0f &&
-                highlight.colorResponse.amount > 0f &&
-                highlight.style !== HighlightStyle.None &&
-                isRuntimeShaderSupported(),
-        )
-        drawContent()
-        if (highlight.width.value == 0f || highlight.style === HighlightStyle.None) {
-            releaseDrawingLayers()
-            return
-        }
-        val outline = shapeProvider.shape.createOutline(size, layoutDirection, this)
-        val interactionConfig =
-            (interactionLighting ?: currentValueOf(LocalBackdropStyle).interactionLighting)()
-                as? InteractionLighting.Config
-        val contourEnabled = interactionConfig != null && interactionConfig.contourOpacity > 0f
-        if (contourEnabled) {
-            val count = processedFrame.interactionLights.count { it.isFiniteForRendering() }
-            var required = 4
-            while (required < count) required *= 2
-            interactionCapacity = maxOf(interactionCapacity, required)
-        }
-        drawStatic(
-            highlight,
-            outline,
-            if (contourEnabled) interactionCapacity else 0,
-            interactionConfig?.contourOpacity ?: 0f,
-        )
+        interactionCapacity = maxOf(interactionCapacity, capacity)
+        with(scope) { drawStatic(highlight, outline, capacity, contourOpacity) }
+    }
+
+    fun refresh() {
+        releaseOutputLayer()
+    }
+
+    fun release() {
+        releaseDrawingLayers()
     }
 
     private fun DrawScope.drawStatic(
@@ -252,11 +163,13 @@ internal class HighlightNode(
         }
         val width = highlight.width.toPx()
         require(width.isFinite()) { "highlight width must remain finite in pixels" }
-        val directionConfig = highlight.direction as? HighlightDirection.Config
+        val directionConfig = highlight.direction as? HighlightDirection.Incidence
+        val angular = highlight.direction as? HighlightDirection.Angular
+        val angularCapacity = angular?.profile?.capacity ?: 0
         val sharedDirectionCurve =
             directionConfig != null &&
                 directionConfig.strength.curve == directionConfig.widthScale.curve
-        val maximumWidthScale = directionConfig?.widthScale?.let { maxOf(it.from, it.to) } ?: 1f
+        val maximumWidthScale = highlight.direction.maximumWidthScale
         require((width * maximumWidthScale).isFinite()) {
             "direction-scaled highlight width must remain finite in pixels"
         }
@@ -264,9 +177,9 @@ internal class HighlightNode(
             if (outline is Outline.Rounded) clipPath ?: Path().also { clipPath = it } else null
         val safeSize = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())
         val style = highlight.style
-        val exclusions = highlight.exclusions
+        val exclusions = highlight.cuts
         val response = highlight.colorResponse
-        val sourceLayer = processedFrame.layer.takeIf { response.amount > 0f }
+        val sourceImage = processedFrame.image.takeIf { response.amount > 0f }
         val fieldUniforms =
             if (interactionCapacity >= 4) {
                 interactionUniforms
@@ -277,12 +190,12 @@ internal class HighlightNode(
                         else uniforms.prepare(processedFrame.interactionLights, coordinates, size)
                     }
             } else null
-        val colorTransform = response.transform.takeIf { sourceLayer != null }
+        val colorTransform = response.transform.takeIf { sourceImage != null }
         val colorTransformSource = colorTransform?.shaderSource.orEmpty()
         val segmentCapacity = boundaryUniformCapacity(geometry.segmentCount)
         val falloffVariant = highlightCurveVariant(highlight.falloff)
         val styleSource = style.shaderSource
-        val sampledColor = sourceLayer != null
+        val sampledColor = sourceImage != null
         val signatureMatches =
             staticShaderSignature?.matches(
                 geometry.shaderKey,
@@ -294,6 +207,7 @@ internal class HighlightNode(
                 exclusions.size,
                 sampledColor,
                 interactionCapacity,
+                angularCapacity,
             ) == true
         val shaderKey =
             if (signatureMatches) {
@@ -310,6 +224,7 @@ internal class HighlightNode(
                         exclusions.size,
                         sampledColor,
                         interactionCapacity,
+                        angularCapacity,
                     )
                 staticShaderSignature = signature
                 staticShaderKeys
@@ -327,6 +242,7 @@ internal class HighlightNode(
                     highlight.falloff,
                     sharedDirectionCurve,
                     interactionCapacity,
+                    angularCapacity,
                 )
             }
         paint.style = PaintingStyle.Fill
@@ -341,67 +257,60 @@ internal class HighlightNode(
         }
         shader.setFloatUniform("tileBounds", 0f, 0f, size.width, size.height)
         shader.setFloatUniform("width", width)
-        val radians = normalizedAngle(directionConfig?.angle ?: 0f) * (PI / 180.0).toFloat()
+        val radians = normalizedAngle(highlight.direction.angle) * (PI / 180.0).toFloat()
         shader.setFloatUniform("directionVector", cos(radians), sin(radians))
-        shader.setFloatUniform("directionEnabled", if (directionConfig == null) 0f else 1f)
-        shader.setFloatUniform(
-            "directionMode",
-            if (directionConfig?.mode == HighlightDirection.Mode.Single) 0f else 1f,
-        )
-        shader.setFloatUniform(
-            "directionStrengthRange",
-            directionConfig?.strength?.from ?: 1f,
-            directionConfig?.strength?.to ?: 1f,
-        )
-        shader.setFloatUniform(
-            "directionStrengthCurve",
-            directionConfig?.strength?.curve?.shaderControls()
-                ?: BackdropCurve.Linear.shaderControls(),
-        )
-        shader.setFloatUniform(
-            "directionWidthRange",
-            directionConfig?.widthScale?.from ?: 1f,
-            directionConfig?.widthScale?.to ?: 1f,
-        )
-        if (!sharedDirectionCurve) {
+        if (angular != null) {
+            angular.profile.upload(shader)
+            shader.setFloatUniform("angularMaximumWidthScale", maximumWidthScale)
+        } else {
+            shader.setFloatUniform("directionEnabled", if (directionConfig == null) 0f else 1f)
             shader.setFloatUniform(
-                "directionWidthCurve",
-                directionConfig?.widthScale?.curve?.shaderControls()
+                "directionMode",
+                if (directionConfig?.mode == HighlightDirection.Mode.Single) 0f else 1f,
+            )
+            shader.setFloatUniform(
+                "directionStrengthRange",
+                directionConfig?.strength?.from ?: 1f,
+                directionConfig?.strength?.to ?: 1f,
+            )
+            shader.setFloatUniform(
+                "directionStrengthCurve",
+                directionConfig?.strength?.curve?.shaderControls()
                     ?: BackdropCurve.Linear.shaderControls(),
             )
+            shader.setFloatUniform(
+                "directionWidthRange",
+                directionConfig?.widthScale?.from ?: 1f,
+                directionConfig?.widthScale?.to ?: 1f,
+            )
+            if (!sharedDirectionCurve) {
+                shader.setFloatUniform(
+                    "directionWidthCurve",
+                    directionConfig?.widthScale?.curve?.shaderControls()
+                        ?: BackdropCurve.Linear.shaderControls(),
+                )
+            }
         }
         if (highlightCurveVariant(highlight.falloff) != "linear") {
             shader.setFloatUniform("falloffCurve", highlight.falloff.shaderControls())
         }
         shader.setColorUniform("color", style.color)
         style.configureShader(shader)
-        if (exclusions.isNotEmpty()) shader.setFloatUniform("exclusions", exclusions.shaderValues())
+        if (exclusions.isNotEmpty()) shader.setFloatUniform("exclusions", highlight.cutUniforms)
         fieldUniforms?.upload(shader)
         if (fieldUniforms != null)
             shader.setFloatUniform("interactionContourOpacity", interactionContourOpacity)
-        val layer =
-            highlightLayer
-                ?: requireGraphicsContext().createGraphicsLayer().also { highlightLayer = it }
+        val layer = highlightLayer ?: resources.createGraphicsLayer().also { highlightLayer = it }
         layer.alpha = highlight.opacity
-        layer.blendMode = highlight.blendMode
+        layer.blendMode = BlendMode.SrcOver
         val canvas = drawContext.canvas
         if (colorTransform != null) {
             shader.setFloatUniform("colorResponseAmount", response.amount)
             colorTransform.configureShader(shader)
-            val source = requireNotNull(sourceLayer)
-            layer.renderEffect =
-                RuntimeShaderEffect(
-                    shader,
-                    "content",
-                    processedFrame.sourceBounds,
-                )
-            layer.record(safeSize) {
-                translate(
-                    -processedFrame.layerOffset.x - source.topLeft.x,
-                    -processedFrame.layerOffset.y - source.topLeft.y,
-                ) {
-                    drawLayer(source)
-                }
+            val source = requireNotNull(sourceImage)
+            layer.renderEffect = source.runtimeShaderEffect(shader, "content")
+            layer.record(Density(density, fontScale), layoutDirection, safeSize) {
+                source.draw(this)
             }
             canvas.save()
             canvas.clipOutline(outline, roundedClipPath)
@@ -410,7 +319,7 @@ internal class HighlightNode(
         } else {
             layer.renderEffect = null
             paint.setRuntimeShader(shader)
-            layer.record(safeSize) {
+            layer.record(Density(density, fontScale), layoutDirection, safeSize) {
                 drawContext.canvas.drawRect(Rect(0f, 0f, size.width, size.height), paint)
             }
             canvas.save()
@@ -425,15 +334,13 @@ internal class HighlightNode(
         outline: Outline,
         interactionContourOpacity: Float,
     ) {
-        val layer =
-            highlightLayer
-                ?: requireGraphicsContext().createGraphicsLayer().also { highlightLayer = it }
+        val layer = highlightLayer ?: resources.createGraphicsLayer().also { highlightLayer = it }
         val roundedClipPath =
             if (outline is Outline.Rounded) clipPath ?: Path().also { clipPath = it } else null
         val safeSize = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())
         val geometry = boundaryGeometry(outline)
         val width = highlight.width.toPx()
-        val exclusions = highlight.exclusions
+        val exclusions = highlight.cuts
         val key =
             CpuFallbackKey(
                 geometry,
@@ -486,9 +393,9 @@ internal class HighlightNode(
                 output
             } else pixels
         layer.alpha = highlight.opacity
-        layer.blendMode = highlight.blendMode
+        layer.blendMode = BlendMode.SrcOver
         layer.renderEffect = null
-        layer.record(safeSize) {
+        layer.record(Density(density, fontScale), layoutDirection, safeSize) {
             val pixelWidth = ceil(size.width).toInt()
             val pixelHeight = ceil(size.height).toInt()
             for (y in 0 until pixelHeight) for (x in 0 until pixelWidth) {
@@ -525,7 +432,7 @@ internal class HighlightNode(
         val coordinates = processedFrame.receiverCoordinates ?: return
         val entries = processedFrame.interactionLights
         val axisAngle =
-            normalizedAngle((highlight.direction as? HighlightDirection.Config)?.angle ?: 0f) *
+            normalizedAngle((highlight.direction as? HighlightDirection.Incidence)?.angle ?: 0f) *
                 (PI / 180.0).toFloat()
         val axisX = cos(axisAngle)
         val axisY = sin(axisAngle)
@@ -543,7 +450,7 @@ internal class HighlightNode(
             if (boundary.distance >= bandWidth + .5f) continue
             val coverage =
                 highlightBandProfile(boundary.distance, bandWidth, highlight.falloff) *
-                    exclusionWeight(normal, highlight.exclusions)
+                    exclusionWeight(normal, highlight.cuts)
             if (coverage <= 0f) continue
             val world = coordinates.localToWindow(point)
             if (!world.x.isFinite() || !world.y.isFinite()) continue
@@ -617,27 +524,6 @@ internal class HighlightNode(
         return requireNotNull(boundaryGeometry)
     }
 
-    override fun onAttach() {
-        renderEpoch = currentValueOf(LocalBackdropRenderEpoch)
-        onObservedReadsChanged()
-    }
-
-    override fun onDensityChange() {
-        onObservedReadsChanged()
-    }
-
-    override fun onObservedReadsChanged() {
-        observeReads {
-            (highlight ?: currentValueOf(LocalBackdropStyle).highlight)()
-        }
-        invalidateDraw()
-    }
-
-    override fun onDetach() {
-        releaseDrawingLayers()
-        processedFrame.clear()
-    }
-
     private fun releaseStaticLayer() {
         releaseOutputLayer()
         runtimeShaderCache.clear()
@@ -656,7 +542,7 @@ internal class HighlightNode(
     private fun releaseOutputLayer() {
         highlightLayer?.let {
             it.renderEffect = null
-            requireGraphicsContext().releaseGraphicsLayer(it)
+            resources.releaseGraphicsLayer(it)
             paint.setRuntimeShader(null)
             paint.blur(0f)
         }

@@ -41,9 +41,8 @@ import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightEmission
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.highlight.toHighlightLinearExtendedSrgb
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
 
 class ProcessedBackdropColorResponseTest {
     @Test
@@ -56,6 +55,7 @@ class ProcessedBackdropColorResponseTest {
         val epoch = mutableIntStateOf(0)
         val surfaceSize = mutableStateOf(80)
         val backdropCallbackCount = AtomicInteger()
+        val frameDrawCount = AtomicInteger()
         val recordingStyle = RecordingStyle()
         setContent {
             CompositionLocalProvider(LocalBackdropRenderEpoch provides epoch.intValue) {
@@ -69,30 +69,43 @@ class ProcessedBackdropColorResponseTest {
                     Box(
                         Modifier.offset(40.dp, 40.dp)
                             .size(surfaceSize.value.dp)
-                            .drawBackdrop(
+                            .renderBackdrop(
                                 backdrop = source,
                                 shape = { RectangleShape },
-                                effects = {
-                                    if (useTint.value) colorFilter(ColorFilter.tint(Color.Blue))
-                                    if (useBlur.value) blur(2f)
-                                },
-                                highlight = {
-                                    Highlight(
-                                            width = 8.dp,
-                                            direction = HighlightDirection.None,
-                                            style = recordingStyle,
-                                            colorResponse = response.value,
-                                        )
-                                        .takeIf { enabled.value } ?: Highlight.None
-                                },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
                                 exportedBackdrop = exported,
-                                onDrawBackdrop = { drawBackdrop, _ ->
-                                    backdropCallbackCount.incrementAndGet()
-                                    drawBackdrop()
+                                render = {
+                                    val material = image {
+                                        source()
+                                        drawWithContent { drawBackdrop, _ ->
+                                            backdropCallbackCount.incrementAndGet()
+                                            drawBackdrop()
+                                        }
+                                        effects {
+                                            if (useTint.value)
+                                                colorFilter(ColorFilter.tint(Color.Blue))
+                                            if (useBlur.value) blur(2f)
+                                        }
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                        paintSurface { drawRect(Color.Green) }
+                                    }
+                                    foreground {
+                                        paint { frameDrawCount.incrementAndGet() }
+                                        val highlightConfig =
+                                            Highlight(
+                                                width = 8.dp,
+                                                direction = HighlightDirection.Uniform,
+                                                style = recordingStyle,
+                                                colorResponse = response.value,
+                                            )
+                                        highlight(
+                                            if (enabled.value) highlightConfig else Highlight.None,
+                                            colorSource = material,
+                                        )
+                                    }
                                 },
-                                onDrawSurface = { drawRect(Color.Green) },
                             ),
                     )
                     Box(
@@ -105,20 +118,32 @@ class ProcessedBackdropColorResponseTest {
                     Box(
                         Modifier.offset(120.dp, 40.dp)
                             .size(40.dp, 80.dp)
-                            .drawBackdrop(
+                            .renderBackdrop(
                                 backdrop = secondSource,
                                 shape = { RectangleShape },
-                                highlight = {
-                                    Highlight(
-                                        width = 8.dp,
-                                        direction = HighlightDirection.None,
-                                        style =
-                                            HighlightStyle.Solid(Color.White.copy(alpha = .32f)),
-                                        colorResponse = HighlightColorResponse(.5f),
-                                    )
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                    foreground {
+                                        highlight(
+                                            Highlight(
+                                                width = 8.dp,
+                                                direction = HighlightDirection.Uniform,
+                                                style =
+                                                    HighlightStyle.Solid(
+                                                        Color.White.copy(alpha = .32f),
+                                                    ),
+                                                colorResponse = HighlightColorResponse(.5f),
+                                            ),
+                                            colorSource = material,
+                                        )
+                                    }
                                 },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
                             ),
                     )
                 }
@@ -148,9 +173,11 @@ class ProcessedBackdropColorResponseTest {
         response.value = HighlightColorResponse(.5f)
         waitForIdle()
         backdropCallbackCount.set(0)
+        frameDrawCount.set(0)
         sourceColor.value = Color.Blue
         waitForIdle()
         val blueTinted = captureRoot()[80, 41]
+        assertEquals(1, frameDrawCount.get(), "A source update must settle in one receiver draw")
         assertTrue(blueTinted.blue > blueTinted.red, "the next source frame tints the rim blue")
         assertEquals(
             1,

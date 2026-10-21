@@ -148,7 +148,7 @@ public data class BackdropRamp(
         /** Default number of curve samples used to construct a gradient brush. */
         public const val DEFAULT_STOPS: Int = 256
 
-        /** Fewest samples that still describe a ramp. */
+        /** Minimum number of samples for a ramp. */
         public const val MIN_STOPS: Int = 2
 
         /** Maximum supported gradient sample count. */

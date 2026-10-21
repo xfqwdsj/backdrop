@@ -2,25 +2,39 @@ package top.ltfan.backdrop.highlight
 
 import androidx.annotation.FloatRange
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.ltfan.backdrop.BackdropCurve
+import top.ltfan.backdrop.BackdropImage
+import top.ltfan.backdrop.BackdropImageScope
+import top.ltfan.backdrop.BackdropPrimitive
+import top.ltfan.backdrop.BackdropPrimitiveDrawContext
+import top.ltfan.backdrop.BackdropPrimitiveGeometry
+import top.ltfan.backdrop.BackdropPrimitiveInput
+import top.ltfan.backdrop.BackdropPrimitiveRenderer
+import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.PrimitiveContext
+import top.ltfan.backdrop.ProcessedBackdropFrame
+import top.ltfan.backdrop.interaction.InteractionLighting
+import top.ltfan.backdrop.primitive
 
 private val DefaultWidth = 2.dp
 private val DefaultStyle = HighlightStyle.Solid
 private val DefaultDirection = HighlightDirection()
 private val DefaultColorResponse = HighlightColorResponse()
 private val DefaultHighlightFalloff = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 1f)
-private val DefaultExclusions
-    get() = emptySet<HighlightExclusion>()
+private val DefaultDisabledAngles
+    get() = emptySet<ClosedFloatingPointRange<Float>>()
 
-/** A highlight decoration, configured or explicitly disabled. */
+/** Parameters for a contour highlight image. */
 @Stable
 public sealed interface Highlight {
+    /** Omits the contour primitive and releases its rendering resources. */
     @Stable public data object None : Highlight
 
-    /** Configures a fixed-width highlight along the nearest outline boundary. */
     @Stable
     public class Config
     public constructor(
@@ -30,12 +44,39 @@ public sealed interface Highlight {
         public val style: HighlightStyle = DefaultStyle,
         public val colorResponse: HighlightColorResponse = DefaultColorResponse,
         @param:FloatRange(from = 0.0, to = 1.0) public val opacity: Float = 1f,
-        public val blendMode: BlendMode = BlendMode.SrcOver,
-        exclusions: Set<HighlightExclusion> = DefaultExclusions,
+        disabledAngles: Set<ClosedFloatingPointRange<Float>> = DefaultDisabledAngles,
+        public val disabledAngleDomain: HighlightAngleDomain = HighlightAngleDomain.Directed,
     ) : Highlight {
-        private val storedExclusions: Set<HighlightExclusion> = FrozenSet(exclusions)
-        public val exclusions: Set<HighlightExclusion>
-            get() = storedExclusions
+        public val disabledAngles: Set<ClosedFloatingPointRange<Float>> =
+            FrozenSet(
+                disabledAngles
+                    .map { range ->
+                        val limit =
+                            if (disabledAngleDomain == HighlightAngleDomain.Unsigned) 180f else 360f
+                        require(
+                            range.start.isFinite() &&
+                                range.endInclusive.isFinite() &&
+                                range.start >= 0f &&
+                                range.endInclusive <= limit &&
+                                range.start <= range.endInclusive,
+                        ) {
+                            "Disabled ranges must be ordered and fit their angular domain"
+                        }
+                        range.start..range.endInclusive
+                    }
+                    .toSet(),
+            )
+        internal val cuts: Set<HighlightAngularCut> = buildSet {
+            for (range in this@Config.disabledAngles) {
+                val middle = (range.start + range.endInclusive) * .5f
+                val half =
+                    minOf(180f, (range.endInclusive - range.start) * .5f + HighlightAngleTolerance)
+                add(HighlightAngularCut(direction.angle + middle, half, 0f))
+                if (disabledAngleDomain == HighlightAngleDomain.Unsigned)
+                    add(HighlightAngularCut(direction.angle - middle, half, 0f))
+            }
+        }
+        internal val cutUniforms: FloatArray = cuts.shaderValues()
 
         init {
             require(width.value.isFinite() && width.value >= 0f) {
@@ -53,10 +94,19 @@ public sealed interface Highlight {
             style: HighlightStyle = this.style,
             colorResponse: HighlightColorResponse = this.colorResponse,
             opacity: Float = this.opacity,
-            blendMode: BlendMode = this.blendMode,
-            exclusions: Set<HighlightExclusion> = this.exclusions,
+            disabledAngles: Set<ClosedFloatingPointRange<Float>> = this.disabledAngles,
+            disabledAngleDomain: HighlightAngleDomain = this.disabledAngleDomain,
         ): Config =
-            Config(width, falloff, direction, style, colorResponse, opacity, blendMode, exclusions)
+            Highlight(
+                width,
+                falloff,
+                direction,
+                style,
+                colorResponse,
+                opacity,
+                disabledAngles,
+                disabledAngleDomain,
+            )
 
         public operator fun component1(): Dp = width
 
@@ -70,9 +120,9 @@ public sealed interface Highlight {
 
         public operator fun component6(): Float = opacity
 
-        public operator fun component7(): BlendMode = blendMode
+        public operator fun component7(): Set<ClosedFloatingPointRange<Float>> = disabledAngles
 
-        public operator fun component8(): Set<HighlightExclusion> = exclusions
+        public operator fun component8(): HighlightAngleDomain = disabledAngleDomain
 
         override fun equals(other: Any?): Boolean =
             this === other ||
@@ -83,8 +133,8 @@ public sealed interface Highlight {
                     style == other.style &&
                     colorResponse == other.colorResponse &&
                     opacity == other.opacity &&
-                    blendMode == other.blendMode &&
-                    exclusions == other.exclusions)
+                    disabledAngles == other.disabledAngles &&
+                    disabledAngleDomain == other.disabledAngleDomain)
 
         override fun hashCode(): Int {
             var result = width.hashCode()
@@ -93,21 +143,43 @@ public sealed interface Highlight {
             result = 31 * result + style.hashCode()
             result = 31 * result + colorResponse.hashCode()
             result = 31 * result + opacity.hashCode()
-            result = 31 * result + blendMode.hashCode()
-            result = 31 * result + exclusions.hashCode()
+            result = 31 * result + disabledAngles.hashCode()
+            result = 31 * result + disabledAngleDomain.hashCode()
             return result
         }
 
         override fun toString(): String =
-            "Config(width=$width, falloff=$falloff, direction=$direction, style=$style, colorResponse=$colorResponse, opacity=$opacity, blendMode=$blendMode, exclusions=$exclusions)"
+            "Highlight(width=$width, falloff=$falloff, direction=$direction, style=$style, colorResponse=$colorResponse, opacity=$opacity, disabledAngles=$disabledAngles, disabledAngleDomain=$disabledAngleDomain)"
     }
 
     public companion object {
         @Stable public val Default: Config = Highlight()
         @Stable public val Ambient: Config = Highlight(style = HighlightStyle.TwoTone)
-        @Stable public val Plain: Config = Highlight(direction = HighlightDirection.None)
+        @Stable public val Plain: Config = Highlight(direction = HighlightDirection.Uniform)
     }
 }
+
+@Suppress("FunctionName")
+public fun Highlight(
+    width: Dp = DefaultWidth,
+    falloff: BackdropCurve = DefaultHighlightFalloff,
+    direction: HighlightDirection = DefaultDirection,
+    style: HighlightStyle = DefaultStyle,
+    colorResponse: HighlightColorResponse = DefaultColorResponse,
+    @FloatRange(from = 0.0, to = 1.0) opacity: Float = 1f,
+    disabledAngles: Set<ClosedFloatingPointRange<Float>> = DefaultDisabledAngles,
+    disabledAngleDomain: HighlightAngleDomain = HighlightAngleDomain.Directed,
+): Highlight.Config =
+    Highlight.Config(
+        width,
+        falloff,
+        direction,
+        style,
+        colorResponse,
+        opacity,
+        disabledAngles,
+        disabledAngleDomain,
+    )
 
 private class FrozenSet<T>(elements: Set<T>) : AbstractSet<T>() {
     private val values: Set<T> = elements.toSet()
@@ -119,25 +191,90 @@ private class FrozenSet<T>(elements: Set<T>) : AbstractSet<T>() {
     override fun iterator(): Iterator<T> = values.toList().iterator()
 }
 
-@Suppress("FunctionName")
-@Stable
-public fun Highlight(
-    width: Dp = DefaultWidth,
-    falloff: BackdropCurve = DefaultHighlightFalloff,
-    direction: HighlightDirection = DefaultDirection,
-    style: HighlightStyle = DefaultStyle,
-    colorResponse: HighlightColorResponse = DefaultColorResponse,
-    @FloatRange(from = 0.0, to = 1.0) opacity: Float = 1f,
+/** Draws a contour primitive with the selected color source and compositing parameters. */
+public fun BackdropImageScope.highlight(
+    config: Highlight,
+    colorSource: BackdropImage? = null,
+    interactionLighting: InteractionLighting = InteractionLighting.None,
+    alpha: Float = 1f,
     blendMode: BlendMode = BlendMode.SrcOver,
-    exclusions: Set<HighlightExclusion> = DefaultExclusions,
-): Highlight.Config =
-    Highlight.Config(
-        width,
-        falloff,
-        direction,
-        style,
-        colorResponse,
-        opacity,
-        blendMode,
-        exclusions,
+) {
+    if (config === Highlight.None) return
+    config as Highlight.Config
+    colorSource?.let(::checkImage)
+    require(config.colorResponse.amount == 0f || colorSource != null) {
+        "A highlight with color response requires an explicit colorSource"
+    }
+    primitive(
+        HighlightPrimitive(config, interactionLighting),
+        inputs = colorSource?.let { listOf(BackdropPrimitiveInput(it)) }.orEmpty(),
+        alpha = alpha,
+        blendMode = blendMode,
     )
+}
+
+/** Configures and draws a contour primitive in declaration order. */
+public fun BackdropImageScope.highlight(
+    colorSource: BackdropImage? = null,
+    interactionLighting: InteractionLighting = InteractionLighting.None,
+    alpha: Float = 1f,
+    blendMode: BlendMode = BlendMode.SrcOver,
+    block: HighlightScope.() -> Unit,
+) {
+    highlight(Highlight(block), colorSource, interactionLighting, alpha, blendMode)
+}
+
+private data class HighlightPrimitive(
+    val config: Highlight.Config,
+    val lighting: InteractionLighting,
+) : BackdropPrimitive<HighlightPrimitive> {
+    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect = geometry.surfaceBounds
+
+    override fun createRenderer(
+        resources: BackdropPrimitiveResources,
+    ): BackdropPrimitiveRenderer<HighlightPrimitive> = Renderer(resources)
+
+    private class Renderer(resources: BackdropPrimitiveResources) :
+        BackdropPrimitiveRenderer<HighlightPrimitive> {
+        private val renderer = HighlightRenderer(resources)
+        private val frame = ProcessedBackdropFrame()
+
+        override fun draw(
+            scope: DrawScope,
+            primitive: HighlightPrimitive,
+            context: BackdropPrimitiveDrawContext,
+        ) {
+            val interactions = (context as PrimitiveContext).interactionFrame
+            frame.begin(context.inputBounds.isNotEmpty())
+            if (context.inputBounds.isNotEmpty()) frame.publish(context.input(0))
+            frame.publishInteraction(
+                interactions.interactionLights,
+                interactions.receiverWindow,
+                interactions.receiverCoordinates,
+            )
+            try {
+                renderer.draw(
+                    scope,
+                    primitive.config,
+                    context.shape.createOutline(
+                        context.size,
+                        context.layoutDirection,
+                        context.density,
+                    ),
+                    frame,
+                    (primitive.lighting as? InteractionLighting.Config)?.contourOpacity ?: 0f,
+                )
+            } finally {
+                frame.clear()
+            }
+        }
+
+        override fun refresh() {
+            renderer.refresh()
+        }
+
+        override fun release() {
+            renderer.release()
+        }
+    }
+}

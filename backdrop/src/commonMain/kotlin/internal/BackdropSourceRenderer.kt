@@ -163,7 +163,7 @@ internal class BackdropSourceRenderer(private val context: () -> GraphicsContext
                 },
             )
             slot.layer.renderEffect =
-                RuntimeShaderEffect(
+                createRuntimeShaderEffect(
                     shader,
                     "content",
                     Rect(0f, 0f, recorded.width, recorded.height),
@@ -262,7 +262,7 @@ float4 main(float2 coord) {
 }
 """
 
-private fun inverseSourceTransform(transform: Matrix, destination: Matrix): Matrix {
+internal fun inverseSourceTransform(transform: Matrix, destination: Matrix): Matrix {
     require(transform.values.size == 16 && transform.values.all { it.isFinite() }) {
         "Source transform must be finite"
     }

@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
-import top.ltfan.backdrop.drawBackdrop
+import top.ltfan.backdrop.renderBackdrop
 import top.ltfan.backdrop.effects.blur
 
 @Composable
@@ -42,24 +42,29 @@ fun BackdropExample() {
                 )
         )
         Box(
-            Modifier.align(Alignment.Center).size(160.dp).drawBackdrop(
+            Modifier.align(Alignment.Center).size(160.dp).renderBackdrop(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(24.dp) },
-                effects = { blur(12.dp.toPx()) },
+                render = {
+                    source()
+                    effects { blur(12.dp.toPx()) }
+                    clipSurface()
+                },
             )
         )
     }
 }
 ```
 
-`layerBackdrop` records the content after that modifier. `drawBackdrop` maps the recorded layer
+`layerBackdrop` records the content after that modifier. `renderBackdrop` maps the recorded layer
 into the receiver's coordinates, processes it, and draws the receiver's content above it. Put the
 background and receiver in separate branches as shown. Give both a real layout size; recording an
 empty source provides no pixels to sample.
 
-The effect scope is a `Density`, so convert dp distances with `toPx()` inside `effects`.
-`drawBackdrop` also supplies the default highlight and outer shadow. Use `drawPlainBackdrop` when
-you want the processed source and drawing callbacks without those decorations.
+The effect scope is a `Density`, so convert dp distances with `toPx()` inside `effects { }`.
+Add highlights and shadows explicitly where they belong in the render declaration. There are no
+automatically inserted decorations. See [Render graphs](render-graphs.md) for composition, masks,
+group alpha, and ordering relative to child content.
 
 For a uniform gradient, blur has little visible structure to soften; replace it with textured or
 scrolling background content to inspect the sampling. Capability and fallback behavior are covered
@@ -68,6 +73,6 @@ in [Platforms and HDR](platforms-and-hdr.md).
 ## Continue building a component
 
 Use [styles](styles-and-decorations.md) to share a visual configuration across receivers. Use
-[sources and surfaces](sources-and-surfaces.md) for callback ordering, transparent boundaries, and
+[sources and surfaces](sources-and-surfaces.md) for transparent boundaries and
 exported sources. For fade regions such as scrolling bars, combine a ramp and progressive blur as
 described in [effects and sampling](effects-and-sampling.md).

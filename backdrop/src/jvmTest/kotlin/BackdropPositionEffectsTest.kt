@@ -49,7 +49,20 @@ class BackdropPositionEffectsTest {
                     Modifier.offset { IntOffset(x, 0) }
                         .size(width.dp, 40.dp)
                         .testTag("surface")
-                        .drawPlainBackdrop(TestBackdrop, { RectangleShape }, effects = effect),
+                        .renderBackdrop(
+                            backdrop = TestBackdrop,
+                            shape = { RectangleShape },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects(effect)
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                            },
+                        ),
                 )
             }
         }

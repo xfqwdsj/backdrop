@@ -34,8 +34,8 @@ public data class BackdropExtension(
 }
 
 /**
- * Surface-local drawing geometry and the resolved recording extension. [size] remains the surface
- * size when a callback runs in an expanded recording layer.
+ * Surface-local drawing geometry and the resolved recording extension. [size] is the surface size
+ * when a callback runs in an expanded recording layer.
  */
 @Immutable
 public data class BackdropRoom(

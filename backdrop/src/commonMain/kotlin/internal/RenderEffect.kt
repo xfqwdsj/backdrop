@@ -7,15 +7,13 @@ import top.ltfan.backdrop.RuntimeShader
 
 internal expect fun RenderEffect?.chain(other: RenderEffect): RenderEffect
 
-@Suppress("FunctionName")
-internal expect fun RuntimeShaderEffect(
+internal expect fun createRuntimeShaderEffect(
     runtimeShader: RuntimeShader,
     uniformShaderName: String,
     inputBounds: Rect? = null,
 ): RenderEffect
 
-@Suppress("FunctionName")
-internal expect fun ColorFilterEffect(
+internal expect fun createColorFilterEffect(
     renderEffect: RenderEffect? = null,
     colorFilter: ColorFilter,
 ): RenderEffect

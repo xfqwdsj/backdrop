@@ -41,10 +41,10 @@ import org.jetbrains.skia.Surface
 import top.ltfan.backdrop.effects.colorFilter
 import top.ltfan.backdrop.effects.vibrancy
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightAngularCut
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
 import top.ltfan.backdrop.highlight.HighlightColorTransform
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
@@ -329,7 +329,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
         val cases =
             listOf(
                 HighlightStyle.Solid(Color(2f, 1f, 0.5f, 0.4f, ColorSpaces.ExtendedSrgb)) to
-                    HighlightDirection.None,
+                    HighlightDirection.Uniform,
                 HighlightStyle.TwoTone(Color(2f, 2f, 2f, 0.4f, ColorSpaces.ExtendedSrgb)) to
                     HighlightDirection(angle = 90f, mode = HighlightDirection.Mode.Double),
             )
@@ -346,7 +346,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
             )
         val extended = renderHighlightShader(HighlightStyle.Solid(Color.White), direction, 2f)
         val base =
-            renderHighlightShader(HighlightStyle.Solid(Color.White), HighlightDirection.None, 2f)
+            renderHighlightShader(HighlightStyle.Solid(Color.White), HighlightDirection.Uniform, 2f)
         assertTrue(extended[(3 * 16 + 8) * 4 + 3] > 0f)
         assertEquals(0f, base[(3 * 16 + 8) * 4 + 3], 0.001f)
         assertHighlightParity(
@@ -408,7 +408,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
         }
 
         val noDirection =
-            renderHighlightShader(HighlightStyle.Solid(Color.White), HighlightDirection.None, 2f)
+            renderHighlightShader(HighlightStyle.Solid(Color.White), HighlightDirection.Uniform, 2f)
         assertTrue(noDirection[(8 * 16) * 4 + 3] > 0f)
 
         val overflowingBound =
@@ -456,7 +456,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
         style: HighlightStyle,
         direction: HighlightDirection,
         widthPx: Float,
-        exclusions: Set<HighlightExclusion> = emptySet(),
+        exclusions: Set<HighlightAngularCut> = emptySet(),
     ): FloatArray {
         val genericGeometry =
             HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f))).cpuGeometry()
@@ -467,7 +467,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
         shader.setFloatUniform("segments", genericGeometry.segments)
         shader.setFloatUniform("tileBounds", 0f, 0f, 16f, 16f)
         shader.setFloatUniform("width", widthPx)
-        val config = direction as? HighlightDirection.Config
+        val config = direction as? HighlightDirection.Incidence
         val angle = (config?.angle ?: 0f) * (PI.toFloat() / 180f)
         shader.setFloatUniform("directionVector", cos(angle), sin(angle))
         shader.setFloatUniform("directionEnabled", if (config == null) 0f else 1f)
@@ -503,14 +503,14 @@ class HdrRenderingTest : SkikoGraphicsTest() {
     @Test
     fun exclusionMaskUsesLocalBoundaryNormals() {
         val style = HighlightStyle.Solid(Color.White)
-        val direction = HighlightDirection.None
+        val direction = HighlightDirection.Uniform
         val withoutExclusion = renderHighlightShader(style, direction, 2f)
         val withTopExcluded =
             renderHighlightShader(
                 style,
                 direction,
                 2f,
-                setOf(HighlightExclusion.Top),
+                setOf(HighlightAngularCut(270f)),
             )
 
         assertTrue(
@@ -567,7 +567,8 @@ class HdrRenderingTest : SkikoGraphicsTest() {
         var shader = constantShader(input)
         for ((index, entry) in shaders.withIndex()) {
             val (key, source) = entry
-            val builder = scope.obtainRuntimeShader("$key#$index", source).asSkikoRuntimeShader()
+            val builder =
+                scope.obtainStageRuntimeShader(index, "$key#$index", source).asSkikoRuntimeShader()
             builder.child("content", shader)
             shader = builder.makeShader()
         }

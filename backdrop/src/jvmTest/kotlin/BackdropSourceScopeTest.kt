@@ -33,12 +33,21 @@ class BackdropSourceScopeTest {
             output = rememberLayerBackdrop()
             Box(
                 Modifier.size(64.dp)
-                    .drawPlainBackdrop(
-                        source,
-                        { RectangleShape },
-                        effects = {},
+                    .renderBackdrop(
+                        backdrop = source,
+                        shape = { RectangleShape },
                         insets = { BackdropInsets.all(8.dp) },
                         exportedBackdrop = output,
+                        render = {
+                            val material = image {
+                                source()
+                                effects {}
+                                clipSurface()
+                            }
+                            group {
+                                draw(material)
+                            }
+                        },
                     ),
             )
         }
@@ -71,12 +80,21 @@ class BackdropSourceScopeTest {
                 output = rememberLayerBackdrop()
                 Box(
                     Modifier.size(8.dp)
-                        .drawPlainBackdrop(
-                            source,
-                            { RectangleShape },
-                            effects = {},
+                        .renderBackdrop(
+                            backdrop = source,
+                            shape = { RectangleShape },
                             insets = { BackdropInsets.all(4.dp) },
                             exportedBackdrop = output,
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                            },
                         ),
                 )
             }
@@ -125,11 +143,20 @@ class BackdropSourceScopeTest {
             output = rememberLayerBackdrop()
             Box(
                 Modifier.size(64.dp)
-                    .drawPlainBackdrop(
-                        source,
-                        { RectangleShape },
-                        effects = {},
+                    .renderBackdrop(
+                        backdrop = source,
+                        shape = { RectangleShape },
                         exportedBackdrop = output,
+                        render = {
+                            val material = image {
+                                source()
+                                effects {}
+                                clipSurface()
+                            }
+                            group {
+                                draw(material)
+                            }
+                        },
                     ),
             )
         }

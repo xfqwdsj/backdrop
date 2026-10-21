@@ -5,18 +5,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightAngularCut
 import top.ltfan.backdrop.highlight.HighlightColorResponse
-import top.ltfan.backdrop.highlight.HighlightExclusion
 
 class HighlightConfigurationTest {
     @Test
     fun exclusionsValidateAngularRangesAndFeather() {
-        assertEquals(-180f, HighlightExclusion.Direction(-180f, 180f, 0f).angle)
-        assertFailsWith<IllegalArgumentException> { HighlightExclusion.Direction(Float.NaN) }
-        assertFailsWith<IllegalArgumentException> { HighlightExclusion.Direction(0f, 180.1f) }
-        assertFailsWith<IllegalArgumentException> { HighlightExclusion.Direction(0f, 60f, 121f) }
+        assertEquals(-180f, HighlightAngularCut(-180f, 180f, 0f).angle)
+        assertFailsWith<IllegalArgumentException> { HighlightAngularCut(Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { HighlightAngularCut(0f, 180.1f) }
+        assertFailsWith<IllegalArgumentException> { HighlightAngularCut(0f, 60f, 121f) }
         assertFailsWith<IllegalArgumentException> {
-            HighlightExclusion.Direction(0f, 0f, Float.POSITIVE_INFINITY)
+            HighlightAngularCut(0f, 0f, Float.POSITIVE_INFINITY)
         }
     }
 

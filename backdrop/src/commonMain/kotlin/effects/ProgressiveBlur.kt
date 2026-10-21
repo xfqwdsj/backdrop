@@ -210,8 +210,8 @@ vec4 blur(vec2 coord, float radius) {
 
   // The radius follows the ramp, which reaches nothing at the edge of the area the effect covers:
   // sampling out to the next whole pixel and taking the spread from the radius itself lets the
-  // neighbours lose their weight as the radius shrinks, so the blur thins out instead of stopping
-  // at the edge as a line the mask no longer hides.
+  // Neighbour weights decrease with the radius, tapering the blur continuously through
+  // the fading mask edge.
   float r = ceil(radius);
 
   float sigma = max(radius / 2.0, 1e-4);
@@ -271,9 +271,9 @@ vec4 main(vec2 coord) {
 /**
  * Asks the effects to cover what [ramp] reaches past the surface, on the side [edge] names.
  *
- * A mask fades over the same span, so a surface that masks without blurring still needs that room:
- * without it the layer would end at the surface, the mask would be clipped there, and the ramp's
- * remaining strength would show as a line along the edge.
+ * A mask fades over the same span, so masking requires that room independently of blur: without it
+ * the layer would end at the surface, the mask would be clipped there, and the ramp's remaining
+ * strength would show as a line along the edge.
  */
 public fun BackdropEffectScope.coverRamp(ramp: BackdropRamp, edge: BackdropEdge) {
     val side = edge.side(layoutDirection)

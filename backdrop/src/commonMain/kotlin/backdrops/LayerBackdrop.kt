@@ -36,9 +36,9 @@ private val DefaultOnDraw: ContentDrawScope.() -> Unit = { drawContent() }
  *
  * [tileMode] defines reads outside the recorded source rectangle before effects run.
  * [TileMode.Clamp] repeats boundary texels, including their alpha. [TileMode.Decal] supplies
- * transparent exterior pixels. Exported surfaces declare their drawn region as the source
- * rectangle; effect sampling padding is storage rather than source content. Edge extension requires
- * runtime shader support.
+ * transparent exterior pixels. Exported surfaces use their visible output bounds, translated into
+ * layer pixels and rounded outward, as the source rectangle. Unused effect sampling padding is
+ * storage rather than source content. Edge extension requires runtime shader support.
  */
 @Composable
 public fun rememberLayerBackdrop(
@@ -71,12 +71,12 @@ internal constructor(
     internal var layerCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
     /**
-     * Where the surface's origin sits inside [graphicsLayer], which covers the surface plus the
-     * insets it resolved. Sampling adds it so a consumer's coordinates meet the layer's pixels.
+     * Surface origin in [graphicsLayer] storage coordinates. The offset includes recording margins,
+     * so source sampling maps surface coordinates to the corresponding stored pixels.
      */
     internal var layerOffset: Offset by mutableStateOf(Offset.Zero, neverEqualPolicy())
 
-    /** Recorded source domain in layer pixels, independent of unused sampling padding. */
+    /** Pixel-aligned source domain in layer storage; null uses the recorded layer size. */
     internal var sourceBounds: Rect? by mutableStateOf(null, neverEqualPolicy())
 
     override fun BackdropDrawScope.drawBackdrop(
@@ -85,7 +85,7 @@ internal constructor(
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
     ) {
         // Read the recorded state before the early returns below. A surface that samples a layer
-        // which is detached or still empty has to observe the next recording, so that it draws the
+        // which is detached or empty has to observe the next recording, so that it draws the
         // content as soon as the layer has any: the recorded size of a graphics layer is not
         // observable, so a surface that returns before reading these stays empty until something
         // else invalidates it.

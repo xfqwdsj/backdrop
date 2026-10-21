@@ -14,20 +14,20 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import kotlin.math.ceil
 import top.ltfan.backdrop.internal.clipToExtendedShape
 
-/** Where a mask reaches past the surface, on the layer's own sides and in its own space. */
-public class BackdropMaskRoom(
+/** Fill coverage beyond the surface, measured in the drawing layer's coordinate space. */
+public class BackdropFillRoom(
     public val insets: BackdropInsets,
     /** The room covered on the layer's leading side, which is where its coordinates start. */
     public val leading: Float,
     public val domain: Size,
 )
 
-/** The room [ramp] reaches past a [surfaceSize] surface, which is where its mask is drawn. */
-public fun DrawScope.backdropMaskRoom(
+/** Computes fill coverage beyond [surfaceSize] for [ramp]. */
+public fun DrawScope.backdropFillRoom(
     ramp: BackdropRamp,
     edge: BackdropEdge,
     surfaceSize: Size,
-): BackdropMaskRoom {
+): BackdropFillRoom {
     val side = edge.side(layoutDirection)
     val vertical = side.isVertical
     val thickness = if (vertical) surfaceSize.height else surfaceSize.width
@@ -67,7 +67,7 @@ public fun DrawScope.backdropMaskRoom(
                 )
         }
     val leading = if (towardsContent) pastFarSide else pastContentSide
-    return BackdropMaskRoom(
+    return BackdropFillRoom(
         insets = insets,
         leading = leading,
         domain =
@@ -78,19 +78,19 @@ public fun DrawScope.backdropMaskRoom(
     )
 }
 
-/** Paints a solid-color mask, multiplying its opacity by [alpha] and the optional ramp. */
-public fun DrawScope.drawBackdropMask(
+/** Paints a solid-color fill, multiplying its opacity by [alpha] and the optional ramp. */
+public fun DrawScope.drawBackdropFill(
     ramped: Boolean,
     color: Color,
     ramp: BackdropRamp,
     domain: Size,
-    cache: BackdropMaskRampCache,
+    cache: BackdropFillRampCache,
     edge: BackdropEdge,
     surfaceSize: Size,
     leadingInset: Float,
     alpha: Float = 1f,
 ): Unit =
-    drawBackdropMask(
+    drawBackdropFill(
         ramped,
         SolidColor(color),
         ramp,
@@ -103,12 +103,12 @@ public fun DrawScope.drawBackdropMask(
     )
 
 /** Paints [brush], multiplying its own opacity by [alpha] and the optional ramp. */
-public fun DrawScope.drawBackdropMask(
+public fun DrawScope.drawBackdropFill(
     ramped: Boolean,
     brush: Brush,
     ramp: BackdropRamp,
     domain: Size,
-    cache: BackdropMaskRampCache,
+    cache: BackdropFillRampCache,
     edge: BackdropEdge,
     surfaceSize: Size,
     leadingInset: Float,
@@ -133,10 +133,10 @@ public fun DrawScope.drawBackdropMask(
 }
 
 /**
- * Keeps the mask's ramp brush while its ramp, color and domain hold: the brush is a color list of
- * the ramp's sample count, so rebuilding it every frame would allocate on every frame.
+ * Caches the ramp brush by ramp, endpoints and color. Reusing the brush avoids allocating its
+ * sampled color list on each frame.
  */
-public class BackdropMaskRampCache {
+public class BackdropFillRampCache {
     private var ramp: BackdropRamp? = null
     private var start: Offset = Offset.Zero
     private var end: Offset = Offset.Zero
@@ -164,8 +164,8 @@ public class BackdropMaskRampCache {
 }
 
 /**
- * Where a ramp's span lands in the space a mask is drawn in, which starts at the area the caller
- * asked for. The axis a ramp measures on is 0 on the surface's content side — the edge the scrolled
+ * Where a ramp's span lands in the fill's drawing space, which starts at the area the caller asked
+ * for. The axis a ramp measures on is 0 on the surface's content side — the edge the scrolled
  * content passes — and grows towards the surface's own far edge.
  */
 private fun DrawScope.maskRampEnds(
@@ -181,7 +181,7 @@ private fun DrawScope.maskRampEnds(
 
 /**
  * Clips to the extended surface outline. Rounded corners retain their radius; custom shapes resolve
- * their outline against the extended size. The layout and content size stay unchanged.
+ * their outline against the extended size. Layout and content use the measured surface size.
  */
 public fun DrawScope.clipToGrownShape(
     shape: Shape,

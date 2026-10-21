@@ -26,9 +26,6 @@ import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.effects.lens
-import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
 
 class BackdropSamplingOverlapTest {
     @Test
@@ -58,28 +55,48 @@ class BackdropSamplingOverlapTest {
                                 Box(
                                     Modifier.offset(40.dp, position.intValue.dp)
                                         .size(160.dp, 80.dp)
-                                        .drawBackdrop(
-                                            background,
-                                            { RoundedCornerShape(20.dp) },
-                                            effects = {
-                                                blur(8.dp.toPx())
-                                                lens(
-                                                    24.dp.toPx(),
-                                                    24.dp.toPx(),
-                                                    depthEffect = true,
-                                                    chromaticAberration = chromatic,
-                                                )
+                                        .renderBackdrop(
+                                            backdrop = background,
+                                            shape = { RoundedCornerShape(20.dp) },
+                                            render = {
+                                                val material = image {
+                                                    source()
+                                                    effects {
+                                                        blur(8.dp.toPx())
+                                                        lens(
+                                                            24.dp.toPx(),
+                                                            24.dp.toPx(),
+                                                            depthEffect = true,
+                                                            chromaticAberration = chromatic,
+                                                        )
+                                                    }
+                                                    clipSurface()
+                                                }
+                                                group {
+                                                    draw(material)
+                                                }
+                                                foreground {}
                                             },
-                                            highlight = { Highlight.None },
-                                            shadow = { Shadow.None },
-                                            innerShadow = { InnerShadow.None },
                                         ),
                                 )
                             }
                             if (sampling)
                                 Box(
                                     Modifier.size(240.dp, 64.dp)
-                                        .drawPlainBackdrop(page, { RectangleShape }, effects = {}),
+                                        .renderBackdrop(
+                                            backdrop = page,
+                                            shape = { RectangleShape },
+                                            render = {
+                                                val material = image {
+                                                    source()
+                                                    effects {}
+                                                    clipSurface()
+                                                }
+                                                group {
+                                                    draw(material)
+                                                }
+                                            },
+                                        ),
                                 )
                         }
                     }

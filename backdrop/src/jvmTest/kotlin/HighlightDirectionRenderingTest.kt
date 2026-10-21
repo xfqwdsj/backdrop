@@ -25,16 +25,14 @@ import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightStyle
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.highlight.highlight
 
 class HighlightDirectionRenderingTest {
     @Test
     fun exclusionMasksOnlyItsBoundaryAndUpdatesWithoutRecomposition() = runComposeUiTest {
-        val exclusions = mutableStateOf(emptySet<HighlightExclusion>())
+        val exclusions = mutableStateOf(emptySet<ClosedFloatingPointRange<Float>>())
         var compositions = 0
         setContent {
             val backdrop = rememberLayerBackdrop()
@@ -44,20 +42,30 @@ class HighlightDirectionRenderingTest {
                 Box(
                     Modifier.offset(40.dp, 40.dp)
                         .size(80.dp)
-                        .drawBackdrop(
-                            backdrop,
-                            { RectangleShape },
-                            highlight = {
-                                Highlight(
-                                    width = 6.dp,
-                                    style = HighlightStyle.Solid(Color.White),
-                                    direction = HighlightDirection.None,
-                                    colorResponse = HighlightColorResponse(amount = 0f),
-                                    exclusions = exclusions.value,
-                                )
+                        .renderBackdrop(
+                            backdrop = backdrop,
+                            shape = { RectangleShape },
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {
+                                    highlight(
+                                        Highlight(
+                                            width = 6.dp,
+                                            style = HighlightStyle.Solid(Color.White),
+                                            direction = HighlightDirection.Uniform,
+                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                            disabledAngles = exclusions.value,
+                                        ),
+                                        colorSource = material,
+                                    )
+                                }
                             },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
                         ),
                 )
             }
@@ -66,7 +74,7 @@ class HighlightDirectionRenderingTest {
         val before = onNodeWithTag("root").captureToImage().toPixelMap()
         val compositionCount = compositions
 
-        exclusions.value = setOf(HighlightExclusion.Top, HighlightExclusion.Left)
+        exclusions.value = setOf(225f..315f, 135f..225f)
         waitForIdle()
         val after = onNodeWithTag("root").captureToImage().toPixelMap()
 
@@ -106,7 +114,7 @@ class HighlightDirectionRenderingTest {
         assertTrue(top[80, 41].alpha > top[80, 118].alpha + 0.1f)
     }
 
-    private fun captureCorner(highlight: Highlight): PixelMap {
+    private fun captureCorner(config: Highlight): PixelMap {
         lateinit var pixels: PixelMap
         runComposeUiTest {
             setContent {
@@ -116,12 +124,21 @@ class HighlightDirectionRenderingTest {
                     Box(
                         Modifier.offset(40.dp, 40.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RoundedCornerShape(20.dp) },
-                                highlight = { highlight },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RoundedCornerShape(20.dp) },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                    foreground {
+                                        highlight(config, colorSource = material)
+                                    }
+                                },
                             ),
                     )
                 }

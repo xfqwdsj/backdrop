@@ -6,76 +6,68 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-/**
- * Visual defaults consumed at the modifier's position in the UI tree. Producers run in drawing or
- * effect observation, so snapshot state read inside them updates rendering without recomposition.
- * Each producer supplies a complete configuration; effects execute in their declared order.
- */
+/** Delayed appearance defaults for the fixed-order [drawBackdrop] surface. */
 @Immutable
 public data class BackdropStyle(
-    public val effects: BackdropEffectScope.() -> Unit = NoEffects,
-    public val highlight: () -> Highlight = DefaultHighlight,
-    public val shadow: () -> Shadow = DefaultShadow,
-    public val innerShadow: () -> InnerShadow = DefaultInnerShadow,
-    /**
-     * How far effects and the drawing callbacks may run outside the surface. The resolved region is
-     * this request plus effect coverage and sampling room. Positive values extend a side and
-     * negative values contract it. Reading a snapshot value here animates the region without
-     * recomposing.
-     */
-    public val insets: () -> BackdropInsets = DefaultInsets,
-    /** Shared interaction light received by this surface. */
-    public val interactionLighting: () -> InteractionLighting = DefaultInteractionLighting,
+    public val blurRadius: () -> Dp = { 0.dp },
+    public val fill: () -> Color = { Color.Transparent },
+    public val highlight: () -> Highlight = { Highlight.Default },
+    public val shadow: () -> Shadow = { Shadow.Default },
+    public val innerShadow: () -> InnerShadow = { InnerShadow.None },
+    public val interactionLighting: () -> InteractionLighting = { InteractionLighting.None },
+    public val insets: () -> BackdropInsets = { BackdropInsets.None },
 ) {
     public companion object {
-        /** An empty effect chain, suitable for explicitly disabling inherited effects. */
-        @Stable public val NoEffects: BackdropEffectScope.() -> Unit = {}
-
-        /** Default highlight and shadow, an empty effect chain, and disabled inner shadow. */
         @Stable public val Default: BackdropStyle = BackdropStyle()
+        /** Explicit appearance with unprocessed input and no decorations. */
+        @Stable
+        public val NoEffects: BackdropStyle =
+            BackdropStyle(
+                highlight = { Highlight.None },
+                shadow = { Shadow.None },
+            )
     }
 }
 
-private val DefaultInsets: () -> BackdropInsets = { BackdropInsets.None }
-private val DefaultHighlight: () -> Highlight = { Highlight.Default }
-private val DefaultShadow: () -> Shadow = { Shadow.Default }
-private val DefaultInnerShadow: () -> InnerShadow = { InnerShadow.None }
-private val DefaultInteractionLighting: () -> InteractionLighting = { InteractionLighting.None }
-
-/**
- * Visual defaults for descendant backdrop modifiers. Explicit modifier parameters take priority.
- */
 public val LocalBackdropStyle: ProvidableCompositionLocal<BackdropStyle> = compositionLocalOf {
     BackdropStyle.Default
 }
 
-/** Provides complete visual defaults for [content]. Producers are evaluated by consuming nodes. */
 @Composable
 public fun ProvideBackdropStyle(style: BackdropStyle, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalBackdropStyle provides style, content = content)
 }
 
-/**
- * Replaces the specified producers and inherits omitted producers from the parent style. Returning
- * a decoration's `None` disables it; [BackdropStyle.NoEffects] disables the inherited effect chain.
- */
+/** Replaces supplied fields and inherits the parent's remaining producers. */
 @Composable
 public fun ProvideBackdropStyle(
-    effects: BackdropEffectScope.() -> Unit = LocalBackdropStyle.current.effects,
+    blurRadius: () -> Dp = LocalBackdropStyle.current.blurRadius,
+    fill: () -> Color = LocalBackdropStyle.current.fill,
     highlight: () -> Highlight = LocalBackdropStyle.current.highlight,
     shadow: () -> Shadow = LocalBackdropStyle.current.shadow,
     innerShadow: () -> InnerShadow = LocalBackdropStyle.current.innerShadow,
-    insets: () -> BackdropInsets = LocalBackdropStyle.current.insets,
     interactionLighting: () -> InteractionLighting = LocalBackdropStyle.current.interactionLighting,
+    insets: () -> BackdropInsets = LocalBackdropStyle.current.insets,
     content: @Composable () -> Unit,
 ) {
     ProvideBackdropStyle(
-        BackdropStyle(effects, highlight, shadow, innerShadow, insets, interactionLighting),
+        BackdropStyle(
+            blurRadius,
+            fill,
+            highlight,
+            shadow,
+            innerShadow,
+            interactionLighting,
+            insets,
+        ),
         content,
     )
 }

@@ -24,8 +24,7 @@ import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightStyle
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.highlight.highlight
 
 class HighlightModifierRenderingTest {
     @Test
@@ -35,7 +34,7 @@ class HighlightModifierRenderingTest {
                 Highlight(
                     width = 8.dp,
                     style = HighlightStyle.Solid(Color.White),
-                    direction = HighlightDirection.None,
+                    direction = HighlightDirection.Uniform,
                     colorResponse = HighlightColorResponse(amount = 0f),
                 ),
             )
@@ -85,7 +84,7 @@ class HighlightModifierRenderingTest {
                     width = 8.25.dp,
                     falloff = BackdropCurve.CubicBezier(.35f, 1f, .6f, 1f),
                     style = HighlightStyle.Solid(Color.White),
-                    direction = HighlightDirection.None,
+                    direction = HighlightDirection.Uniform,
                     colorResponse = HighlightColorResponse(amount = 0f),
                 ),
             )
@@ -104,12 +103,22 @@ class HighlightModifierRenderingTest {
                     Box(
                         Modifier.offset(40.dp, 40.dp)
                             .size(80.dp)
-                            .drawBackdrop(
-                                backdrop,
-                                { RectangleShape },
-                                highlight = { selected.value },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
+                            .renderBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                    foreground {
+                                        val highlightConfig = selected.value
+                                        highlight(highlightConfig, colorSource = material)
+                                    }
+                                },
                             ),
                     )
                 }

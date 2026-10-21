@@ -39,54 +39,55 @@ import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightEmission
 import top.ltfan.backdrop.highlight.HighlightSample
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.shadow.innerShadow
+import top.ltfan.backdrop.shadow.shadow
 
-class BackdropStyleTest {
+class BackdropRenderStyleTest {
     @Test
     fun rootDefaultsAndNestedProvidersKeepOmittedProducers() = runComposeUiTest {
-        lateinit var root: BackdropStyle
-        lateinit var child: BackdropStyle
-        val parent = BackdropStyle(highlight = { Highlight.None }, effects = { blur(2f) })
-        val inner: () -> InnerShadow = { InnerShadow.Default }
+        lateinit var root: BackdropRenderStyle
+        lateinit var child: BackdropRenderStyle
+        val render: BackdropRenderScope.() -> Unit = { effects { blur(2f) } }
+        val parent = BackdropRenderStyle(render = render)
+        val insets: () -> BackdropInsets = { BackdropInsets.None }
         setContent {
-            root = LocalBackdropStyle.current
-            ProvideBackdropStyle(parent) {
-                ProvideBackdropStyle(innerShadow = inner) {
-                    child = LocalBackdropStyle.current
+            root = LocalBackdropRenderStyle.current
+            ProvideBackdropRenderStyle(parent) {
+                ProvideBackdropRenderStyle(insets = insets) {
+                    child = LocalBackdropRenderStyle.current
                     Panel("panel")
                 }
             }
         }
         waitForIdle()
-        assertSame(BackdropStyle.Default, root)
-        assertSame(Highlight.Default, root.highlight())
-        assertSame(Shadow.Default, root.shadow())
-        assertSame(InnerShadow.None, root.innerShadow())
-        assertSame(BackdropStyle.NoEffects, root.effects)
-        assertSame(parent.effects, child.effects)
-        assertSame(parent.highlight, child.highlight)
-        assertSame(parent.shadow, child.shadow)
-        assertSame(inner, child.innerShadow)
+        assertSame(BackdropRenderStyle.Default, root)
+        assertSame(BackdropRenderStyle.NoEffects, root.render)
+        assertEquals(BackdropInsets.None, root.insets())
+        assertSame(parent.render, child.render)
+        assertSame(insets, child.insets)
     }
 
     @Test
     fun sharedModifierReadsStyleAtItsUsePositionAndPlainIgnoresDecorations() = runComposeUiTest {
-        val shared =
-            Modifier.drawBackdrop(
-                backdrop = TestBackdrop,
-                shape = { RectangleShape },
-                shadow = { Shadow.None },
-                innerShadow = { InnerShadow.None },
-            )
+        val shared = Modifier.renderBackdrop(TestBackdrop, { RectangleShape })
         setContent {
             Column {
-                ProvideBackdropStyle(highlight = { solidHighlight(Color.Red) }) {
+                ProvideBackdropRenderStyle(render = { highlight(solidHighlight(Color.Red)) }) {
                     Panel("red", shared)
                 }
-                ProvideBackdropStyle(highlight = { solidHighlight(Color.Green) }) {
+                ProvideBackdropRenderStyle(render = { highlight(solidHighlight(Color.Green)) }) {
                     Panel("green", shared)
-                    Panel("plain", Modifier.drawPlainBackdrop(TestBackdrop, { RectangleShape }))
+                    Panel(
+                        "plain",
+                        Modifier.renderBackdrop(
+                            TestBackdrop,
+                            { RectangleShape },
+                            render = BackdropRenderStyle.NoEffects,
+                        ),
+                    )
                 }
             }
         }
@@ -98,24 +99,15 @@ class BackdropStyleTest {
 
     @Test
     fun explicitOverridesDoNotInvokeDefaultsOrAppendEffects() = runComposeUiTest {
-        val unused =
-            BackdropStyle(
-                effects = { error("Inherited effects must be replaced") },
-                highlight = { error("Inherited highlight must be replaced") },
-                shadow = { error("Inherited shadow must be replaced") },
-                innerShadow = { error("Inherited inner shadow must be replaced") },
-            )
+        val unused = BackdropRenderStyle(render = { error("Inherited rendering must be replaced") })
         setContent {
-            ProvideBackdropStyle(unused) {
+            ProvideBackdropRenderStyle(unused) {
                 Panel(
                     "panel",
-                    Modifier.drawBackdrop(
+                    Modifier.renderBackdrop(
                         TestBackdrop,
                         { RectangleShape },
-                        effects = BackdropStyle.NoEffects,
-                        highlight = { Highlight.None },
-                        shadow = { Shadow.None },
-                        innerShadow = { InnerShadow.None },
+                        render = BackdropRenderStyle.NoEffects,
                     ),
                 )
             }
@@ -126,12 +118,11 @@ class BackdropStyleTest {
 
     @Test
     fun inheritedHighlightAnimationAndNoneSwitchesDrawWithoutRecomposition() = runComposeUiTest {
-        val highlight = mutableStateOf<Highlight>(Highlight.None)
+        val highlight = mutableStateOf<Highlight?>(null)
         var compositions = 0
         setContent {
-            ProvideBackdropStyle(
-                highlight = { highlight.value },
-                shadow = { Shadow.None },
+            ProvideBackdropRenderStyle(
+                render = { highlight.value?.let { highlight(it) } },
             ) {
                 Panel("panel", onComposition = { compositions++ })
             }
@@ -143,7 +134,7 @@ class BackdropStyleTest {
             highlight.value = solidHighlight(color)
             waitForIdle()
             assertColor(color, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
-            highlight.value = Highlight.None
+            highlight.value = null
             waitForIdle()
             assertColor(Color.Blue, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
         }
@@ -155,26 +146,23 @@ class BackdropStyleTest {
         val config = InnerShadow(radius = 3.dp, offset = DpOffset(0.dp, 5.dp), color = Color.Red)
         val style =
             mutableStateOf(
-                BackdropStyle(
-                    highlight = { Highlight.None },
-                    shadow = { Shadow.None },
-                ),
+                BackdropRenderStyle(),
             )
         setContent {
-            ProvideBackdropStyle(style.value) { Panel("panel") }
+            ProvideBackdropRenderStyle(style.value) { Panel("panel") }
         }
         waitForIdle()
         val blank = onNodeWithTag("panel").captureToImage().toPixelMap()[20, 1]
         assertColor(Color.Blue, blank)
         var enabled: Color? = null
         repeat(3) {
-            style.value = style.value.copy(innerShadow = { config })
+            style.value = style.value.copy(render = { innerShadow(config) })
             waitForIdle()
             val pixel = onNodeWithTag("panel").captureToImage().toPixelMap()[20, 1]
             assertTrue(pixel.red > blank.red + 0.1f)
             enabled?.let { assertColor(it, pixel) }
             enabled = pixel
-            style.value = style.value.copy(innerShadow = { InnerShadow.None })
+            style.value = style.value.copy(render = BackdropRenderStyle.NoEffects)
             waitForIdle()
             assertColor(blank, onNodeWithTag("panel").captureToImage().toPixelMap()[20, 1])
         }
@@ -182,6 +170,7 @@ class BackdropStyleTest {
 
     @Test
     fun twoToneColorAlphaAndLayerBlendModeReachTheDrawingLayer() = runComposeUiTest {
+        val blend = mutableStateOf(BlendMode.SrcOver)
         val style = MutableTwoToneStyle(Color.White.copy(alpha = 0.2f))
         val highlight =
             mutableStateOf(
@@ -192,9 +181,8 @@ class BackdropStyleTest {
                 ),
             )
         setContent {
-            ProvideBackdropStyle(
-                highlight = { highlight.value },
-                shadow = { Shadow.None },
+            ProvideBackdropRenderStyle(
+                render = { highlight(highlight.value, blendMode = blend.value) },
             ) {
                 Panel("panel")
             }
@@ -207,7 +195,7 @@ class BackdropStyleTest {
         val bright = onNodeWithTag("panel").captureToImage().toPixelMap()[39, 20]
         assertEquals(0.8f * 0.84375f, bright.red, 0.03f)
         val srcOver = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
-        highlight.value = highlight.value.copy(blendMode = BlendMode.Plus)
+        blend.value = BlendMode.Plus
         waitForIdle()
         val plus = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
         assertTrue(plus.blue > srcOver.blue + 0.5f)
@@ -215,13 +203,11 @@ class BackdropStyleTest {
 
     @Test
     fun inheritedInnerShadowAnimationDrawsWithoutRecomposition() = runComposeUiTest {
-        val innerShadow = mutableStateOf<InnerShadow>(InnerShadow.None)
+        val innerShadow = mutableStateOf<InnerShadow?>(null)
         var compositions = 0
         setContent {
-            ProvideBackdropStyle(
-                highlight = { Highlight.None },
-                shadow = { Shadow.None },
-                innerShadow = { innerShadow.value },
+            ProvideBackdropRenderStyle(
+                render = { innerShadow.value?.let { innerShadow(it) } },
             ) {
                 Panel("panel", onComposition = { compositions++ })
             }
@@ -238,7 +224,7 @@ class BackdropStyleTest {
                 )
             waitForIdle()
             assertTrue(onNodeWithTag("panel").captureToImage().toPixelMap()[20, 1].red > 0.1f)
-            innerShadow.value = InnerShadow.None
+            innerShadow.value = null
             waitForIdle()
             assertColor(blank, onNodeWithTag("panel").captureToImage().toPixelMap()[20, 1])
         }
@@ -247,11 +233,22 @@ class BackdropStyleTest {
 
     @Test
     fun shadowNoneSwitchesAndZeroAlphaConfigurationRemainDistinct() = runComposeUiTest {
-        val shadow = mutableStateOf<Shadow>(Shadow.None)
+        val shadow = mutableStateOf<Shadow?>(null)
         val config = Shadow(radius = 2.dp, offset = DpOffset(4.dp, 0.dp), color = Color.Red)
         var compositions = 0
         setContent {
-            ProvideBackdropStyle(highlight = { Highlight.None }, shadow = { shadow.value }) {
+            ProvideBackdropRenderStyle(
+                render = {
+                    val material = image {
+                        source()
+                        clipSurface()
+                    }
+                    group {
+                        shadow.value?.let { shadow(it) }
+                        draw(material)
+                    }
+                },
+            ) {
                 Box(Modifier.testTag("outer").background(Color.White).padding(10.dp)) {
                     Panel("panel", onComposition = { compositions++ })
                 }
@@ -269,7 +266,7 @@ class BackdropStyleTest {
             waitForIdle()
             assertColor(blank, onNodeWithTag("outer").captureToImage().toPixelMap()[51, 30])
             assertTrue(shadow.value is Shadow.Config)
-            shadow.value = Shadow.None
+            shadow.value = null
             waitForIdle()
             assertColor(blank, onNodeWithTag("outer").captureToImage().toPixelMap()[51, 30])
         }
@@ -282,13 +279,17 @@ class BackdropStyleTest {
         lateinit var scope: BackdropEffectScope
         var compositions = 0
         setContent {
-            ProvideBackdropStyle(
-                effects = {
-                    scope = this
-                    if (enabled.value) blur(3f, TileMode.Decal)
+            ProvideBackdropRenderStyle(
+                render = {
+                    group {
+                        source()
+                        effects {
+                            scope = this
+                            if (enabled.value) blur(3f, TileMode.Decal)
+                        }
+                        clipSurface()
+                    }
                 },
-                highlight = { Highlight.None },
-                shadow = { Shadow.None },
             ) {
                 Panel("panel", onComposition = { compositions++ })
             }
@@ -329,14 +330,14 @@ class BackdropStyleTest {
         Box(
             Modifier.testTag(tag)
                 .size(40.dp)
-                .then(modifier ?: Modifier.drawBackdrop(TestBackdrop, { RectangleShape })),
+                .then(modifier ?: Modifier.renderBackdrop(TestBackdrop, { RectangleShape })),
         )
     }
 
-    private fun solidHighlight(color: Color): Highlight.Config =
+    private fun solidHighlight(color: Color): Highlight =
         Highlight(
             width = 20.dp,
-            direction = HighlightDirection.None,
+            direction = HighlightDirection.Uniform,
             style = HighlightStyle.Solid(color),
             colorResponse = HighlightColorResponse(amount = 0f),
         )

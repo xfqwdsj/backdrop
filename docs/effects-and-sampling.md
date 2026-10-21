@@ -1,8 +1,9 @@
 # Effects and sampling
 
 Effects transform the source in declaration order. A blur followed by a color filter therefore
-filters the blurred result. Explicit `effects` replaces the inherited chain; use
-`BackdropStyle.NoEffects` to request an empty chain.
+filters the blurred result. Use `effects { ... }` to process the current result, or capture a reusable
+branch with `image { source(); effects { ... } }`. An explicit render declaration replaces
+the inherited declaration; `BackdropRenderStyle.NoEffects` draws the unprocessed source.
 
 ## Choose a built-in effect
 
@@ -57,21 +58,22 @@ Progressive blur evaluates the curve per pixel in two Gaussian passes. End inten
 finite and in `0..1`, and anchors must resolve to a finite increasing span. Its anchors can add
 visible coverage. Changing caller insets clips that span without moving its anchors.
 
-`BackdropMask` is a fill description for consumers: brush, optional alpha, and optional ramp.
+`BackdropFill` is a fill description for consumers: brush, optional alpha, and optional ramp.
 Its color constructor wraps a specified color in `SolidColor`; unspecified fill or alpha delegates
 that choice to the consuming component. Backdrop does not supply a theme-based component that
 resolves those choices for you.
 
-Use the color or brush overload of `drawBackdropMask` to paint a resolved fill. Strength multiplies
+Use the color or brush overload of `drawBackdropFill` to paint a resolved fill. Strength multiplies
 the fill's alpha and ramp intensity. A painted ramp samples the curve into gradient stops, whereas
-progressive blur evaluates it directly. Retain `BackdropMaskRampCache` for repeated mask drawing,
+progressive blur evaluates it directly. Retain `BackdropFillRampCache` for repeated fill drawing,
 or remember the brush from `ramp.brush(...)` instead of allocating its color list each frame.
 `clipToGrownShape` matches the extended surface clip: rounded corners keep their radius and custom
 shapes resolve against the extended size.
 
 ## Custom effects
 
-Both `effect(RenderEffect, sampling)` and `runtimeShaderEffect` require a `BackdropSampling` contract.
+`effect(RenderEffect, sampling)`, `effect(sampling) { }`, and `runtimeShaderEffect` require a
+`BackdropSampling` contract.
 It maps an output rectangle to the complete required input rectangle in surface-local pixels,
 independent of the expanded layer origin. Declare all reads, including interpolation neighbors.
 
@@ -85,7 +87,7 @@ independent of the expanded layer origin. Declare all reads, including interpola
 For example, registering a platform effect that reads up to eight pixels on every side:
 
 ```kotlin
-effects = {
+effects {
     effect(customEffect, sampling = BackdropSampling.outsets(8f, 8f, 8f, 8f))
 }
 ```
@@ -95,6 +97,29 @@ predecessor. Recording bounds union the visible output and every intermediate re
 translated regions that do not overlap the output. Contracts must be deterministic, finite, and
 non-inverted. Validation checks rectangle shape, while the effect author must prove it covers
 the actual reads.
+
+### Construct an effect from resolved geometry
+
+`effect(sampling) { }` registers a deferred factory. Its `BackdropEffectContext` supplies `size`,
+`shape`, `layoutDirection`, an immutable `density` conversion value, the final graph `extension`,
+and the active stage's `inputBounds`. Bounds use surface-local pixels; adding the extension's
+left/top margins maps them to storage coordinates. The final extension includes other branches'
+requirements, while `inputBounds` belongs to this stage's backward sampling request.
+
+Read the context during the factory invocation. It is a read-only view of active build geometry,
+not a snapshot to retain. Factories return a platform `RenderEffect`; graph registration belongs
+to the surrounding `BackdropEffectScope`. Unsupported render-effect platforms skip the factory.
+The factory's shader cache uses stage-local keys: equal keys in different stages identify separate
+mutable shaders, while repeated resolutions reuse a stage's cached instance. A source change under
+one key replaces that shader; the receiver releases caches when the process node is omitted
+or detached. Display refresh invalidates recorded layers and reuses compiled programs. Custom
+factories own their complete sampling declaration just like built-ins.
+
+User-defined `BackdropEffectScope` extensions can register platform effects through this factory or
+use `runtimeShaderEffect` for a single-input shader. The latter manages shader-stage keys, input
+bounds and platform adapters. See [BackdropEffectContext](../backdrop/src/commonMain/kotlin/BackdropEffectContext.kt)
+for the factory context and [Render graphs](render-graphs.md#extend-the-declaration-language) for
+composition extensions.
 
 The effects producer runs once per resolution. Stage construction and runtime-shader uniform blocks
 run after the extension is resolved. Read `extension` inside the uniform block when translating

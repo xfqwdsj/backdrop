@@ -1,113 +1,108 @@
 # Styles and decorations
 
-A `BackdropStyle` supplies delayed visual defaults to receiving surfaces. Receivers resolve it at
-their position in the UI tree, so the same modifier value can inherit different defaults when used
-under different providers.
+`drawBackdrop` provides a parameterized surface with a fixed rendering contract. `renderBackdrop`
+provides the ordered graph DSL. Both use the same receiver-owned rendering engine.
 
-## Share defaults and override deliberately
+## Configure a surface
 
 ```kotlin
 ProvideBackdropStyle(
-    effects = { blur(8.dp.toPx()) },
+    blurRadius = { 8.dp },
+    fill = { tint },
     highlight = { Highlight.Ambient },
 ) {
     Box(Modifier.drawBackdrop(backdrop, shape = { RoundedCornerShape(24.dp) }))
 }
 ```
 
-Omitted provider fields retain the parent's producers. `ProvideBackdropStyle(style = myStyle)`
-provides a complete style; use `LocalBackdropStyle.current.copy(...)` when constructing a style
-that retains selected parent fields.
+`BackdropStyle` contains delayed blur, fill, highlight, shadow, inner-shadow, interaction-lighting
+and inset producers. It exposes no effect or graph interface. The fixed order is outer shadow,
+blurred and clipped source, fill, additive interior light, children, then highlight and inner shadow.
+`backgroundAlpha` fades the background group; foreground decorations and children have independent opacity.
+Use the graph DSL when decorations should fade with the background or need another ordering.
 
-| Value at a modifier | Meaning |
-| --- | --- |
-| `null` producer | Inherit that field from the style. |
-| Explicit producer | Replace that field, including the complete effects chain. |
-| `{ Highlight.None }`, `{ Shadow.None }`, `{ InnerShadow.None }` | Disable that decoration. |
-| `BackdropStyle.NoEffects` | Use an empty effects chain. |
+A null modifier producer inherits that field at the modifier's use position. An explicit producer
+replaces it; `Highlight.None`, `Shadow.None`, and `InnerShadow.None` disable those primitives.
+A zero-alpha value configures the primitive with transparent output. `BackdropStyle.NoEffects`
+specifies every style field, with zero blur, transparent fill, no insets, and all decoration
+primitives disabled. Omitted provider fields inherit parent producers;
+providing a complete style replaces all fields. Defaults include highlight and outer shadow.
 
-[BackdropStyle.Default](../backdrop/src/commonMain/kotlin/BackdropStyle.kt) defines the root
-appearance. A style governs visual defaults; the call site owns the source and component structure.
-The plain modifier inherits only effects and insets.
-
-## Animate through producers
-
-Read snapshot state inside the producer to update drawing without recomposing the component:
+Read animation state inside a producer to update rendering without recomposition:
 
 ```kotlin
 Modifier.drawBackdrop(
-    backdrop = backdrop,
-    shape = { RoundedCornerShape(24.dp) },
-    highlight = { if (enabled) Highlight.Default else Highlight.None },
-    innerShadow = { InnerShadow(alpha = animatedAlpha.value) },
+    backdrop,
+    shape = { shape },
+    blurRadius = { animatedRadius.value.dp },
+    highlight = { if (enabled.value) Highlight.Default else Highlight.None },
 )
 ```
 
-Here `enabled` is snapshot-backed state and `animatedAlpha` is an animation state holder. Reading
-its value before constructing the producer would instead subscribe the composition to that value.
-Disabled decorations retain observation so they can become active again, while releasing drawing
-layers. A zero-alpha `Config` remains a configuration; use `None` to express disabling.
+`BackdropRenderStyle` separately supplies `render` and `insets` to graph receivers. Its `NoEffects`
+is an empty render declaration. See [Render graphs](render-graphs.md) for composition and export.
 
-## Shape a highlight
+## Shape the contour response
 
-`Highlight(...)` creates a `Highlight.Config`. `Default` uses a solid style with two-sided direction;
-`Ambient` selects two-tone shading; `Plain` removes directional modulation. The renderer shades the
-nearest contour and clips through the original outline, including holes and disconnected contours.
+`Highlight(width, direction, style, ...)` configures a contour highlight.
+`HighlightDirection(angle, mode, strength, widthScale)` uses normal incidence: the normal's dot
+product with the chosen direction is truncated for Single or folded by absolute value for Double.
+Its width and strength have independent curves. `Uniform` removes directional modulation.
+`falloff` shapes the profile across the band; `opacity` controls the primitive's output layer.
 
-Tune the controls according to their role:
-
-- `width` sets the base band width. `direction.widthScale` changes coverage from side-facing to
-  aligned incidence; its default range is 60% to 100% of the base width.
-- `direction.strength` independently changes emission from side-facing to aligned incidence.
-  Both response ranges have their own curves and may use endpoints above one.
-- `falloff` controls the profile across the band. Each pixel uses its center sample and the shape
-  clip supplies the antialiased contour edge.
-- `opacity` controls the shared output layer. Color alpha and directional response contribute to
-  emission strength before that layer is composited.
-- `exclusions` masks outward-normal directions. Named sides and angular exclusions use boundary
-  orientation rather than the pixel's position within the component.
-
-Direction angles use 0 right, 90 down, 180 left, and 270 up. A two-tone style emits black RGB on
-its negative side while retaining emission strength. `Highlight.Config` snapshots the supplied
-exclusion set and provides value equality, `copy`, and component accessors.
-
-## Let the backdrop tint the contour
-
-`HighlightColorResponse` samples the already processed backdrop, including `onDrawBackdrop`
-drawing. Surface and front callbacks, text, and other foreground content are excluded. Its amount
-defaults to 0.5; zero disables backdrop sampling. Sample alpha scales that amount, while the
-highlight's own alpha and direction still determine emission strength.
-
-The default `PreservePeak` transform scales the sampled positive RGB peak to the base highlight
-peak in linear extended-sRGB. If no finite positive scale is available, it retains the base color.
-The response changes RGB only; it does not multiply the result by display headroom.
+For explicit angular curves, both parameter and graph APIs accept the same configuration DSL.
+Import `highlight` and `angles` from `top.ltfan.backdrop.highlight`:
 
 ```kotlin
-Highlight(
-    style = HighlightStyle.Solid,
-    colorResponse = HighlightColorResponse(amount = 0.5f),
-)
+highlight(colorSource = material) {
+    width = 2.dp
+    angles(angle = 90f, domain = HighlightAngleDomain.Directed) {
+        widthScale(0f, 180f, .5f, 1f, curve = BackdropCurve.CubicBezier(.4f, 0f, .8f, 1f))
+        brightness(0f, 180f, .2f, 1.5f, curve = BackdropCurve.CubicBezier(.2f, 0f, .8f, 1f))
+        mirror()
+        clear(setOf(0f..30f, 330f..360f))
+    }
+}
 ```
 
-## Extend shading
+Outside a graph, `Highlight { ... }` builds that configuration. `incidence(...)` inside the builder
+selects the normal-incidence response; import that extension from the highlight package. Both branches use `angle` for orientation: 0 points
+right, 90 down, 180 left, 270 up. Angular segments are relative to that orientation.
 
-Implement `HighlightStyle` with matching CPU `shade(HighlightSample)` and AGSL `shaderSource`.
-The shader declares `shadeHighlight(...)` and `highlightStrength(...)`; return straight-alpha color
-and separate non-negative emission strength. Use `configureShader` for uniforms. The renderer then
-applies direction, width, falloff, exclusions, and premultiplication.
+| Domain | Relative coordinate |
+| --- | --- |
+| `Unsigned` | Shortest separation in 0..180 degrees; both sides share the response. |
+| `Directed` | Clockwise turn in 0..360 degrees; the sides can differ. |
 
-A custom `HighlightColorTransform` likewise provides matching CPU and AGSL color transforms.
-Both interfaces are `@Stable`: back mutable public properties with Compose snapshot state.
-Prefix custom uniforms and helpers so they stay separate from renderer-owned shader declarations.
-The extension signatures are specified in
-[HighlightStyle](../backdrop/src/commonMain/kotlin/highlight/HighlightStyle.kt) and
-[HighlightColorResponse](../backdrop/src/commonMain/kotlin/highlight/HighlightColorResponse.kt).
-Static highlight emission remains available without runtime shaders; processed-backdrop tinting
-requires the shader path.
+Each segment interpolates from `from` to `to` over its relative angular interval using `curve`.
+Width and brightness accept independent `BackdropCurve.Linear` or `BackdropCurve.CubicBezier`
+responses; omitting `curve` selects linear interpolation.
+Width scale multiplies base width; brightness multiplies emission and may exceed one for HDR.
+Undefined channels are zero. Later declarations replace earlier values only in their specified
+interval and channel. `clear` hard-zeros both channels. Shared endpoints are closed with a 0.001°
+tolerance; later declarations win there too. Split cross-seam intervals at 0/360. `mirror(axis)`
+appends reflected declarations including reversed curves; Unsigned already folds the two sides.
+Profiles snapshot and precompute uniform arrays once and can be shared across rotated instances.
+Shaders are specialized by segment capacity, not individual values or rotation.
 
-## Add shadows
+Parameterized `disabledAngles: Set<ClosedFloatingPointRange<Float>>` applies a final hard cut.
+`disabledAngleDomain` supports the same Unsigned and Directed meanings. These ranges are also
+relative to the direction's `angle`.
+For a uniform response, the orientation is zero. Cuts affect static and interaction contour light.
 
-`Shadow(...)` and `InnerShadow(...)` create their respective `Config` values with radius, offset,
-color, `alpha`, and blend mode. Their opacity parameter is named `alpha`; the highlight layer's
-parameter is `opacity`. `InnerShadow.lerp` interpolates two configurations and switches blend mode
-at the midpoint. Outer shadow support expands compositing bounds without changing layout size.
+## Color and geometry
+
+The renderer evaluates one nearest-contour response and clips through the original outline,
+including holes and disconnected contours. `Default` uses solid shading, `Ambient` two-tone
+shading, and `Plain` uniform direction. Two-tone shading can emit black RGB while retaining emission.
+
+`HighlightColorResponse` samples an explicit `colorSource`; pass the processed material to exclude
+later tints and children. Zero amount permits omitting that source. Source alpha scales the response,
+while highlight alpha and directional response determine emission. `PreservePeak` rescales positive
+sample RGB in linear extended-sRGB to the base peak when a finite positive scale exists. Color
+response changes RGB only; display headroom never multiplies it automatically.
+
+Outer and inner shadows are independent primitives. Their parameter objects retain radius, offset,
+color and alpha; configuration factories and `copy` produce configured values, while `None` omits
+rendering. The call site owns shape, ordering and source selection. Interaction lighting is opt-in
+through its provider registry; see [Interaction lighting](interaction-lighting.md).

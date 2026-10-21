@@ -64,6 +64,48 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
 
     private val runtimeShaderCache = RuntimeShaderCacheImpl()
 
+    private var contextStageIndex = 0
+    private var contextDensity: Density = Density(1f)
+    internal val context: BackdropEffectContext = EffectContext()
+
+    private inner class EffectContext : BackdropEffectContext {
+        override val density: Density
+            get() {
+                if (
+                    contextDensity.density != this@BackdropEffectScopeImpl.density ||
+                        contextDensity.fontScale != this@BackdropEffectScopeImpl.fontScale
+                ) {
+                    contextDensity =
+                        Density(
+                            this@BackdropEffectScopeImpl.density,
+                            this@BackdropEffectScopeImpl.fontScale,
+                        )
+                }
+                return contextDensity
+            }
+
+        override val size: Size
+            get() = this@BackdropEffectScopeImpl.size
+
+        override val shape: Shape
+            get() = this@BackdropEffectScopeImpl.shape
+
+        override val layoutDirection: LayoutDirection
+            get() = this@BackdropEffectScopeImpl.layoutDirection
+
+        override val extension: BackdropExtension
+            get() = resolvedExtension
+
+        override val inputBounds: Rect
+            get() = samplingBounds
+
+        override fun obtainRuntimeShader(key: String, string: String): RuntimeShader =
+            obtainStageRuntimeShader(contextStageIndex, key, string)
+    }
+
+    internal fun obtainStageRuntimeShader(index: Int, key: String, string: String): RuntimeShader =
+        obtainRuntimeShader("Deferred#$index:$key", string)
+
     override fun obtainRuntimeShader(key: String, string: String): RuntimeShader =
         runtimeShaderCache.obtainRuntimeShader(key, string)
 
@@ -113,13 +155,7 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         effects: BackdropEffectScope.() -> Unit,
         requested: BackdropInsets,
     ) {
-        tintEffectIndex = 0
-        lightingEffectIndex = 0
-        runtimeShaderEffectIndex = 0
-        stages.clear()
-        cover = BackdropInsets.None
-        renderEffect = null
-        effects()
+        prepareEffects(effects)
 
         val left = (requested.left + cover.left).toPx()
         val top = (requested.top + cover.top).toPx()
@@ -145,7 +181,22 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         resolveStages(visible, width, height)
     }
 
+    internal fun prepareEffects(effects: BackdropEffectScope.() -> Unit) {
+        tintEffectIndex = 0
+        lightingEffectIndex = 0
+        runtimeShaderEffectIndex = 0
+        stages.clear()
+        cover = BackdropInsets.None
+        renderEffect = null
+        effects()
+    }
+
     private fun resolveStages(visible: Rect, width: Float, height: Float) {
+        measureStages(visible, width, height)
+        buildEffects(resolvedExtension)
+    }
+
+    internal fun measureStages(visible: Rect, width: Float, height: Float) {
         stageSamplingBounds.clear()
         val needed =
             stages.asReversed().fold(visible) { output, stage ->
@@ -172,8 +223,15 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
                 bottom = ceil(maxOf(0f, bounds.bottom - height)),
             )
 
+        samplingBounds = needed
+    }
+
+    internal fun buildEffects(extension: BackdropExtension) {
+        resolvedExtension = extension
+        val needed = samplingBounds
         renderEffect =
             stages.foldIndexed(null) { index, current, stage ->
+                contextStageIndex = index
                 samplingBounds = stageSamplingBounds[index]
                 current.chain(stage.factory(this))
             }

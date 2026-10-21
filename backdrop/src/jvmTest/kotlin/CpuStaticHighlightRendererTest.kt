@@ -9,8 +9,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightAngularCut
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightExclusion
 import top.ltfan.backdrop.highlight.HighlightResponse
 import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.renderStaticHighlightPixels
@@ -48,7 +48,8 @@ class CpuStaticHighlightRendererTest : SkikoGraphicsTest() {
     @Test
     fun exclusionsAndExtendedRgbApplyAtNearestBoundary() {
         val hdr = Color(2f, 1f, 0.5f, colorSpace = ColorSpaces.ExtendedSrgb)
-        val pixels = render(HighlightStyle.Solid(hdr), exclusions = setOf(HighlightExclusion.Top))
+        val pixels =
+            render(HighlightStyle.Solid(hdr), exclusions = setOf(HighlightAngularCut(270f)))
         assertEquals(0f, pixels[rgba(16, 0) + 3])
         assertTrue(pixels[rgba(0, 16)] > pixels[rgba(0, 16) + 3] + 0.1f)
     }
@@ -95,8 +96,8 @@ class CpuStaticHighlightRendererTest : SkikoGraphicsTest() {
 
     private fun render(
         style: HighlightStyle,
-        direction: HighlightDirection = HighlightDirection.None,
-        exclusions: Set<HighlightExclusion> = emptySet(),
+        direction: HighlightDirection = HighlightDirection.Uniform,
+        exclusions: Set<HighlightAngularCut> = emptySet(),
         widthPx: Float = 2f,
     ): FloatArray =
         renderStaticHighlightPixels(

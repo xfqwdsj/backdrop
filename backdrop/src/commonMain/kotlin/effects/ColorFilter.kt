@@ -10,10 +10,9 @@ import androidx.compose.ui.graphics.LightingColorFilter
 import top.ltfan.backdrop.BackdropEffectScope
 import top.ltfan.backdrop.BackdropEffectScopeImpl
 import top.ltfan.backdrop.BackdropSampling
-import top.ltfan.backdrop.addEffect
-import top.ltfan.backdrop.internal.ColorFilterEffect
 import top.ltfan.backdrop.internal.LightingShaderString
 import top.ltfan.backdrop.internal.TintShaderString
+import top.ltfan.backdrop.internal.createColorFilterEffect
 import top.ltfan.backdrop.isRenderEffectSupported
 import top.ltfan.backdrop.isRuntimeShaderSupported
 
@@ -57,7 +56,7 @@ public fun BackdropEffectScope.colorFilter(colorFilter: ColorFilter) {
 
     // Color matrices and every other filter without a runtime-shader path keep their platform
     // semantics here. Android 12/12L has RenderEffect but no RuntimeShader.
-    addEffect(BackdropSampling.Identity) { ColorFilterEffect(null, colorFilter) }
+    effect(BackdropSampling.Identity) { createColorFilterEffect(null, colorFilter) }
 }
 
 public fun BackdropEffectScope.opacity(@FloatRange(from = 0.0, to = 1.0) alpha: Float) {
@@ -117,14 +116,12 @@ private fun colorControlsColorFilter(
     val g = 0.715f * invSat
     val b = 0.072f * invSat
 
-    val c = contrast
-    val t = (0.5f - c * 0.5f + brightness) * 255f
-    val s = saturation
+    val t = (0.5f - contrast * 0.5f + brightness) * 255f
 
-    val cr = c * r
-    val cg = c * g
-    val cb = c * b
-    val cs = c * s
+    val cr = contrast * r
+    val cg = contrast * g
+    val cb = contrast * b
+    val cs = contrast * saturation
 
     val colorMatrix =
         ColorMatrix(

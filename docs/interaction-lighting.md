@@ -17,10 +17,17 @@ ProvideInteractionLighting {
             ).clickable(onClick = onClick)
         )
         Box(
-            Modifier.size(240.dp).drawBackdrop(
+            Modifier.size(240.dp).renderBackdrop(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(24.dp) },
-                interactionLighting = { InteractionLighting.Config() },
+                render = {
+                    val lighting = InteractionLighting.Config()
+                    source()
+                    clipSurface()
+                    val material = current
+                    interactionLight(lighting)
+                    highlight(Highlight(), colorSource = material, interactionLighting = lighting)
+                },
             )
         )
     }
@@ -28,10 +35,9 @@ ProvideInteractionLighting {
 ```
 
 Import the lighting APIs from `top.ltfan.backdrop.interaction`. Supply the backdrop and layout
-appropriate to your component; the source can be independent from the receiver. Put
+appropriate to your component; the source can be independent of the receiver. Put
 `interactionLightSource` before the focusable modifier to observe keyboard and focus events.
-You can also set receiver defaults through `ProvideBackdropStyle(interactionLighting = { ... })`.
-`drawPlainBackdrop` receives no shared field.
+Receiver defaults can share the same declaration through `ProvideBackdropRenderStyle(render = { ... })`.
 
 `InteractionLight.Config` controls color, radius, radial falloff, and release duration.
 `InteractionLighting.Config` controls interior and contour opacity independently. Return
@@ -54,7 +60,7 @@ radius. Moving a source updates its position rather than rebuilding the receivin
 Physical pointer down creates light immediately, including inside scrolling click targets. The
 source observes input without consuming it. Pointer movement and release own that light's lifetime;
 release fades intensity according to the configured duration. Nested sources coordinate the same
-physical pointer so it contributes once, while distinct pointers remain separate.
+physical pointer so it contributes once, while distinct pointers contribute independently.
 
 An optional `InteractionSource` adds synthetic presses and focus events. Pass the same instance to
 the component and `interactionLightSource` when those events should illuminate receivers. A press
@@ -69,10 +75,9 @@ interaction source, disabling, or detaching clears the corresponding active entr
 
 ## Choose the visual response
 
-Interior lighting draws after the surface callback and before foreground content, clipped to the
-original surface shape even when effects extend beyond it. It uses native Plus blending without
-allocating another layer. Contour lighting joins the highlight output and uses its blend mode;
-provide a highlight configuration for that contour path.
+Interior lighting produces an image clipped to the original surface shape. Draw it with native
+Plus blending at the desired point in the declaration. Contour lighting joins the highlight image
+when passed as `interactionLighting` to `highlight`; its external blend belongs to the graph draw.
 
 The runtime field evaluates color in linear extended-sRGB. On platforms without runtime shaders,
 the interior fallback interpolates a cached SDR vertex mesh. Small features and extended-range

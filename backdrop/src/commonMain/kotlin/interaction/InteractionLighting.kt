@@ -13,10 +13,23 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import top.ltfan.backdrop.BackdropCurve
+import top.ltfan.backdrop.BackdropImageScope
+import top.ltfan.backdrop.BackdropPrimitive
+import top.ltfan.backdrop.BackdropPrimitiveDrawContext
+import top.ltfan.backdrop.BackdropPrimitiveGeometry
+import top.ltfan.backdrop.BackdropPrimitiveRenderer
+import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.PrimitiveContext
 import top.ltfan.backdrop.highlight.HighlightLinearColor
 import top.ltfan.backdrop.highlight.toHighlightLinearExtendedSrgb
+import top.ltfan.backdrop.internal.clipOutline
+import top.ltfan.backdrop.primitive
 
 /** Receiver settings for shared interaction light. */
 @Stable
@@ -112,4 +125,65 @@ internal fun InteractionLightEntry.isFiniteForRendering(): Boolean {
         linear.green.isFinite() &&
         linear.blue.isFinite() &&
         linear.alpha.isFinite()
+}
+
+/** Draws interior interaction lighting with additive blending by default. */
+public fun BackdropImageScope.interactionLight(
+    config: InteractionLighting.Config,
+    alpha: Float = 1f,
+    blendMode: BlendMode = BlendMode.Plus,
+) {
+    primitive(InteractionPrimitive(config), alpha = alpha, blendMode = blendMode)
+}
+
+private data class InteractionPrimitive(val config: InteractionLighting.Config) :
+    BackdropPrimitive<InteractionPrimitive> {
+    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect = geometry.surfaceBounds
+
+    override fun createRenderer(
+        resources: BackdropPrimitiveResources,
+    ): BackdropPrimitiveRenderer<InteractionPrimitive> = Renderer()
+
+    private class Renderer : BackdropPrimitiveRenderer<InteractionPrimitive> {
+        private val renderer = InteractionFieldRenderer()
+        private val path = Path()
+
+        override fun draw(
+            scope: DrawScope,
+            primitive: InteractionPrimitive,
+            context: BackdropPrimitiveDrawContext,
+        ) {
+            val frame = (context as PrimitiveContext).interactionFrame
+            val coordinates = frame.receiverCoordinates ?: return
+            if (primitive.config.interiorOpacity <= 0f) return
+            val canvas = scope.drawContext.canvas
+            canvas.save()
+            try {
+                canvas.clipOutline(
+                    context.shape.createOutline(
+                        context.size,
+                        context.layoutDirection,
+                        context.density,
+                    ),
+                    path,
+                )
+                renderer.draw(
+                    scope,
+                    coordinates,
+                    frame.interactionLights,
+                    primitive.config.interiorOpacity,
+                )
+            } finally {
+                canvas.restore()
+            }
+        }
+
+        override fun refresh() {
+            renderer.release()
+        }
+
+        override fun release() {
+            renderer.release()
+        }
+    }
 }

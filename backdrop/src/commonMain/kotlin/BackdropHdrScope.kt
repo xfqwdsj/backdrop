@@ -10,8 +10,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Minimum interval between HDR layer refreshes, 200 milliseconds by default. When events keep
- * arriving the most recent display ratio is still delivered once they stop, so no change is
- * dropped.
+ * arriving, the latest display ratio is delivered after the final event.
  *
  * The value must be finite and non-negative; [BackdropHdrScope] throws [IllegalArgumentException]
  * otherwise. Set it once: changing a static composition local recomposes the whole subtree it
@@ -31,9 +30,9 @@ public val LocalBackdropHdrHeadroom: ProvidableCompositionLocal<Float> = composi
 
 /**
  * Refreshes Backdrop-owned rendering resources when Android's display HDR headroom changes. The
- * composition and interaction state remain intact. Enable HDR on the Android Window separately.
- * Platforms without the display callback retain their usual rendering behavior. Externally supplied
- * GraphicsLayers and ancestor effects remain owned by their callers.
+ * composition and interaction state are independent of this resource refresh. Enable HDR on the
+ * Android Window separately. Platforms without the display callback retain their usual rendering
+ * behavior. Externally supplied GraphicsLayers and ancestor effects belong to their callers.
  */
 @Composable
 public fun BackdropHdrScope(content: @Composable () -> Unit) {

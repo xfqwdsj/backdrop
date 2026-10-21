@@ -33,8 +33,6 @@ import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberCombinedBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
-import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.shadow.Shadow
 
 class LayerBackdropRebuildRenderingTest {
     private data class StripePixels(val first: Int, val second: Int)
@@ -96,14 +94,24 @@ class LayerBackdropRebuildRenderingTest {
                             CompositionLocalProvider(LocalBackdropRenderEpoch provides 0) {
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .drawBackdrop(
+                                        .renderBackdrop(
                                             backdrop = source,
                                             shape = { RectangleShape },
-                                            effects = { blur(8.dp.toPx()) },
-                                            highlight = { Highlight.None },
-                                            shadow = { Shadow.None },
-                                            onDrawSurface = {
-                                                drawRect(Color.White.copy(alpha = 0.2f))
+                                            render = {
+                                                val material = image {
+                                                    source()
+                                                    effects { blur(8.dp.toPx()) }
+                                                    clipSurface()
+                                                }
+                                                group {
+                                                    draw(material)
+                                                    paintSurface {
+                                                        drawRect(
+                                                            Color.White.copy(alpha = 0.2f),
+                                                        )
+                                                    }
+                                                }
+                                                foreground {}
                                             },
                                         ),
                                 ) {
@@ -181,12 +189,20 @@ class LayerBackdropRebuildRenderingTest {
                             ) {
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .drawBackdrop(
+                                        .renderBackdrop(
                                             backdrop = page,
                                             shape = { RectangleShape },
-                                            effects = { blur(4.dp.toPx()) },
-                                            highlight = { Highlight.None },
-                                            shadow = { Shadow.None },
+                                            render = {
+                                                val material = image {
+                                                    source()
+                                                    effects { blur(4.dp.toPx()) }
+                                                    clipSurface()
+                                                }
+                                                group {
+                                                    draw(material)
+                                                }
+                                                foreground {}
+                                            },
                                         ),
                                 ) {
                                     Box(
@@ -200,12 +216,20 @@ class LayerBackdropRebuildRenderingTest {
                             CompositionLocalProvider(LocalBackdropRenderEpoch provides 0) {
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .drawBackdrop(
+                                        .renderBackdrop(
                                             backdrop = combined,
                                             shape = { RectangleShape },
-                                            effects = { blur(8.dp.toPx()) },
-                                            highlight = { Highlight.None },
-                                            shadow = { Shadow.None },
+                                            render = {
+                                                val material = image {
+                                                    source()
+                                                    effects { blur(8.dp.toPx()) }
+                                                    clipSurface()
+                                                }
+                                                group {
+                                                    draw(material)
+                                                }
+                                                foreground {}
+                                            },
                                         ),
                                 ) {
                                     Box(
@@ -274,33 +298,49 @@ class LayerBackdropRebuildRenderingTest {
                             }
                             Box(
                                 Modifier.fillMaxSize()
-                                    .drawBackdrop(
+                                    .renderBackdrop(
                                         backdrop = page,
                                         shape = { RectangleShape },
-                                        effects = {},
-                                        highlight = { Highlight.None },
-                                        shadow = { Shadow.None },
                                         exportedBackdrop = exported,
-                                        onDrawSurface = {
-                                            drawStripes(
-                                                size.width,
-                                                size.height,
-                                                10.dp.toPx(),
-                                                Color.Yellow,
-                                                Color.Cyan,
-                                            )
+                                        render = {
+                                            val material = image {
+                                                source()
+                                                effects {}
+                                                clipSurface()
+                                            }
+                                            group {
+                                                draw(material)
+                                                paintSurface {
+                                                    drawStripes(
+                                                        size.width,
+                                                        size.height,
+                                                        10.dp.toPx(),
+                                                        Color.Yellow,
+                                                        Color.Cyan,
+                                                    )
+                                                }
+                                            }
+                                            foreground {}
                                         },
                                     ),
                             ) {
                                 Box(Modifier.fillMaxSize().background(Color.Blue))
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .drawBackdrop(
+                                        .renderBackdrop(
                                             backdrop = exported,
                                             shape = { RectangleShape },
-                                            effects = {},
-                                            highlight = { Highlight.None },
-                                            shadow = { Shadow.None },
+                                            render = {
+                                                val material = image {
+                                                    source()
+                                                    effects {}
+                                                    clipSurface()
+                                                }
+                                                group {
+                                                    draw(material)
+                                                }
+                                                foreground {}
+                                            },
                                         ),
                                 )
                             }

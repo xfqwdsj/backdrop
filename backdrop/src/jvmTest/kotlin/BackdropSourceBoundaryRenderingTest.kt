@@ -26,9 +26,6 @@ import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.effects.lens
 import top.ltfan.backdrop.effects.progressiveBlur
-import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
 
 class BackdropSourceBoundaryRenderingTest {
     @Test
@@ -215,15 +212,22 @@ class BackdropSourceBoundaryRenderingTest {
         Box(
             modifier
                 .size(width = width, height = 64.dp)
-                .drawBackdrop(
+                .renderBackdrop(
                     backdrop = source,
                     shape = { RoundedCornerShape(4.dp) },
-                    effects = effects,
                     insets = { BackdropInsets.all(8.dp) },
-                    highlight = { Highlight.None },
-                    shadow = { Shadow.None },
-                    innerShadow = { InnerShadow.None },
                     exportedBackdrop = output,
+                    render = {
+                        val material = image {
+                            source()
+                            effects(effects)
+                            clipSurface()
+                        }
+                        group {
+                            draw(material)
+                        }
+                        foreground {}
+                    },
                 ),
         )
     }

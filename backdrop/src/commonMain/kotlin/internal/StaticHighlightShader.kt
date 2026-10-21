@@ -4,6 +4,7 @@ import top.ltfan.backdrop.BackdropCurve
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
 import top.ltfan.backdrop.highlight.HighlightColorTransform
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.angularDirectionShader
 import top.ltfan.backdrop.highlight.exclusionShader
 import top.ltfan.backdrop.interaction.interactionFieldShader
 
@@ -17,6 +18,7 @@ internal fun staticHighlightTileShader(
     falloff: BackdropCurve = BackdropCurve.Default,
     sharedDirectionCurve: Boolean = false,
     interactionCapacity: Int = 0,
+    angularCapacity: Int = 0,
 ): String =
     nearestBandShader(
         genericBoundaryShaderFunctions(geometry.segmentCount, segmentCapacity),
@@ -26,6 +28,7 @@ internal fun staticHighlightTileShader(
         falloff,
         sharedDirectionCurve,
         interactionCapacity,
+        angularCapacity,
     )
 
 internal fun staticHighlightTileShader(
@@ -37,6 +40,7 @@ internal fun staticHighlightTileShader(
     falloff: BackdropCurve = BackdropCurve.Default,
     sharedDirectionCurve: Boolean = false,
     interactionCapacity: Int = 0,
+    angularCapacity: Int = 0,
 ): String =
     if (boundary.isAnalytic) {
         nearestBandShader(
@@ -47,6 +51,7 @@ internal fun staticHighlightTileShader(
             falloff,
             sharedDirectionCurve,
             interactionCapacity,
+            angularCapacity,
         )
     } else {
         staticHighlightTileShader(
@@ -58,6 +63,7 @@ internal fun staticHighlightTileShader(
             falloff,
             sharedDirectionCurve,
             interactionCapacity,
+            angularCapacity,
         )
     }
 
@@ -69,6 +75,7 @@ private fun nearestBandShader(
     falloff: BackdropCurve,
     sharedDirectionCurve: Boolean,
     interactionCapacity: Int,
+    angularCapacity: Int,
 ): String {
     val colorResponseShader =
         if (colorTransform == null) ""
@@ -136,7 +143,9 @@ private fun nearestBandShader(
     val directionWidthCurveUniform =
         if (sharedDirectionCurve) "" else "uniform float4 directionWidthCurve;"
     val directionCurveValues =
-        if (sharedDirectionCurve) {
+        if (angularCapacity > 0)
+            "float2 angularValues = angularResponse(normal); float widthScale = angularValues.x; float strengthByDirection = angularValues.y;"
+        else if (sharedDirectionCurve) {
             """
             float sharedDirectionLevel = backdropCurve(magnitude, directionStrengthCurve);
             float strengthByDirection = directionEnabled > 0.5
@@ -154,6 +163,22 @@ private fun nearestBandShader(
             """
                 .trimIndent()
         }
+    val directionUniforms =
+        if (angularCapacity > 0) {
+            "uniform float angularMaximumWidthScale;\n" + angularDirectionShader(angularCapacity)
+        } else
+            """
+        uniform float directionEnabled;
+        uniform float directionMode;
+        uniform float2 directionStrengthRange;
+        uniform float4 directionStrengthCurve;
+        uniform float2 directionWidthRange;
+        $directionWidthCurveUniform
+    """
+                .trimIndent()
+    val maximumWidth =
+        if (angularCapacity > 0) "angularMaximumWidthScale"
+        else "max(directionWidthRange.x, directionWidthRange.y)"
     val falloffCurveShader =
         highlightCurveShader(falloff).replace("backdropCurve", "backdropFalloffCurve")
     return """
@@ -161,13 +186,8 @@ $geometry
 $HighlightCurveShader
 $falloffCurveShader
 uniform float width;
-uniform float directionEnabled;
-uniform float directionMode;
 uniform float2 directionVector;
-uniform float2 directionStrengthRange;
-uniform float4 directionStrengthCurve;
-uniform float2 directionWidthRange;
-$directionWidthCurveUniform
+$directionUniforms
 uniform float4 falloffCurve;
 uniform float4 tileBounds;
 layout(color) uniform half4 color;
@@ -191,14 +211,14 @@ float fixedBandProfile(float distance, float bandWidth, float4 curve) {
 half4 shadeAt(float2 coord) {
   float2 p = coord - origin;
   if (width <= 0.0) return half4(0.0);
-  float maxBandWidth = width * max(directionWidthRange.x, directionWidthRange.y);
+  float maxBandWidth = width * $maximumWidth;
   float conservativeUpper = maxBandWidth + max(0.0001, abs(maxBandWidth) * 0.000001) + 0.5;
   float2 nearestPosition;
   float3 nearest = nearestBoundaryWithPosition(p, nearestPosition);
   if (nearest.x >= conservativeUpper) return half4(0.0);
   float2 normal = nearest.yz;
   float projection = dot(normal, directionVector);
-  float magnitude = directionMode < 0.5 ? max(0.0, projection) : abs(projection);
+  ${if (angularCapacity == 0) "float magnitude = directionMode < 0.5 ? max(0.0, projection) : abs(projection);" else ""}
   $directionCurveValues
   float bandWidth = width * widthScale;
   if (nearest.x >= bandWidth + 0.5) return half4(0.0);

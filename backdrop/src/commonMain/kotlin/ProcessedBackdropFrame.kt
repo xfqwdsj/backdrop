@@ -1,24 +1,14 @@
 package top.ltfan.backdrop
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import top.ltfan.backdrop.interaction.InteractionLightEntry
 
-/** A same-draw reference to the already processed backdrop layer owned by its draw node. */
+/** A same-draw reference to the already processed backdrop image owned by its draw node. */
 internal class ProcessedBackdropFrame {
     var requested: Boolean = false
         private set
 
-    var layer: GraphicsLayer? = null
-        private set
-
-    var layerOffset: Offset = Offset.Zero
-        private set
-
-    var sourceBounds: Rect = Rect.Zero
+    var image: BackdropPrimitiveImage? = null
         private set
 
     var interactionLights: List<InteractionLightEntry> = emptyList()
@@ -32,25 +22,14 @@ internal class ProcessedBackdropFrame {
 
     fun begin(requested: Boolean) {
         this.requested = requested
-        layer = null
-        layerOffset = Offset.Zero
-        sourceBounds = Rect.Zero
+        image = null
         interactionLights = emptyList()
         receiverWindow = null
         receiverCoordinates = null
     }
 
-    fun publish(layer: GraphicsLayer, offset: Offset, size: Size) {
-        if (!requested) return
-        this.layer = layer
-        layerOffset = offset
-        sourceBounds = Rect(0f, 0f, size.width, size.height)
-    }
-
-    fun invalidateSource() {
-        layer = null
-        layerOffset = Offset.Zero
-        sourceBounds = Rect.Zero
+    fun publish(image: BackdropPrimitiveImage) {
+        if (requested) this.image = image
     }
 
     fun publishInteraction(

@@ -58,11 +58,20 @@ class LayerBackdropTransformRenderingTest {
                     ) {
                         Box(
                             Modifier.fillMaxSize()
-                                .drawPlainBackdrop(
+                                .renderBackdrop(
                                     backdrop = source,
                                     shape = { RectangleShape },
-                                    effects = {},
                                     exportedBackdrop = output,
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                        }
+                                    },
                                 ),
                         )
                     }
@@ -97,16 +106,25 @@ class LayerBackdropTransformRenderingTest {
                     Box(
                         Modifier.offset(60.dp, 70.dp)
                             .size(140.dp, 120.dp)
-                            .drawPlainBackdrop(
+                            .renderBackdrop(
                                 backdrop = source,
                                 shape = { RectangleShape },
-                                effects = {},
                                 layerBlock = {
                                     scaleX = 0.8f
                                     scaleY = 0.9f
                                     transformOrigin = TransformOrigin(0.3f, 1.4f)
                                 },
                                 exportedBackdrop = output,
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                },
                             ),
                     )
                 }
@@ -136,16 +154,25 @@ class LayerBackdropTransformRenderingTest {
                     Box(
                         Modifier.offset(60.dp, 70.dp)
                             .size(140.dp, 120.dp)
-                            .drawPlainBackdrop(
+                            .renderBackdrop(
                                 backdrop = combined,
                                 shape = { RectangleShape },
-                                effects = {},
                                 layerBlock = {
                                     scaleX = 1.000548f
                                     scaleY = 0.970076f
                                     transformOrigin = TransformOrigin(0.3f, 1.4f)
                                 },
                                 exportedBackdrop = output,
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                },
                             ),
                     )
                 }
@@ -185,11 +212,20 @@ class LayerBackdropTransformRenderingTest {
                     ) {
                         Box(
                             Modifier.fillMaxSize()
-                                .drawPlainBackdrop(
+                                .renderBackdrop(
                                     backdrop = source,
                                     shape = { RectangleShape },
-                                    effects = {},
                                     exportedBackdrop = output,
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                        }
+                                    },
                                 ),
                         )
                     }
@@ -233,16 +269,25 @@ class LayerBackdropTransformRenderingTest {
                     ) {
                         Box(
                             Modifier.fillMaxSize()
-                                .drawPlainBackdrop(
+                                .renderBackdrop(
                                     backdrop = source,
                                     shape = { RectangleShape },
-                                    effects = {},
                                     layerBlock = {
                                         scaleX = 0.75f
                                         scaleY = 0.85f
                                         transformOrigin = TransformOrigin(0.6f, 0.2f)
                                     },
                                     exportedBackdrop = output,
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                        }
+                                    },
                                 ),
                         )
                     }
@@ -281,11 +326,20 @@ class LayerBackdropTransformRenderingTest {
                     ) {
                         Box(
                             Modifier.fillMaxSize()
-                                .drawPlainBackdrop(
+                                .renderBackdrop(
                                     backdrop = source,
                                     shape = { RectangleShape },
-                                    effects = {},
                                     exportedBackdrop = output,
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                        }
+                                    },
                                 ),
                         )
                     }
@@ -326,12 +380,21 @@ class LayerBackdropTransformRenderingTest {
                     GradientSource(source)
                     Box(
                         Modifier.fillMaxSize()
-                            .drawPlainBackdrop(
+                            .renderBackdrop(
                                 backdrop = source,
                                 shape = { RectangleShape },
-                                effects = {},
                                 insets = { BackdropInsets(left = 11.dp, top = 17.dp) },
                                 exportedBackdrop = intermediate,
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                },
                             ),
                     )
                     Box(Modifier.fillMaxSize().background(Color.Magenta))
@@ -344,11 +407,20 @@ class LayerBackdropTransformRenderingTest {
                     ) {
                         Box(
                             Modifier.fillMaxSize()
-                                .drawPlainBackdrop(
+                                .renderBackdrop(
                                     backdrop = intermediate,
                                     shape = { RectangleShape },
-                                    effects = {},
                                     exportedBackdrop = output,
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                        }
+                                    },
                                 ),
                         )
                     }

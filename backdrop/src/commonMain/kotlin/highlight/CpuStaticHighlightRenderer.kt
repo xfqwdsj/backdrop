@@ -5,7 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.acos
+import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
@@ -21,7 +21,7 @@ internal fun renderStaticHighlightPixels(
     falloff: BackdropCurve,
     direction: HighlightDirection,
     style: HighlightStyle,
-    exclusions: Set<HighlightExclusion>,
+    exclusions: Set<HighlightAngularCut>,
     density: Float = 1f,
 ): FloatArray =
     renderStaticHighlightPixels(
@@ -53,7 +53,7 @@ internal fun renderStaticHighlightPixels(
     falloff: BackdropCurve,
     direction: HighlightDirection,
     style: HighlightStyle,
-    exclusions: Set<HighlightExclusion>,
+    exclusions: Set<HighlightAngularCut>,
     density: Float = 1f,
 ): FloatArray {
     if (!geometry.isAnalytic) {
@@ -91,22 +91,19 @@ private fun renderStaticHighlightPixels(
     falloff: BackdropCurve,
     direction: HighlightDirection,
     style: HighlightStyle,
-    exclusions: Set<HighlightExclusion>,
+    exclusions: Set<HighlightAngularCut>,
     density: Float,
 ): FloatArray {
     require(widthPx.isFinite() && widthPx >= 0f && density.isFinite() && density > 0f)
-    val maximumWidthScale =
-        (direction as? HighlightDirection.Config)?.widthScale?.let {
-            maxOf(it.from, it.to)
-        } ?: 1f
+    val maximumWidthScale = direction.maximumWidthScale
     require((widthPx * maximumWidthScale).isFinite()) {
         "direction-scaled highlight width must remain finite"
     }
     val pixelWidth = ceil(size.width).toInt()
     val pixelHeight = ceil(size.height).toInt()
     val pixels = FloatArray(pixelWidth * pixelHeight * 4)
-    val directionConfig = direction as? HighlightDirection.Config
-    val angle = (directionConfig?.angle ?: 0f).let(::normalizedAngle) * (PI / 180.0).toFloat()
+    val angular = direction as? HighlightDirection.Angular
+    val angle = direction.angle.let(::normalizedAngle) * (PI / 180.0).toFloat()
     val axisX = cos(angle)
     val axisY = sin(angle)
     if (widthPx == 0f || style === HighlightStyle.None) return pixels
@@ -120,13 +117,27 @@ private fun renderStaticHighlightPixels(
         val boundary = nearestBoundary(point)
         val normal = boundary.outwardNormal
         val projection = normal.x * axisX + normal.y * axisY
-        val magnitude = directionLevel(direction, projection)
-        val bandWidth = widthPx * directionWidthScale(direction, magnitude)
+        val angularValues =
+            when (angular) {
+                null -> 0L
+                else ->
+                    angular.profile.evaluate(
+                        atan2(normal.y, normal.x) * (180f / PI.toFloat()) -
+                            normalizedAngle(angular.angle),
+                    )
+            }
+        val magnitude = if (angular == null) directionLevel(direction, projection) else 0f
+        val widthScale =
+            if (angular == null) directionWidthScale(direction, magnitude)
+            else Float.fromBits((angularValues shr 32).toInt())
+        val bandWidth = widthPx * widthScale
         require(bandWidth.isFinite()) { "direction-scaled highlight width must remain finite" }
         if (boundary.distance >= bandWidth + .5f) continue
         val sample = HighlightSample(boundary.position, normal, projection, widthPx)
         val shaded = style.shade(sample)
-        val directionalStrength = directionStrength(direction, magnitude)
+        val directionalStrength =
+            if (angular == null) directionStrength(direction, magnitude)
+            else Float.fromBits(angularValues.toInt())
         val light = maxOf(0f, shaded.color.alpha) * maxOf(0f, shaded.strength) * directionalStrength
         val coverage = highlightBandProfile(boundary.distance, bandWidth, falloff)
         val q = light * coverage * exclusionWeight(normal, exclusions)
@@ -145,31 +156,37 @@ private fun renderStaticHighlightPixels(
 
 internal fun directionLevel(direction: HighlightDirection, projection: Float): Float =
     when (direction) {
-        HighlightDirection.None -> 1f
-        is HighlightDirection.Config ->
+        HighlightDirection.Uniform -> 1f
+        is HighlightDirection.Angular -> error("Angular profiles require a relative normal angle")
+        is HighlightDirection.Incidence ->
             if (direction.mode == HighlightDirection.Mode.Single) maxOf(0f, projection)
             else abs(projection)
     }
 
 private fun directionStrength(direction: HighlightDirection, magnitude: Float): Float =
-    (direction as? HighlightDirection.Config)?.strength?.transform(magnitude) ?: 1f
+    (direction as? HighlightDirection.Incidence)?.strength?.transform(magnitude) ?: 1f
 
 internal fun directionWidthScale(direction: HighlightDirection, magnitude: Float): Float =
-    (direction as? HighlightDirection.Config)?.widthScale?.transform(magnitude) ?: 1f
+    (direction as? HighlightDirection.Incidence)?.widthScale?.transform(magnitude) ?: 1f
 
-internal fun exclusionWeight(normal: Offset, exclusions: Set<HighlightExclusion>): Float {
+internal fun exclusionWeight(normal: Offset, exclusions: Set<HighlightAngularCut>): Float {
     var weight = 1f
     val radians = (PI / 180.0).toFloat()
-    for (entry in exclusions) {
-        val item = entry.asDirection()
-        val angle = normalizedAngle(item.angle) * radians
-        val difference = acos((normal.x * cos(angle) + normal.y * sin(angle)).coerceIn(-1f, 1f))
-        val start = item.halfAngle * radians
-        val end = (item.halfAngle + item.featherAngle) * radians
+    for ((angle, halfAngle, featherAngle) in exclusions) {
+        val axis = normalizedAngle(angle) * radians
+        val difference =
+            abs(
+                atan2(
+                    cos(axis) * normal.y - sin(axis) * normal.x,
+                    normal.x * cos(axis) + normal.y * sin(axis),
+                ),
+            )
+        val start = halfAngle * radians
+        val end = (halfAngle + featherAngle) * radians
         val allowed =
             when {
                 difference <= start -> 0f
-                item.featherAngle <= 0f -> 1f
+                featherAngle <= 0f -> 1f
                 difference >= end -> 1f
                 else -> smoothstep(start, end, difference)
             }

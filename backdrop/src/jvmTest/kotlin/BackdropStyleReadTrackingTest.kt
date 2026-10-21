@@ -19,13 +19,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class BackdropStyleReadTrackingTest {
+class BackdropRenderStyleReadTrackingTest {
     @Test
     fun explicitProducersDoNotRereadReplacedStyles() = runComposeUiTest {
-        val style = mutableStateOf(BackdropStyle.Default)
+        val style = mutableStateOf(BackdropRenderStyle.Default)
         var explicitEffectCalls = 0
         var explicitInsetCalls = 0
-        val explicitEffects: BackdropEffectScope.() -> Unit = { explicitEffectCalls++ }
+        val explicitEffects: BackdropRenderScope.() -> Unit = { explicitEffectCalls++ }
         val explicitInsets: () -> BackdropInsets = {
             explicitInsetCalls++
             BackdropInsets.None
@@ -33,15 +33,15 @@ class BackdropStyleReadTrackingTest {
         val modifier =
             Modifier.size(40.dp)
                 .testTag("surface")
-                .drawPlainBackdrop(
+                .renderBackdrop(
                     TestBackdrop,
                     { RectangleShape },
-                    effects = explicitEffects,
+                    render = explicitEffects,
                     insets = explicitInsets,
                 )
 
         setContent {
-            CompositionLocalProvider(LocalBackdropStyle provides style.value) {
+            CompositionLocalProvider(LocalBackdropRenderStyle provides style.value) {
                 Box(modifier)
             }
         }
@@ -55,8 +55,8 @@ class BackdropStyleReadTrackingTest {
         repeat(10) { index ->
             runOnIdle {
                 style.value =
-                    BackdropStyle(
-                        effects = { cover(BackdropInsets(top = (index + 1).dp)) },
+                    BackdropRenderStyle(
+                        render = { effects { cover(BackdropInsets(top = (index + 1).dp)) } },
                         insets = { BackdropInsets(top = (index + 1).dp) },
                     )
             }
@@ -83,7 +83,7 @@ class BackdropStyleReadTrackingTest {
         var inheritedInsetCalls = 0
         var explicitEffectCalls = 0
         var explicitInsetCalls = 0
-        val explicitEffects: BackdropEffectScope.() -> Unit = { explicitEffectCalls++ }
+        val explicitEffects: BackdropRenderScope.() -> Unit = { explicitEffectCalls++ }
         val explicitInsets: () -> BackdropInsets = {
             explicitInsetCalls++
             BackdropInsets.None
@@ -91,9 +91,9 @@ class BackdropStyleReadTrackingTest {
 
         setContent {
             CompositionLocalProvider(
-                LocalBackdropStyle provides
-                    BackdropStyle(
-                        effects = {
+                LocalBackdropRenderStyle provides
+                    BackdropRenderStyle(
+                        render = {
                             inheritedEffectCalls++
                             version.intValue
                         },
@@ -107,10 +107,10 @@ class BackdropStyleReadTrackingTest {
                 val modifier =
                     Modifier.size(40.dp)
                         .testTag("surface")
-                        .drawPlainBackdrop(
+                        .renderBackdrop(
                             TestBackdrop,
                             { RectangleShape },
-                            effects = explicitEffects.takeIf { useExplicitProducers.value },
+                            render = explicitEffects.takeIf { useExplicitProducers.value },
                             insets = explicitInsets.takeIf { useExplicitProducers.value },
                         )
                 Box(modifier)

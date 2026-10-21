@@ -23,8 +23,6 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
-import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.shadow.Shadow
 
 class LayerBackdropReplacementRenderingTest {
     @Test
@@ -39,12 +37,20 @@ class LayerBackdropReplacementRenderingTest {
                     Box(Modifier.fillMaxSize().background(Color.Yellow))
                     Box(
                         Modifier.fillMaxSize()
-                            .drawBackdrop(
+                            .renderBackdrop(
                                 backdrop = source,
                                 shape = { RectangleShape },
-                                effects = {},
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                    foreground {}
+                                },
                             ),
                     )
                 }
@@ -76,16 +82,24 @@ class LayerBackdropReplacementRenderingTest {
                 val inner = rememberLayerBackdrop(graphicsLayer = replaced)
                 Box(Modifier.fillMaxSize().layerBackdrop(inner).background(Color.Blue))
                 // A sibling between the recording and the sampling surface, so the sampling surface
-                // is drawn while the replaced layer is still empty.
+                // is drawn while the replaced layer is empty.
                 Box(Modifier.fillMaxSize().background(Color.Yellow))
                 Box(
                     Modifier.fillMaxSize()
-                        .drawBackdrop(
+                        .renderBackdrop(
                             backdrop = inner,
                             shape = { RectangleShape },
-                            effects = {},
-                            highlight = { Highlight.None },
-                            shadow = { Shadow.None },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
                         ),
                 )
             }
@@ -118,25 +132,41 @@ class LayerBackdropReplacementRenderingTest {
                     // The surface records `exported` after its content has drawn.
                     Box(
                         Modifier.fillMaxSize()
-                            .drawBackdrop(
+                            .renderBackdrop(
                                 backdrop = source,
                                 shape = { RectangleShape },
-                                effects = {},
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
                                 exportedBackdrop = exported,
-                                onDrawSurface = { drawRect(Color.Yellow) },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                        paintSurface { drawRect(Color.Yellow) }
+                                    }
+                                    foreground {}
+                                },
                             ),
                     ) {
                         Box(Modifier.fillMaxSize().background(Color.Blue))
                         Box(
                             Modifier.fillMaxSize()
-                                .drawBackdrop(
+                                .renderBackdrop(
                                     backdrop = exported,
                                     shape = { RectangleShape },
-                                    effects = {},
-                                    highlight = { Highlight.None },
-                                    shadow = { Shadow.None },
+                                    render = {
+                                        val material = image {
+                                            source()
+                                            effects {}
+                                            clipSurface()
+                                        }
+                                        group {
+                                            draw(material)
+                                        }
+                                        foreground {}
+                                    },
                                 ),
                         )
                     }

@@ -18,7 +18,7 @@ These are the gates implemented by [Android Platform](../backdrop/src/androidMai
 and [Skiko Platform](../backdrop/src/skikoMain/kotlin/Platform.kt), rather than guarantees that an
 output surface can display HDR. Unsupported render effects are omitted. Progressive blur falls
 back to uniform blur without runtime shaders; lens is omitted. Finite source boundaries use
-transparent exterior pixels without their shader extension. Static highlight emission remains
+transparent exterior pixels without their shader extension. Static highlight emission is
 visible, and interior interaction lighting has an SDR mesh fallback.
 
 ## Preserve extended-range color
@@ -76,3 +76,11 @@ Public APIs do not provide a layer's HDR luminance, and screenshot/readback path
 display output. The rendering tests use floating-point Skia surfaces to check owned color math;
 Compose screenshots check geometry, alpha, and updates through their 8-bit path. Neither replaces
 verification on the application's configured HDR window and display.
+
+## Render graph capability boundaries
+
+Graph images stay in GraphicsLayer and native effect resources. Alpha masks, clear operations,
+group alpha, and ordered composites use native layer blending without CPU pixel readback.
+Luminance masks require `isRuntimeShaderSupported()`; choose an alpha coverage image explicitly
+when it returns false. Arbitrary multi-input custom shaders and cross-frame graph feedback are
+outside the public graph contract. See [Render graphs](render-graphs.md).

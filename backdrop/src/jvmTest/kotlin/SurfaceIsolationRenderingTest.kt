@@ -34,9 +34,8 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
-import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.shadow.shadow
 
 class SurfaceIsolationRenderingTest {
     @Test
@@ -48,18 +47,26 @@ class SurfaceIsolationRenderingTest {
                 Box(
                     Modifier.offset(80.dp, 80.dp)
                         .size(80.dp)
-                        .drawBackdrop(
-                            source,
+                        .renderBackdrop(
+                            backdrop = source,
                             shape = { RoundedCornerShape(20.dp) },
-                            effects = {},
-                            highlight = { Highlight.None },
-                            innerShadow = { InnerShadow.None },
-                            shadow = {
-                                Shadow(
-                                    radius = 16.dp,
-                                    offset = DpOffset.Zero,
-                                    color = Color.Black.copy(alpha = 0.8f),
-                                )
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    shadow(
+                                        Shadow(
+                                            radius = 16.dp,
+                                            offset = DpOffset.Zero,
+                                            color = Color.Black.copy(alpha = 0.8f),
+                                        ),
+                                    )
+                                    draw(material)
+                                }
+                                foreground {}
                             },
                         ),
                 )
@@ -88,14 +95,21 @@ class SurfaceIsolationRenderingTest {
                             layout(placeable.width, placeable.height) { placeable.place(0, 0) }
                         }
                         .size(60.dp)
-                        .drawBackdrop(
+                        .renderBackdrop(
                             backdrop = backdrop,
                             shape = { RectangleShape },
-                            effects = {},
                             layerBlock = { this.alpha = alpha.intValue / 100f },
-                            highlight = { Highlight.None },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
                         ),
                 ) {
                     Box(Modifier.fillMaxSize()) {
@@ -135,14 +149,21 @@ class SurfaceIsolationRenderingTest {
                 Box(Modifier.size(80.dp)) {
                     Box(
                         Modifier.size(60.dp)
-                            .drawBackdrop(
+                            .renderBackdrop(
                                 backdrop = backdrop,
                                 shape = { RectangleShape },
-                                effects = {},
                                 layerBlock = { alpha = 0.5f },
-                                highlight = { Highlight.None },
-                                shadow = { Shadow.None },
-                                innerShadow = { InnerShadow.None },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                    foreground {}
+                                },
                             ),
                     ) {
                         Box(
@@ -213,14 +234,21 @@ class SurfaceIsolationRenderingTest {
         Box(Modifier.size(80.dp).background(Color.Black).testTag("root")) {
             Box(
                 Modifier.size(60.dp)
-                    .drawBackdrop(
+                    .renderBackdrop(
                         backdrop = backdrop,
                         shape = { RectangleShape },
-                        effects = {},
                         layerBlock = { alpha = 0.5f },
-                        highlight = { Highlight.None },
-                        shadow = { Shadow.None },
-                        innerShadow = { InnerShadow.None },
+                        render = {
+                            val material = image {
+                                source()
+                                effects {}
+                                clipSurface()
+                            }
+                            group {
+                                draw(material)
+                            }
+                            foreground {}
+                        },
                     ),
             ) {
                 Box(Modifier.fillMaxSize()) {

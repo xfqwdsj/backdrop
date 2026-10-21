@@ -28,8 +28,7 @@ import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightStyle
-import top.ltfan.backdrop.shadow.InnerShadow
-import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.highlight.highlight
 
 class DisconnectedHighlightGeometryTest {
     @Test
@@ -41,19 +40,29 @@ class DisconnectedHighlightGeometryTest {
                 Box(
                     Modifier.offset(20.dp, 20.dp)
                         .size(80.dp)
-                        .drawBackdrop(
-                            backdrop,
-                            { ThinSubpixelShape },
-                            highlight = {
-                                Highlight(
-                                    width = 8.dp,
-                                    direction = HighlightDirection.None,
-                                    style = HighlightStyle.Solid(Color.White),
-                                    colorResponse = HighlightColorResponse(amount = 0f),
-                                )
+                        .renderBackdrop(
+                            backdrop = backdrop,
+                            shape = { ThinSubpixelShape },
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {
+                                    highlight(
+                                        Highlight(
+                                            width = 8.dp,
+                                            direction = HighlightDirection.Uniform,
+                                            style = HighlightStyle.Solid(Color.White),
+                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                        ),
+                                        colorSource = material,
+                                    )
+                                }
                             },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
                         ),
                 )
             }
@@ -77,19 +86,29 @@ class DisconnectedHighlightGeometryTest {
                 Box(
                     Modifier.offset(20.dp, 20.dp)
                         .size(80.dp)
-                        .drawBackdrop(
-                            backdrop,
-                            { DisconnectedShape },
-                            highlight = {
-                                Highlight(
-                                    width = 4.dp,
-                                    direction = HighlightDirection.None,
-                                    style = HighlightStyle.Solid(Color.White),
-                                    colorResponse = HighlightColorResponse(amount = 0f),
-                                )
+                        .renderBackdrop(
+                            backdrop = backdrop,
+                            shape = { DisconnectedShape },
+                            render = {
+                                val material = image {
+                                    source()
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {
+                                    highlight(
+                                        Highlight(
+                                            width = 4.dp,
+                                            direction = HighlightDirection.Uniform,
+                                            style = HighlightStyle.Solid(Color.White),
+                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                        ),
+                                        colorSource = material,
+                                    )
+                                }
                             },
-                            shadow = { Shadow.None },
-                            innerShadow = { InnerShadow.None },
                         ),
                 )
             }

@@ -119,6 +119,42 @@ class SegmentNormalSignRenderingTest : PlatformGraphicsTest() {
     }
 
     @Test
+    fun adjacentUncertifiedSegmentsKeepTheirOwnNormals() {
+        val geometry = FlattenedBoundaryGeometry(thinNotchPath())
+        val boundary = HighlightBoundaryGeometry(Outline.Generic(thinNotchPath()))
+        val points =
+            listOf(
+                Offset(15.92f, 8.25f),
+                Offset(16.08f, 8.25f),
+                Offset(16f, 7.75f),
+                Offset(16f, 8.25f),
+            )
+        val normals = listOf(Offset(1f, 0f), Offset(-1f, 0f), Offset(0f, 1f), Offset(1f, 0f))
+        assertTrue(geometry.normalSigns.any { it != 0f })
+        assertTrue(geometry.normalSigns.any { it == 0f })
+        for (groupSize in listOf(0, 4, 8, 16)) {
+            val pixels =
+                render(
+                    createProbeShader(geometry, points.size, 16, groupSize),
+                    geometry,
+                    points,
+                    geometry.normalSigns,
+                    16,
+                    if (groupSize == 0) null else boundary.segmentGroupBounds(16, groupSize),
+                )
+            for (index in points.indices) {
+                val expected = normals[index]
+                val context = "point=${points[index]}, groupSize=$groupSize"
+                val cpuNormal = geometry.nearestBoundary(points[index]).outwardNormal
+                assertEquals(expected.x, cpuNormal.x, .000001f, context)
+                assertEquals(expected.y, cpuNormal.y, .000001f, context)
+                assertEquals(expected.x, pixels[index * 4 + 1] * 2f - 1f, .006f, context)
+                assertEquals(expected.y, pixels[index * 4 + 2] * 2f - 1f, .006f, context)
+            }
+        }
+    }
+
+    @Test
     fun paddedNormalSignsAreCachedPerGeometry() {
         val boundary = HighlightBoundaryGeometry(Outline.Generic(RectanglePath))
         val first = boundary.paddedNormalSigns(8)

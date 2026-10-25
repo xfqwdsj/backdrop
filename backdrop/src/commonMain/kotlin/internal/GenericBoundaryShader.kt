@@ -40,16 +40,23 @@ $segments
 $normalSigns
 $groupBounds
 
-bool containsPoint(float2 p) {
+bool containsPoint(float2 p, bool enabled) {
   bool inside = false;
+  // Uniform loop participation preserves per-pixel masks during conditional probes.
   for (int i = 0; i < $segmentCapacity; ++i) {
-    float4 segment = segments[i];
-    float2 a = segment.xy;
-    float2 b = segment.zw;
-    bool crosses = (a.y > p.y) != (b.y > p.y);
-    if (crosses && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)) inside = !inside;
+    if (enabled) {
+      float4 segment = segments[i];
+      float2 a = segment.xy;
+      float2 b = segment.zw;
+      bool crosses = (a.y > p.y) != (b.y > p.y);
+      if (crosses && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)) inside = !inside;
+    }
   }
   return inside;
+}
+
+bool containsPoint(float2 p) {
+  return containsPoint(p, true);
 }
 
 float3 nearestBoundaryWithPosition(float2 p, out float2 closest) {
@@ -85,12 +92,10 @@ float3 nearestBoundaryWithPosition(float2 p, out float2 closest) {
   closest = p + bestDelta;
   float tangentLength = length(bestTangent);
   float2 outward = tangentLength > 0.0 ? float2(bestTangent.y, -bestTangent.x) / tangentLength : float2(0.0, -1.0);
-  if (bestNormalSign != 0.0 && abs(p.x) <= geometryScale && abs(p.y) <= geometryScale) {
-    outward *= bestNormalSign;
-  } else {
-    float probeDistance = max(0.0001, tolerance * 4.0);
-    if (containsPoint(closest + outward * probeDistance)) outward = -outward;
-  }
+  bool certified = bestNormalSign != 0.0 && abs(p.x) <= geometryScale && abs(p.y) <= geometryScale;
+  float probeDistance = max(0.0001, tolerance * 4.0);
+  bool inward = containsPoint(closest + outward * probeDistance, !certified);
+  outward *= certified ? bestNormalSign : (inward ? -1.0 : 1.0);
   return float3(selectedDistance, outward);
 }
 

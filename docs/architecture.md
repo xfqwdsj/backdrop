@@ -175,6 +175,8 @@ Remaining candidates retain declaration order and the nearest-boundary tie toler
 degenerate and skipped, preserving nearest-boundary and containment results. Geometry caches segment orientation only
 when its normal probe is separated from every boundary segment; uncertain segments retain the
 containment probe at draw time. These conditions matter for thin features and nearby contours.
+The containment loop keeps uniform participation and gates crossing work within each iteration,
+preserving per-pixel execution masks when certified and uncertified segments share a pixel group.
 
 Larger contours build a temporary group-bound index while generating orientation certificates.
 It rejects disjoint segment groups and containment groups outside the query's vertical range.

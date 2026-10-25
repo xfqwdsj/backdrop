@@ -61,6 +61,11 @@ workflow artifacts for 90 days. Release notes link to that run. Attach selected 
 release when longer retention is required. A manual benchmark run generates artifacts and a job
 summary while leaving release notes unchanged.
 
+Include local comparative results when establishing a harness baseline or when a specific change
+warrants a separate investigation. Keep that comparison in an author-owned section outside the
+managed performance block, with identified revisions, matched workloads, relevant environment
+details and measurement limits. Routine release measurements belong to the managed CI section.
+
 ## Manage the performance section
 
 The release body contains one managed block:

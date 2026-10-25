@@ -36,6 +36,11 @@ val warmupCount = if (smoke) 1 else 5
 val measurementCount = if (smoke) 2 else 8
 val iterationMillis = if (smoke) 100L else 1000L
 val forkCount = if (smoke) 1 else 2
+val forkHeap = providers.gradleProperty("benchmarkHeap").getOrElse("2g")
+
+require(Regex("[1-9][0-9]*[mMgG]").matches(forkHeap)) {
+    "benchmarkHeap must be a positive heap size in MiB or GiB, such as 512m or 2g."
+}
 
 benchmark {
     targets {
@@ -90,7 +95,7 @@ tasks.register<JavaExec>("jvmAllocationBenchmark") {
         "-f",
         forkCount.toString(),
         "-jvmArgsAppend",
-        "-Xms512m -Xmx512m -Djava.awt.headless=true",
+        "-Xms$forkHeap -Xmx$forkHeap -Djava.awt.headless=true",
         "-bm",
         "avgt",
         "-tu",

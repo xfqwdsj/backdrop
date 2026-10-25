@@ -140,10 +140,16 @@ test('workflow JavaScript blocks compile without expression interpolation', asyn
 
 test('complete reports require measurement metadata and retain exact provenance', async () => {
   const { benchmarkReport } = await import('./release-notes.mjs');
-  const rows = results.map(row => ({ ...row, jdkVersion: 'test-jdk', forks: 2, warmupIterations: 5, measurementIterations: 8, warmupTime: '1 s', measurementTime: '1 s' }));
+  const rows = results.map(row => ({ ...row, jdkVersion: 'test-jdk', forks: 2, warmupIterations: 5, measurementIterations: 8, warmupTime: '1 s', measurementTime: '1 s', jvmArgs: ['-Ddiagnostic.path=private', '-Xms2g', '-Xmx2g'] }));
   const provenance = { commit: 'a'.repeat(40), runUrl: 'https://github.com/owner/repo/actions/runs/1' };
   assert.ok(benchmarkReport(rows, listing, provenance).includes(provenance.commit));
   assert.ok(benchmarkReport(rows, listing, provenance).includes('2 forks'));
+  assert.ok(benchmarkReport(rows, listing, provenance).includes('-Xms2g -Xmx2g'));
+  assert.ok(!benchmarkReport(rows, listing, provenance).includes('diagnostic.path'));
+  const mixed = structuredClone(rows); mixed[1].jvmArgs = ['-Xms512m', '-Xmx512m'];
+  assert.throws(() => benchmarkReport(mixed, listing, provenance), /heaps differ/);
+  const missing = structuredClone(rows); missing[0].jvmArgs = ['-Xmx2g'];
+  assert.throws(() => benchmarkReport(missing, listing, provenance), /heap metadata/);
   assert.throws(() => benchmarkReport(results, listing, provenance));
   assert.throws(() => benchmarkReport(rows, listing, { ...provenance, commit: 'unknown' }));
 });

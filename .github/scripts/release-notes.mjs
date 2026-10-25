@@ -130,10 +130,20 @@ export function benchmarkReport(results, listing, { commit, runUrl }) {
   for (const name of ['jdkVersion', 'warmupTime', 'measurementTime']) {
     if (typeof sample[name] !== 'string' || !sample[name]) throw new Error('Benchmark runtime metadata is incomplete.');
   }
+  const heapArguments = row => {
+    if (!Array.isArray(row.jvmArgs)) throw new Error('Benchmark fork heap metadata is missing.');
+    const initial = row.jvmArgs.findLast(arg => /^-Xms[1-9][0-9]*[kmg]?$/i.test(arg));
+    const maximum = row.jvmArgs.findLast(arg => /^-Xmx[1-9][0-9]*[kmg]?$/i.test(arg));
+    if (!initial || !maximum) throw new Error('Benchmark fork heap metadata is incomplete.');
+    return `${initial} ${maximum}`;
+  };
+  const heap = heapArguments(sample);
+  if (results.some(row => heapArguments(row) !== heap)) throw new Error('Benchmark fork heaps differ between workloads.');
   const markdown = [
     `Commit: \`${commit}\`. [Raw results and environment](${runUrl}).`,
     'Warmed JVM throughput and managed allocation on a shared Linux runner. Motion workloads use unpaced CPU raster rendering.',
     `JDK ${cell(sample.jdkVersion)}; ${sample.forks} forks; ${sample.warmupIterations} warm-ups (${cell(sample.warmupTime)}); ${sample.measurementIterations} measurements (${cell(sample.measurementTime)}).`,
+    `Fork heap: \`${heap}\`.`,
     table,
   ].join('\n\n');
   if (Buffer.byteLength(markdown, 'utf8') > 50000) throw new Error('The performance table exceeds the release-note budget; retain the full artifact and revise the reporting layout.');

@@ -64,7 +64,9 @@ synchronously through a raster `ImageComposeScene`; its result is unpaced raster
 not displayed frame rate or GPU execution time.
 
 The full JMH allocation task uses five one-second warm-ups, eight one-second measurements and two
-forks with a fixed 512 MiB heap. It reports microseconds per operation and GC-profiler managed bytes
+forks with a fixed 2 GiB heap. Use `-PbenchmarkHeap=<size>`, such as `2g`, to select another fixed
+fork heap; matched comparisons use the same heap on both revisions. The report includes the actual
+initial and maximum fork heap sizes from JMH metadata. It reports microseconds per operation and GC-profiler managed bytes
 per operation. Native Skia memory is outside that allocation metric. Smoke runs use shorter windows
 to verify execution. Establish baselines with the full measurement schedule and preserve generated
 JSON reports before another run overwrites them. The manual

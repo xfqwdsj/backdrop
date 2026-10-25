@@ -1,3 +1,4 @@
+import com.android.build.api.dsl.ManagedVirtualDevice
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
@@ -17,6 +18,10 @@ plugins {
 }
 
 kotlin {
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+        vendor.set(JvmVendorSpec.ADOPTIUM)
+    }
     explicitApi()
 
     jvm {
@@ -32,7 +37,26 @@ kotlin {
                     minorApiLevel = 2
                 }
         }
+        androidResources.enable = true
         minSdk = 21
+        withDeviceTestBuilder {
+            sourceSetTreeName = "test"
+        }
+            .configure {
+                instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+                animationsDisabled = true
+                // AGP creates and tears down this device; CI only invokes the generated task.
+                managedDevices {
+                    localDevices {
+                        create("pixel6Api37") {
+                            device = "Pixel 6"
+                            apiLevel = 37
+                            systemImageSource = "google_apis"
+                            pageAlignment = ManagedVirtualDevice.PageAlignment.FORCE_4KB_PAGES
+                        }
+                    }
+                }
+            }
 
         compilerOptions {
             jvmTarget = JvmTarget.JVM_11
@@ -71,9 +95,22 @@ kotlin {
             }
         }
 
+        val renderTest =
+            create("renderTest") {
+                dependsOn(commonTest.get())
+                dependencies {
+                    implementation(libs.compose.ui.test)
+                }
+            }
         jvmTest {
+            dependsOn(renderTest)
+        }
+        getByName("androidDeviceTest") {
+            dependsOn(renderTest)
             dependencies {
-                implementation(libs.compose.ui.test)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.junit)
+                implementation(libs.androidx.activity.compose)
             }
         }
 

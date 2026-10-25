@@ -20,17 +20,17 @@ internal class PrimitiveGeometry(
     override val shape: Shape,
     override val layoutDirection: LayoutDirection,
     override val surfaceBounds: Rect,
-) : BackdropPrimitiveGeometry
+) : BackdropGeometry
 
 internal class PrimitiveContext(
-    private val geometry: BackdropPrimitiveGeometry,
+    private val geometry: BackdropGeometry,
     override val extension: BackdropExtension,
     override val outputBounds: Rect,
     override val requestedBounds: Rect,
     override val inputBounds: List<Rect>,
-    private val images: (Int, Int) -> BackdropPrimitiveImage,
+    private val images: (Int, Int) -> BackdropImageInput,
     val interactionFrame: ProcessedBackdropFrame,
-) : BackdropPrimitiveDrawContext, BackdropPrimitiveGeometry by geometry {
+) : BackdropPrimitiveDrawContext, BackdropGeometry by geometry {
     var drawing: Boolean = false
     var generation: Int = 0
         private set
@@ -40,7 +40,7 @@ internal class PrimitiveContext(
         drawing = true
     }
 
-    override fun input(index: Int): BackdropPrimitiveImage {
+    override fun input(index: Int): BackdropImageInput {
         check(drawing) { "Primitive inputs are available only during drawing" }
         return images(index, generation)
     }
@@ -51,7 +51,7 @@ internal class PrimitiveImage(
     private val context: PrimitiveContext,
     private val generation: Int,
     private val layer: () -> GraphicsLayer,
-) : BackdropPrimitiveImage {
+) : BackdropImageInput {
     override fun draw(scope: DrawScope) {
         check(context.drawing && generation == context.generation) {
             "Primitive input views expire after drawing"
@@ -77,8 +77,10 @@ internal class PrimitiveImage(
         }
         val storageBounds = bounds.translate(origin)
         require(
-            listOf(storageBounds.left, storageBounds.top, storageBounds.right, storageBounds.bottom)
-                .all { it.isFinite() },
+            storageBounds.left.isFinite() &&
+                storageBounds.top.isFinite() &&
+                storageBounds.right.isFinite() &&
+                storageBounds.bottom.isFinite(),
         ) {
             "Primitive input bounds must be finite"
         }
@@ -87,13 +89,15 @@ internal class PrimitiveImage(
 }
 
 internal class PrimitiveResources(private val context: () -> GraphicsContext) :
-    BackdropPrimitiveResources {
+    BackdropRenderResources {
     private val layers = mutableSetOf<GraphicsLayer>()
     private val shaders = RuntimeShaderCacheImpl()
+    private val pools = mutableListOf<BackdropResourcePool<*, *>>()
     private var closed = false
+    private var cleaning = false
 
     override fun createGraphicsLayer(): GraphicsLayer {
-        check(!closed) { "Primitive resources have been released" }
+        check(!closed && !cleaning) { "Primitive resources are unavailable during release" }
         return context().createGraphicsLayer().also { layers += it }
     }
 
@@ -105,19 +109,50 @@ internal class PrimitiveResources(private val context: () -> GraphicsContext) :
     }
 
     override fun obtainRuntimeShader(key: String, string: String): RuntimeShader {
-        check(!closed) { "Primitive resources have been released" }
+        check(!closed && !cleaning) { "Primitive resources are unavailable during release" }
         return shaders.obtainRuntimeShader(key, string)
     }
 
-    fun releaseLayers() {
-        layers.toList().forEach(::releaseGraphicsLayer)
+    override fun <K : Any, V : Any> resourcePool(
+        dispose: (V) -> Unit,
+        create: BackdropRenderResources.(K) -> V,
+    ): BackdropResourcePool<K, V> {
+        check(!closed && !cleaning) { "Primitive resources are unavailable during release" }
+        return BackdropResourcePool({ PrimitiveResources(context) }, create, dispose).also {
+            pools += it
+        }
     }
+
+    fun releaseLayers() = cleanup(refresh = true)
 
     fun close() {
         if (closed) return
-        releaseLayers()
-        closed = true
-        shaders.clear()
+        try {
+            cleanup(refresh = false)
+        } finally {
+            closed = true
+            pools.clear()
+            shaders.clear()
+        }
+    }
+
+    private fun cleanup(refresh: Boolean) {
+        cleaning = true
+        try {
+            var failure: Throwable? = null
+            fun attempt(action: () -> Unit) {
+                try {
+                    action()
+                } catch (problem: Throwable) {
+                    if (failure == null) failure = problem else failure.addSuppressed(problem)
+                }
+            }
+            for (pool in pools) attempt { if (refresh) pool.refresh() else pool.close() }
+            for (layer in layers.toList()) attempt { releaseGraphicsLayer(layer) }
+            failure?.let { throw it }
+        } finally {
+            cleaning = false
+        }
     }
 }
 

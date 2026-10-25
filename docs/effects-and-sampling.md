@@ -55,19 +55,18 @@ val ramp = BackdropRamp(anchors = BackdropRampAnchors.offsets(16.dp, 32.dp))
 progressiveBlur(radius = 24.dp.toPx(), edge = BackdropEdge.Top, ramp = ramp)
 ```
 
-Progressive blur evaluates the curve per pixel in two Gaussian passes. End intensities must be
-finite and in `0..1`, and anchors must resolve to a finite increasing span. Its anchors can add
+Progressive blur evaluates the curve per pixel in two Gaussian passes. Endpoint intensities must
+be finite and in `0..1`, and anchors must resolve to a finite increasing span. Its anchors can add
 visible coverage. Changing caller insets clips that span without moving its anchors.
 
 `BackdropFill` is a fill description for consumers: brush, optional alpha, and optional ramp.
 Its color constructor wraps a specified color in `SolidColor`; unspecified fill or alpha delegates
-that choice to the consuming component. Backdrop does not supply a theme-based component that
-resolves those choices for you.
+that choice to the consuming component, which resolves them through its theme.
 
 Use the color or brush overload of `drawBackdropFill` to paint a resolved fill. Strength multiplies
 the fill's alpha and ramp intensity. A painted ramp samples the curve into gradient stops, whereas
 progressive blur evaluates it directly. Retain `BackdropFillRampCache` for repeated fill drawing,
-or remember the brush from `ramp.brush(...)` instead of allocating its color list each frame.
+or remember the brush from `ramp.brush(...)` to reuse its sampled color list across frames.
 `clipToGrownShape` matches the extended surface clip: rounded corners keep their radius and custom
 shapes resolve against the extended size.
 
@@ -78,7 +77,8 @@ in two runtime-shader passes. `layeredProgressiveBlur(radius, edge, ramp, levels
 image-scope operation: it independently blurs the current image at uniformly spaced radii and
 mixes adjacent levels with premultiplied weights. The level count includes the unchanged input.
 More levels can increase processing and layer costs; levels with zero weight across the ramp
-are omitted. Choose the count for the consuming component and measure its rendering cost. Native
+are omitted. The receiver retains gradient brushes and branch layers, independently of animated
+radius changes. Choose the count for the consuming component and measure its rendering cost. Native
 uniform blur and the two-pass spatial shader have different kernels, so increasing the count does
 not guarantee pixel equality.
 
@@ -96,17 +96,16 @@ if (isRuntimeShaderSupported()) {
 }
 ```
 
-This is a caller-selected route, not an automatic library policy. Backdrop supplies no unified blur
-enable switch or theme fallback. Consumers own settings, animations, alternative fills and algorithm
-selection. Both algorithms preserve their input and request no ramp coverage when their required
-capability is absent or the radius is zero. Radius, endpoint intensities and the layered level count
-are validated before these early returns; anchors are resolved only when the algorithm runs.
+The consuming component selects the route, settings, animations and alternative fills. Both
+algorithms preserve their input and request no ramp coverage when their required capability is
+absent or the radius is zero. Radius, endpoint intensities and the layered level count are validated
+before these early returns; anchors are resolved only when the algorithm runs.
 
-The layered algorithm reads the result before the call, including any previous effects or painting.
+The layered algorithm reads the result before the call, including preceding effects and painting.
 Every level reads that same result; blur levels are not serial blur stages. Gradient weights sample
 the shared curve using `ramp.stops`, with level crossings inserted so only adjacent levels mix.
 Constant-weight intervals retain their endpoints without storing redundant intermediate colors,
-so `ramp.stops` is the initial curve sample count rather than the final gradient stop count.
+`ramp.stops` specifies the initial curve sample count; the inserted crossings determine the final stop count.
 Weights are complementary before color and render-target quantization.
 `levels` controls blur radii independently of gradient precision. Logical directions, anchors and
 coverage follow the same ramp geometry as the shader algorithm.
@@ -114,7 +113,7 @@ coverage follow the same ramp geometry as the shader algorithm.
 Neither algorithm applies a separate alpha fade. Blur can still redistribute the source's alpha.
 Extended coverage can still contain source pixels where blur intensity reaches zero. Apply a
 separate mask when that area should disappear.
-Existing graph operations also provide other visual alternatives. In the following render-declaration
+Graph operations also provide other visual alternatives. In the following render-declaration
 fragment, `rampCache` is a `BackdropFillRampCache` retained by the consuming component:
 
 ```kotlin
@@ -154,8 +153,8 @@ mask(coverage) // Fades the uniformly blurred image's coverage.
 // Alternatively: mix(original, softened, coverage) retains an original-image contribution.
 ```
 
-The examples use the existing `mask` and `mix` APIs. They change coverage or interpolate two images;
-they do not change the blur radius at each pixel. The component decides whether either appearance
+The examples use `mask` to change coverage and `mix` to interpolate two images. Both retain the
+uniform blur radius used to produce the softened image. The component decides whether either appearance
 is an appropriate substitute. See [Render graphs](render-graphs.md) for their composition semantics.
 
 ## Custom effects

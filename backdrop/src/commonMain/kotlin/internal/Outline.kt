@@ -16,3 +16,11 @@ internal fun Canvas.clipOutline(outline: Outline, path: Path?) {
         is Outline.Generic -> clipPath(outline.path)
     }
 }
+
+internal fun Canvas.clipOutline(outline: Outline, path: SurfaceClipPath) {
+    when (outline) {
+        is Outline.Rectangle -> clipRect(outline.rect)
+        is Outline.Rounded -> clipPath(path.rounded(outline.roundRect))
+        is Outline.Generic -> clipPath(outline.path)
+    }
+}

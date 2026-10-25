@@ -1,7 +1,8 @@
 # Render graphs
 
-`Modifier.renderBackdrop` records and processes receiver-owned `GraphicsLayer` objects. Graph
-operations never read rendered pixels back to the CPU. The declaration runs under snapshot
+`Modifier.drawBackdrop` creates independently sampled and composited images using receiver-owned
+`GraphicsLayer` objects. Ordinary fixed-phase surfaces use the direct [surface DSL](styles-and-decorations.md). Graph
+operations keep intermediate pixels in native graphics resources. The declaration runs under snapshot
 observation; read animated state there or in drawing callbacks to avoid recomposition.
 
 ## Declare operations in order
@@ -13,7 +14,7 @@ inside it when processing the backdrop. `group { }` starts transparent and repla
 result with its completed composite. Its alpha applies once to the whole group.
 
 ```kotlin
-Modifier.renderBackdrop(backdrop, shape = { shape }) {
+Modifier.drawBackdrop(backdrop, shape = { shape }) {
     val glass = image {
         source()
         effects { blur(16.dp.toPx()) }
@@ -72,6 +73,13 @@ lifecycle; custom operations use the public drawing, effect-registration and
 clips only the appended drawing to the visible surface. Both painting callbacks receive
 `BackdropRoom`, which describes surface size and sampling extension. Brush sizing uses the surface size, independently of storage margins.
 
+Painting defaults to `CompositingStrategy.Offscreen`, so destination-based operations such as
+Clear affect only the resulting graph image. For appended SrcOver drawing, pass
+`compositingStrategy = CompositingStrategy.Auto` to compose into the consumer without forcing a
+separate paint buffer. Import `CompositingStrategy` from `androidx.compose.ui.graphics.layer`.
+The callback owns this choice: Auto drawing must preserve the consumer's existing destination.
+Graph alpha, masks and blend operations still apply to the complete image.
+
 ```kotlin
 source()
 effects { blur(12.dp.toPx()) }
@@ -120,10 +128,9 @@ highlight(Highlight.Default, colorSource = material)
 ```
 
 Add independent branches and weight images for more transitions. To accumulate processing,
-select a preceding image with `replace` inside the next branch instead of calling `source()`.
-The custom shader interface accepts one rendered input: composite branches before processing
-that input. It cannot bind arbitrary independent layers to separate shader inputs across platforms.
-There is no readback fallback.
+select a preceding image with `replace` inside the next branch.
+The portable custom shader interface accepts one rendered input, so composite branches into one
+image before applying a custom shader.
 
 ## Primitives and presentation
 
@@ -134,7 +141,7 @@ Interior interaction light defaults to additive `BlendMode.Plus`. A decoration's
 node and resources; a zero-alpha configuration has transparent output.
 
 ```kotlin
-Modifier.renderBackdrop(backdrop, shape = { shape }, backgroundAlpha = { alpha.value }) {
+Modifier.drawBackdrop(backdrop, shape = { shape }, backgroundAlpha = { alpha.value }) {
     source()
     effects { blur(8.dp.toPx()) }
     clipSurface()
@@ -153,17 +160,55 @@ pixels in layer-storage coordinates; unused sampling padding is excluded. See
 [exported source domains](sources-and-surfaces.md#export-a-processed-surface). Foreground starts transparent and is
 drawn after children. Exported pixels exclude children unless the source itself contains them.
 
-`BackdropRenderStyle` supplies inherited `render` and `insets` producers to graph receivers.
-An explicit render declaration replaces the inherited one completely; its `NoEffects` is an empty
-render declaration that leaves the original input selected. For fixed-order appearance without an
-effect interface, use [the parameterized surface API](styles-and-decorations.md).
+`BackdropRenderStyle` supplies inherited `render` and `insets` producers to graph receivers. An
+explicit render declaration replaces the inherited one completely; its `NoEffects` is an empty
+render declaration that leaves the original input selected. For a serial effect chain and fixed
+decoration phases, use [the surface DSL](styles-and-decorations.md).
 
 ## Compose progressive blur alternatives
 
 `layeredProgressiveBlur` operates on the current image, independently blurring it at several radii
 before mixing adjacent levels. It belongs to the image DSL because it needs branches and masks;
 `effects { progressiveBlur(...) }` remains the runtime-shader algorithm in a serial effect chain.
-Both share ramp geometry and leave alpha fading to the caller. Existing `mask` and `mix` operations
+Both share ramp geometry and leave alpha fading to the caller. The `mask` and `mix` operations
 can instead fade a uniform blur or interpolate it with the original image. See
 [Effects and sampling](effects-and-sampling.md#choose-a-progressive-blur-algorithm) for caller-selected
 routes, capability requirements and examples.
+
+## Drawing outside a modifier
+
+`BackdropRenderScope` can be constructed with a `Density`, surface-pixel `Size`, `Shape` and
+`LayoutDirection`. Its optional style producer supplies inherited appearance. Build the same DSL
+used by `drawBackdrop`, then pass the declaration and requested surface bounds to
+`BackdropRenderer.resolve`. Resolution seals the declaration; build a new declaration to change
+its structure. Effect inputs may be resolved again on the existing declaration.
+
+The renderer owns its native layers and primitive resources. Keep its graphics context alive and
+use it on that context's drawing thread. Call `beginFrame` after resolution or `refresh`, and when
+source or drawing inputs change. `prepare` records a selected output without presenting it;
+`draw` presents it. Repeated draws in the same frame reuse recordings. Both accept the background
+by default, or the handles selected as `foregroundImage` and `exportedImage`. Use `outputBounds`
+to inspect a reachable image's visible bounds. Image handles belong to their declaration.
+
+```kotlin
+val declaration = BackdropRenderScope(density, size, shape, layoutDirection).apply {
+    surface {
+        effects { blur(12f) }
+    }
+}
+BackdropRenderer { graphicsContext }.use { renderer ->
+    renderer.resolve(declaration, Rect(Offset.Zero, size))
+    renderer.beginFrame()
+    renderer.draw(target) { requested -> drawSource(requested) }
+}
+```
+
+Here `target` is a `DrawScope` with the declaration's density and layout direction. The source
+callback draws the requested sampling footprint in surface coordinates. The host owns finite-source
+tiling, snapshot observation, invalidation, presentation opacity and window coordinate mapping.
+Modifier rendering additionally integrates window interaction lighting; independent declarations
+use their explicit effects and decorations. `close` releases resources and declaration references,
+is repeatable, and allows reuse after a fresh successful `resolve`. A failed resolution also
+requires a successful resolution before drawing again. Close the renderer before replacing its
+graphics context. These drawing objects expose unsignalled mutable state, so they carry no Compose
+stability annotation.

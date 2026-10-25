@@ -1,0 +1,259 @@
+package top.ltfan.backdrop
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.layer.CompositingStrategy
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotSame
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+import top.ltfan.backdrop.backdrops.layerBackdrop
+import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
+import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
+import top.ltfan.backdrop.shadow.Shadow
+import top.ltfan.backdrop.shadow.shadow
+
+class SurfaceIsolationRenderingTest {
+    @Test
+    fun expandedBufferRetainsAllFourShadowMargins() = runRenderTest {
+        setContent {
+            val source = rememberLayerBackdrop()
+            Box(Modifier.size(240.dp).background(Color.White).testTag("scene")) {
+                Box(Modifier.fillMaxSize().layerBackdrop(source).background(Color.White))
+                Box(
+                    Modifier.offset(80.dp, 80.dp)
+                        .size(80.dp)
+                        .drawBackdrop(
+                            backdrop = source,
+                            shape = { RoundedCornerShape(20.dp) },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    shadow(
+                                        Shadow(
+                                            radius = 16.dp,
+                                            offset = DpOffset.Zero,
+                                            color = Color.Black.copy(alpha = 0.8f),
+                                        ),
+                                    )
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
+                        ),
+                )
+            }
+        }
+        val pixels = onNodeWithTag("scene").captureToImage().toPixelMap()
+        for ((x, y) in listOf(68 to 120, 172 to 120, 120 to 68, 120 to 172)) {
+            assertTrue(
+                pixels[x, y].red < 0.95f,
+                "The expanded isolation buffer must retain the shadow at ($x, $y): ${pixels[x, y]}",
+            )
+        }
+    }
+
+    @Test
+    fun alphaUpdateRedrawsTheGroupWithoutMeasuringItsParent() = runRenderTest {
+        val alpha = mutableIntStateOf(50)
+        var parentMeasureCount = 0
+        setContent {
+            val backdrop = rememberCanvasBackdrop {}
+            Box(Modifier.size(80.dp).background(Color.Black).testTag("root")) {
+                Box(
+                    Modifier.layout { measurable, constraints ->
+                            parentMeasureCount++
+                            val placeable = measurable.measure(constraints)
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
+                        .size(60.dp)
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { RectangleShape },
+                            layerBlock = { this.alpha = alpha.intValue / 100f },
+                            render = {
+                                val material = image {
+                                    source()
+                                    effects {}
+                                    clipSurface()
+                                }
+                                group {
+                                    draw(material)
+                                }
+                                foreground {}
+                            },
+                        ),
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        Box(Modifier.offset(5.dp, 5.dp).size(30.dp).background(Color.White))
+                        Box(Modifier.offset(20.dp, 5.dp).size(30.dp).background(Color.White))
+                    }
+                }
+            }
+        }
+        waitForIdle()
+
+        val initialMeasureCount = parentMeasureCount
+        val initial = onNodeWithTag("root").captureToImage().toPixelMap()[25, 15]
+        assertTrue(initial.red in 0.47f..0.53f)
+
+        runOnIdle { alpha.intValue = 25 }
+        waitForIdle()
+
+        val updated = onNodeWithTag("root").captureToImage().toPixelMap()[25, 15]
+        assertNotEquals(initial.red, updated.red)
+        assertTrue(updated.red in 0.22f..0.28f)
+        assertEquals(initialMeasureCount, parentMeasureCount)
+    }
+
+    @Test
+    fun epochChangeReplacesTheLayerThatRecordsDescendantDrawing() = runRenderTest {
+        val epoch = mutableIntStateOf(0)
+        val redraw = mutableIntStateOf(0)
+        var observedLayer: GraphicsLayer? = null
+        var drawCount = 0
+        var compositionToken: Any? = null
+        setContent {
+            CompositionLocalProvider(LocalBackdropRenderEpoch provides epoch.intValue) {
+                val token = remember { Any() }
+                compositionToken = token
+                val backdrop = rememberCanvasBackdrop {}
+                Box(Modifier.size(80.dp)) {
+                    Box(
+                        Modifier.size(60.dp)
+                            .drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { RectangleShape },
+                                layerBlock = { alpha = 0.5f },
+                                render = {
+                                    val material = image {
+                                        source()
+                                        effects {}
+                                        clipSurface()
+                                    }
+                                    group {
+                                        draw(material)
+                                    }
+                                    foreground {}
+                                },
+                            ),
+                    ) {
+                        Box(
+                            Modifier.size(20.dp).drawWithContent {
+                                check(redraw.intValue >= 0)
+                                observedLayer = drawContext.graphicsLayer
+                                drawCount++
+                                drawContent()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        waitForIdle()
+        val initialLayer = requireNotNull(observedLayer)
+        val initialToken = requireNotNull(compositionToken)
+        val initialDrawCount = drawCount
+        assertEquals(CompositingStrategy.Offscreen, initialLayer.compositingStrategy)
+        assertEquals(0.5f, initialLayer.alpha)
+
+        runOnIdle { redraw.intValue++ }
+        waitForIdle()
+        assertTrue(drawCount > initialDrawCount, "The fixed-epoch redraw must record child content")
+        assertSame(initialLayer, observedLayer)
+
+        val fixedEpochDrawCount = drawCount
+        runOnIdle {
+            epoch.intValue++
+            redraw.intValue++
+        }
+        waitForIdle()
+
+        val refreshedLayer = requireNotNull(observedLayer)
+        assertTrue(drawCount > fixedEpochDrawCount, "The new epoch must record child content")
+        assertSame(initialToken, compositionToken, "The composition must survive the layer refresh")
+        assertNotSame(initialLayer, refreshedLayer)
+        assertTrue(initialLayer.isReleased)
+        assertFalse(refreshedLayer.isReleased)
+    }
+
+    @Test
+    fun groupAlphaCompositesOverlappingContentOnce() = runRenderTest {
+        val epoch = mutableIntStateOf(0)
+        setContent {
+            CompositionLocalProvider(LocalBackdropRenderEpoch provides epoch.intValue) {
+                IsolationScene()
+            }
+        }
+        waitForIdle()
+
+        val pixels = onNodeWithTag("root").captureToImage().toPixelMap()
+        val overlap = pixels[25, 15]
+        assertTrue(overlap.red in 0.47f..0.53f && overlap.green in 0.47f..0.53f)
+        assertTrue(overlap.blue in 0.47f..0.53f)
+        assertTrue(pixels[65, 15].red < 0.02f, "Pixels outside the isolated group stay black")
+
+        runOnIdle { epoch.intValue++ }
+        waitForIdle()
+        val refreshed = onNodeWithTag("root").captureToImage().toPixelMap()[25, 15]
+        assertTrue(refreshed.red in 0.47f..0.53f && refreshed.green in 0.47f..0.53f)
+        assertTrue(refreshed.blue in 0.47f..0.53f)
+    }
+
+    @Composable
+    private fun IsolationScene() {
+        val backdrop = rememberCanvasBackdrop {}
+        Box(Modifier.size(80.dp).background(Color.Black).testTag("root")) {
+            Box(
+                Modifier.size(60.dp)
+                    .drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { RectangleShape },
+                        layerBlock = { alpha = 0.5f },
+                        render = {
+                            val material = image {
+                                source()
+                                effects {}
+                                clipSurface()
+                            }
+                            group {
+                                draw(material)
+                            }
+                            foreground {}
+                        },
+                    ),
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.offset(5.dp, 5.dp).size(30.dp).background(Color.White))
+                    Box(Modifier.offset(20.dp, 5.dp).size(30.dp).background(Color.White))
+                }
+            }
+        }
+    }
+}

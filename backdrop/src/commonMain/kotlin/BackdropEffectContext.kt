@@ -8,8 +8,8 @@ import androidx.compose.ui.unit.LayoutDirection
 
 /**
  * Read-only geometry and shader access for constructing one effect stage. Properties describe the
- * active build invocation; read them inside the factory rather than retaining the context. Shader
- * cache keys are local to each stage position, so stages have independent mutable uniforms.
+ * active build invocation and remain valid for that factory call. Shader cache keys are local to
+ * each stage position, so stages have independent mutable uniforms.
  */
 @BackdropRenderDsl
 public sealed interface BackdropEffectContext : RuntimeShaderCache {

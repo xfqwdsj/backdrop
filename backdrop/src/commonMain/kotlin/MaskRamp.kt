@@ -181,7 +181,8 @@ private fun DrawScope.maskRampEnds(
 
 /**
  * Clips to the extended surface outline. Rounded corners retain their radius; custom shapes resolve
- * their outline against the extended size. Layout and content use the measured surface size.
+ * their outline against the extended size and retain their fill rule. Layout and content use the
+ * measured surface size.
  */
 public fun DrawScope.clipToGrownShape(
     shape: Shape,

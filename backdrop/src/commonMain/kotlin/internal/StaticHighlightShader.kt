@@ -19,9 +19,10 @@ internal fun staticHighlightTileShader(
     sharedDirectionCurve: Boolean = false,
     interactionCapacity: Int = 0,
     angularCapacity: Int = 0,
+    segmentGroupSize: Int = 0,
 ): String =
     nearestBandShader(
-        genericBoundaryShaderFunctions(geometry.segmentCount, segmentCapacity),
+        genericBoundaryShaderFunctions(geometry.segmentCount, segmentCapacity, segmentGroupSize),
         style,
         exclusionCount,
         colorTransform,
@@ -41,6 +42,7 @@ internal fun staticHighlightTileShader(
     sharedDirectionCurve: Boolean = false,
     interactionCapacity: Int = 0,
     angularCapacity: Int = 0,
+    segmentGroupSize: Int = 0,
 ): String =
     if (boundary.isAnalytic) {
         nearestBandShader(
@@ -64,6 +66,7 @@ internal fun staticHighlightTileShader(
             sharedDirectionCurve,
             interactionCapacity,
             angularCapacity,
+            segmentGroupSize,
         )
     }
 
@@ -102,7 +105,6 @@ private fun nearestBandShader(
               return mix(baseColor, transformed, clamp(colorResponseAmount * sample.a, 0.0, 1.0));
             }
             """
-                .trimIndent()
         }
     val colorResponseCall =
         if (colorTransform == null) ""
@@ -120,7 +122,6 @@ private fun nearestBandShader(
             float alpha = min(q, 1.0);
             return half4(fromLinearSrgb(linearColor * (q / max(alpha, 0.000001))) * alpha, alpha);
             """
-                .trimIndent()
         } else {
             """
             float baseAlpha = min(q, 1.0);
@@ -138,7 +139,6 @@ private fun nearestBandShader(
               linearColor * q * (1.0 - interactionAlpha);
             return half4(fromLinearSrgb(premultiplied / alpha) * alpha, alpha);
             """
-                .trimIndent()
         }
     val directionWidthCurveUniform =
         if (sharedDirectionCurve) "" else "uniform float4 directionWidthCurve;"
@@ -175,7 +175,6 @@ private fun nearestBandShader(
         uniform float2 directionWidthRange;
         $directionWidthCurveUniform
     """
-                .trimIndent()
     val maximumWidth =
         if (angularCapacity > 0) "angularMaximumWidthScale"
         else "max(directionWidthRange.x, directionWidthRange.y)"
@@ -190,6 +189,7 @@ uniform float2 directionVector;
 $directionUniforms
 uniform float4 falloffCurve;
 uniform float4 tileBounds;
+uniform float4 emptyBoundaryBounds;
 layout(color) uniform half4 color;
 ${style.shaderSource}
 $colorResponseShader
@@ -213,6 +213,10 @@ half4 shadeAt(float2 coord) {
   if (width <= 0.0) return half4(0.0);
   float maxBandWidth = width * $maximumWidth;
   float conservativeUpper = maxBandWidth + max(0.0001, abs(maxBandWidth) * 0.000001) + 0.5;
+  if (p.x > emptyBoundaryBounds.x + conservativeUpper &&
+      p.y > emptyBoundaryBounds.y + conservativeUpper &&
+      p.x < emptyBoundaryBounds.z - conservativeUpper &&
+      p.y < emptyBoundaryBounds.w - conservativeUpper) return half4(0.0);
   float2 nearestPosition;
   float3 nearest = nearestBoundaryWithPosition(p, nearestPosition);
   if (nearest.x >= conservativeUpper) return half4(0.0);
@@ -234,5 +238,4 @@ half4 main(float2 coord) {
   return shadeAt(coord);
 }
 """
-        .trimIndent()
 }

@@ -58,6 +58,7 @@ internal class InteractionFieldRenderer {
         ensureCapacity(maxOf(4, entries.size))
         val uniforms = uniformPackets.getOrPut(capacity) { InteractionLightUniforms(capacity) }
         if (!uniforms.prepare(entries, coordinates, scope.size)) return
+        if (!uniforms.mayCoverReceiver) return
         if (!isRuntimeShaderSupported()) {
             if (entries.isEmpty()) return
             drawSoftwareMesh(scope, entries, opacity, uniforms)

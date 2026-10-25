@@ -9,18 +9,25 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 
 /**
- * Configuration for an independently rendered image. Mutable properties must be snapshot-backed.
- * [P] is the implementing configuration type. Bounds and input sampling are deterministic within a
- * resolution. Coordinates use surface-local pixels. Input footprints include interpolation
- * neighbors.
+ * Configuration for a graph image. Mutable properties must be snapshot-backed. [P] is the
+ * implementing configuration type. Bounds and input sampling are deterministic within a resolution.
+ * Coordinates use surface-local pixels. Input footprints include interpolation neighbors.
  */
 @Stable
 public interface BackdropPrimitive<P : BackdropPrimitive<P>> {
+    /**
+     * Offscreen preserves an isolated image for destination-dependent drawing. Auto permits SrcOver
+     * composition directly into a single consumer; dependencies still retain images.
+     */
+    public val compositingStrategy: CompositingStrategy
+        get() = CompositingStrategy.Offscreen
+
     /**
      * Identifies compatible renderer state within this configuration class. Equal keys reuse the
      * renderer with updated parameters; different renderer implementations or generic type
@@ -30,10 +37,10 @@ public interface BackdropPrimitive<P : BackdropPrimitive<P>> {
         get() = Unit
 
     /** Conservative finite output bounds. Pixels outside these bounds are transparent. */
-    public fun bounds(geometry: BackdropPrimitiveGeometry): Rect
+    public fun bounds(geometry: BackdropGeometry): Rect
 
-    /** Creates one renderer for one reachable declaration in one receiving modifier. */
-    public fun createRenderer(resources: BackdropPrimitiveResources): BackdropPrimitiveRenderer<P>
+    /** Creates one primitive renderer per reachable declaration and [BackdropRenderer] instance. */
+    public fun createRenderer(resources: BackdropRenderResources): BackdropPrimitiveRenderer<P>
 }
 
 /**
@@ -45,13 +52,18 @@ public interface BackdropPrimitiveRenderer<P : BackdropPrimitive<P>> {
     /** Runs under observation after final graph storage and all input requests are resolved. */
     public fun prepare(primitive: P, context: BackdropPrimitiveContext) {}
 
-    /** Draws one isolated output. Input images and the context are valid only during this call. */
+    /**
+     * Draws within the output bounds using this primitive’s compositing contract. Inputs and the
+     * context are valid only during this call.
+     */
     public fun draw(scope: DrawScope, primitive: P, context: BackdropPrimitiveDrawContext)
 
     /**
      * Drops owned-layer references for a display refresh. The engine releases owned layers after
-     * this callback and keeps shader-cache entries. Prepare runs before the next draw. A stateless
-     * renderer implements an empty callback.
+     * this callback and keeps shader-cache entries. Resource pools invalidate their entry values
+     * after this callback; retain the pool objects and drop separately cached value references.
+     * Prepare runs before the next draw. An implementation with no separate transient state uses an
+     * empty callback.
      */
     public fun refresh()
 
@@ -70,7 +82,7 @@ public data class BackdropPrimitiveInput(
 
 /** Geometry used to declare output bounds, independently of storage padding. */
 @BackdropRenderDsl
-public sealed interface BackdropPrimitiveGeometry {
+public sealed interface BackdropGeometry {
     public val density: Density
     public val size: Size
     public val shape: Shape
@@ -79,26 +91,26 @@ public sealed interface BackdropPrimitiveGeometry {
     public val surfaceBounds: Rect
 }
 
-/** Read-only preparation context. Read values during the invocation rather than retaining it. */
+/** Read-only preparation context whose values are valid during the active invocation. */
 @BackdropRenderDsl
-public sealed interface BackdropPrimitiveContext : BackdropPrimitiveGeometry {
+public sealed interface BackdropPrimitiveContext : BackdropGeometry {
     public val extension: BackdropExtension
     public val outputBounds: Rect
     public val requestedBounds: Rect
     public val inputBounds: List<Rect>
 }
 
-/** Same-frame access to declared dependencies. No rendered pixels are read back. */
+/** Same-frame access to declared dependencies through native graphics resources. */
 @BackdropRenderDsl
 public sealed interface BackdropPrimitiveDrawContext : BackdropPrimitiveContext {
-    public fun input(index: Int): BackdropPrimitiveImage
+    public fun input(index: Int): BackdropImageInput
 }
 
 /**
  * A borrowed, read-only image view. Draw it in surface coordinates or use it as one runtime-shader
- * input. The view is valid only in the active primitive draw invocation.
+ * input. The view is valid only in the active renderer draw invocation.
  */
-public sealed interface BackdropPrimitiveImage {
+public sealed interface BackdropImageInput {
     public val bounds: Rect
 
     public fun draw(scope: DrawScope)
@@ -116,15 +128,27 @@ public sealed interface BackdropPrimitiveImage {
 
 /**
  * Per-instance resources. Layers created here belong to this receiver and are automatically
- * released on omission, renderer-key replacement, refresh or detach, including failed
- * construction/preparation. Refresh releases layers after [BackdropPrimitiveRenderer.refresh] drops
- * its references and keeps shader-cache entries. A renderer may release an owned layer earlier;
+ * released on omission, renderer-key replacement, refresh or [BackdropRenderer.close], including
+ * failed construction/preparation. Refresh releases layers after
+ * [BackdropPrimitiveRenderer.refresh] or [BackdropDecorationRenderer.refresh] drops layer
+ * references and keeps shader-cache entries. A renderer may release an owned layer earlier;
  * borrowed and already released layers are rejected.
  */
-public sealed interface BackdropPrimitiveResources : RuntimeShaderCache {
+public sealed interface BackdropRenderResources : RuntimeShaderCache {
     public fun createGraphicsLayer(): GraphicsLayer
 
     public fun releaseGraphicsLayer(layer: GraphicsLayer)
+
+    /**
+     * Creates a pool owned by this renderer. Entry factories receive isolated resource owners;
+     * [dispose] releases value-owned resources before automatic layer and shader cleanup. Keep the
+     * pool in the renderer and update retained values when parameters change. Display refresh
+     * invalidates values automatically while preserving each retained key's shader namespace.
+     */
+    public fun <K : Any, V : Any> resourcePool(
+        dispose: (V) -> Unit = {},
+        create: BackdropRenderResources.(K) -> V,
+    ): BackdropResourcePool<K, V>
 }
 
 /** Draws a primitive at the declaration position, with external alpha and blend applied once. */

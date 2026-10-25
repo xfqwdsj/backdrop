@@ -58,7 +58,7 @@ import top.ltfan.backdrop.internal.colorUniformComponents
 import top.ltfan.backdrop.internal.setHdrColor
 import top.ltfan.backdrop.internal.staticHighlightTileShader
 
-class HdrRenderingTest : SkikoGraphicsTest() {
+class HdrRenderingTest : PlatformGraphicsTest() {
     @Test
     fun floatSurfacePreservesHdrBaseline() {
         assertPixel(floatArrayOf(2f, 2f, 2f, 1f), render(floatArrayOf(2f, 2f, 2f, 1f)) {})
@@ -236,8 +236,7 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                 base,
                 sample,
             )
-        // Use the renderer's unclamped extended-sRGB conversion instead of Compose's Color.convert,
-        // which quantizes these extended channels more coarsely in the HDR path.
+        // The renderer's extended-sRGB conversion retains precision in these HDR channels.
         val expectedBase = base.toHighlightLinearExtendedSrgb()
         val actual = result.toHighlightLinearExtendedSrgb()
         val expectedPeak = maxOf(expectedBase.red, expectedBase.green, expectedBase.blue)
@@ -633,9 +632,8 @@ class HdrRenderingTest : SkikoGraphicsTest() {
                 surface.canvas.restore()
             }
             Bitmap().use { bitmap ->
-                // Skiko's RGBA_F32 ordinal currently maps to native RGB_F16F16F16x; recheck when
-                // Skiko is updated.
-                // Read the correctly mapped RGBA_F16 format, including alpha.
+                // RGBA_F16 retains alpha in native readback; the RGBA_F32 mapping uses
+                // RGB_F16F16F16x.
                 val readWidth = if (wholeSurface) 16 else 1
                 val readHeight = if (wholeSurface) 16 else 1
                 val readX = if (wholeSurface) 0 else 8

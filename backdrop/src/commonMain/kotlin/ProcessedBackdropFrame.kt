@@ -8,7 +8,7 @@ internal class ProcessedBackdropFrame {
     var requested: Boolean = false
         private set
 
-    var image: BackdropPrimitiveImage? = null
+    var image: BackdropImageInput? = null
         private set
 
     var interactionLights: List<InteractionLightEntry> = emptyList()
@@ -28,7 +28,7 @@ internal class ProcessedBackdropFrame {
         receiverCoordinates = null
     }
 
-    fun publish(image: BackdropPrimitiveImage) {
+    fun publish(image: BackdropImageInput) {
         if (requested) this.image = image
     }
 

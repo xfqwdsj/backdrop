@@ -2,7 +2,8 @@
 
 ## Scope and navigation
 
-This repository ships one library module, `:backdrop`. Keep demo, catalog, and app modules out of it.
+This repository publishes one library module, `:backdrop`. The non-published modules under
+`benchmarks/` are performance harnesses. Keep product demos and catalogs out of this repository.
 Backdrop is an independent fork: upstream code is reference material, not this project's specification.
 
 Read [the documentation guide](docs/README.md) for the relevant subsystem before changing behavior.
@@ -20,10 +21,19 @@ duplicated documentation inventories.
   Put probes, clones, and temporary copies under a temporary directory, never in this repository.
 - For stability, API shape, or consumer skipping, use a separate consumer probe module. An in-module
   compiler report cannot establish cross-module behavior. Generate Compose metrics in a temporary copy.
-- Before considering a change done, run `./gradlew :backdrop:spotlessCheck`, IDE lint at warning
-  severity on touched files, and
-  `./gradlew :backdrop:assemble :backdrop:jvmTest --no-build-cache --rerun-tasks`.
+- For ordinary local iterations, run `./gradlew :verify`.
+  Before completing rendering, platform, API, or test-infrastructure changes, run
+  IDE lint at warning severity on touched files and
+  `./gradlew :verifyConnected` with a connected Android device or emulator.
+  CI runs JVM tests and the same Android device tests on an AGP-managed virtual device on Ubuntu.
   Report skipped, incomplete, or unavailable checks explicitly.
+- Shared rendering tests belong in `renderTest`, consumed by JVM and Android device tests.
+  Keep Skiko-only and Android-only behavior in their platform source sets; use expect/actual for
+  small backend differences while retaining common assertions.
+- Performance benchmarks are separate from correctness tests. Run JVM JMH for declaration,
+  resolution and allocation baselines; use the Android release harness for device frame timing.
+  Record environment, warm-up, workload and raw results. Do not equate JVM capture time or logical
+  layer pixels with device frame time, GPU memory or displayed FPS.
 - Do not push or rewrite published history. The owner pushes, including to upstream.
 
 ## Public API and source conventions
@@ -46,7 +56,9 @@ duplicated documentation inventories.
 - Comments and KDoc are English and describe current behavior positively. Explain the concrete
   reason for surprising behavior; omit change history and ungrounded negative claims. Overviews
   describe responsibilities and contracts rather than inventories of current features or internals.
-  Keep member-specific details with the member that defines them.
+  Keep member-specific details with the member that defines them. Repository prose describes
+  repository-owned contracts: omit local identifiers, ignored-file contents and external
+  investigation details so documentation and published sources remain portable.
 - Type-name factories copy the name of the type they construct. An exact match between the function
   name and declared return type name needs no naming suppression. When the names differ, verify
   that the returned type is compatible with the named type, then locally suppress `FunctionName`.

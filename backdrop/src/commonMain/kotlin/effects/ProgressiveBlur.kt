@@ -162,8 +162,12 @@ private val ProgressiveBlurHorizontalShader: String by lazy {
 /**
  * A separable Gaussian whose radius follows the shared ramp curve at each pixel. Intensity is
  * derived from the coordinate so both passes share the ramp without an extra shader input.
+ * Successive Gaussian quotients replace per-tap exponentials while retaining paired sample
+ * positions and kernel support. Each blurred pixel initializes the recurrence with two
+ * exponentials. See
+ * [Incremental Computation of the Gaussian](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-40-incremental-computation-gaussian).
  */
-private fun progressiveBlurShader(vertical: Boolean): String =
+internal fun progressiveBlurShader(vertical: Boolean): String =
     """
 uniform shader content;
 
@@ -193,6 +197,9 @@ vec4 blur(vec2 coord, float radius) {
   vec4 result = vec4(0.0);
   float weightSum = 0.0;
 
+  // Successive Gaussian ratios differ by a constant factor: only two exponentials per pixel.
+  float ratio = exp(-inv2Sigma2);
+  float ratioStep = exp(-2.0 * inv2Sigma2);
   float wPrev = 1.0;
   result += wPrev * content.eval(coord);
   weightSum += wPrev;
@@ -200,8 +207,10 @@ vec4 blur(vec2 coord, float radius) {
   for (float i = 1.0; i < maxRadius; i += 2.0) {
     if (i >= r) { break; }
 
-    float w1 = wPrev * exp(-(2.0 * (i - 1.0) + 1.0) * inv2Sigma2);
-    float w2 = w1 * exp(-(2.0 * i + 1.0) * inv2Sigma2);
+    float w1 = wPrev * ratio;
+    ratio *= ratioStep;
+    float w2 = w1 * ratio;
+    ratio *= ratioStep;
 
     float weight = w1 + w2;
 
@@ -215,7 +224,7 @@ vec4 blur(vec2 coord, float radius) {
   }
 
   if (r < maxRadius && mod(r, 2.0) == 1.0) {
-    float w = wPrev * exp(-(2.0 * (r - 1.0) + 1.0) * inv2Sigma2);
+    float w = wPrev * ratio;
 
     vec2 offset = ${if (vertical) "vec2(0.0, r)" else "vec2(r, 0.0)"};
 

@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -21,7 +20,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import top.ltfan.backdrop.BackdropCurve
-import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.BackdropRenderResources
 import top.ltfan.backdrop.ProcessedBackdropFrame
 import top.ltfan.backdrop.RuntimeShaderCacheImpl
 import top.ltfan.backdrop.highlightBandProfile
@@ -29,7 +28,6 @@ import top.ltfan.backdrop.interaction.InteractionLightUniforms
 import top.ltfan.backdrop.interaction.interactionFieldResponse
 import top.ltfan.backdrop.interaction.interactionLightWeight
 import top.ltfan.backdrop.interaction.isFiniteForRendering
-import top.ltfan.backdrop.internal.blur
 import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.internal.highlightCurveVariant
 import top.ltfan.backdrop.internal.setRuntimeShader
@@ -44,7 +42,7 @@ internal fun boundaryUniformCapacity(candidateCount: Int): Int {
     return capacity
 }
 
-private class StaticShaderSignature(
+private data class StaticShaderSignature(
     val geometryKey: String,
     val segmentCapacity: Int,
     val falloffVariant: String,
@@ -92,7 +90,7 @@ private data class CpuFallbackKey(
 )
 
 /** Generates contour pixels into receiver-owned layers. */
-internal class HighlightRenderer(private val resources: BackdropPrimitiveResources) {
+internal class HighlightRenderer(private val resources: BackdropRenderResources) {
     private var processedFrame = ProcessedBackdropFrame()
     private var highlightLayer: GraphicsLayer? = null
     private var boundaryOutline: Outline? = null
@@ -108,10 +106,7 @@ internal class HighlightRenderer(private val resources: BackdropPrimitiveResourc
     private var interactionCapacity = 0
     private val interactionUniforms = mutableMapOf<Int, InteractionLightUniforms>()
 
-    private val paint =
-        Paint().apply {
-            style = PaintingStyle.Stroke
-        }
+    private val paint = Paint()
     private var clipPath: Path? = null
 
     private val runtimeShaderCache = RuntimeShaderCacheImpl()
@@ -193,6 +188,7 @@ internal class HighlightRenderer(private val resources: BackdropPrimitiveResourc
         val colorTransform = response.transform.takeIf { sourceImage != null }
         val colorTransformSource = colorTransform?.shaderSource.orEmpty()
         val segmentCapacity = boundaryUniformCapacity(geometry.segmentCount)
+        val segmentGroupSize = if (!geometry.isAnalytic && segmentCapacity >= 32) 8 else 0
         val falloffVariant = highlightCurveVariant(highlight.falloff)
         val styleSource = style.shaderSource
         val sampledColor = sourceImage != null
@@ -243,16 +239,29 @@ internal class HighlightRenderer(private val resources: BackdropPrimitiveResourc
                     sharedDirectionCurve,
                     interactionCapacity,
                     angularCapacity,
+                    segmentGroupSize,
                 )
             }
-        paint.style = PaintingStyle.Fill
-        paint.blur(0f)
         geometry.configureShader(shader)
+        val emptyBounds = geometry.contourFreeBounds
+        shader.setFloatUniform(
+            "emptyBoundaryBounds",
+            emptyBounds.left,
+            emptyBounds.top,
+            emptyBounds.right,
+            emptyBounds.bottom,
+        )
         if (!geometry.isAnalytic) {
             shader.setFloatUniform("segments", geometry.paddedSegments(segmentCapacity))
             shader.setFloatUniform(
                 "segmentNormalSigns",
                 geometry.paddedNormalSigns(segmentCapacity),
+            )
+        }
+        if (segmentGroupSize > 0) {
+            shader.setFloatUniform(
+                "segmentGroupBounds",
+                geometry.segmentGroupBounds(segmentCapacity, segmentGroupSize),
             )
         }
         shader.setFloatUniform("tileBounds", 0f, 0f, size.width, size.height)
@@ -544,7 +553,6 @@ internal class HighlightRenderer(private val resources: BackdropPrimitiveResourc
             it.renderEffect = null
             resources.releaseGraphicsLayer(it)
             paint.setRuntimeShader(null)
-            paint.blur(0f)
         }
         highlightLayer = null
     }

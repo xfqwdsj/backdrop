@@ -33,7 +33,7 @@ Every tile policy preserves transparency inside the source.
 val backdrop = rememberLayerBackdrop(tileMode = TileMode.Decal)
 ```
 
-For procedural content, draw the entire requested region rather than assuming it equals `size`:
+For procedural content, draw the entire requested region, which can extend beyond `size`:
 
 ```kotlin
 val backdrop = rememberCanvasBackdrop {
@@ -50,16 +50,38 @@ See [BackdropDrawScope](../backdrop/src/commonMain/kotlin/BackdropDrawScope.kt) 
 
 ## Draw a surface
 
-`Modifier.renderBackdrop` maps the source into receiver coordinates and evaluates an explicit
-[render graph](render-graphs.md). Select a processed image with `replace(image)`, composite images with `draw(image)`,
-and paint with `paint` or `paintSurface`. Call `source()` followed by
-`drawWithContent { drawContent, room -> ... }` to customize source drawing before processing;
-invoke `drawContent()` inside that callback to include the source. These drawing operations receive
-surface-local coordinates and `BackdropRoom`, including the full sampling extension.
+`Modifier.drawBackdrop` maps the source into receiver coordinates and evaluates one declaration:
+
+```kotlin
+Modifier.drawBackdrop(backdrop, shape = { shape }) {
+    surface {
+        effects { blur(12.dp.toPx()) }
+        fill(tint)
+        highlight(Highlight.Ambient)
+    }
+    val overlay = layer {
+        fill(Color.White.copy(alpha = .1f))
+        highlight(Highlight.Ambient)
+    }
+    draw(overlay)
+}
+```
+
+A fixed `surface` declaration processes its selected source with one serial effect chain. Surface paint and interior lighting draw before
+children; contour highlights and inner shadows draw after them. Unset appearance slots inherit
+[styles](styles-and-decorations.md). Background opacity below one uses one grouped output so
+alpha applies once. A stateful decoration owns only the construction resources its algorithm needs.
+
+The same DSL also exposes [image operations](render-graphs.md). Select a processed image with
+`replace(image)`, composite images with `draw(image)`, and paint with `paint` or `paintSurface`.
+Call `source()` followed by `drawWithContent { drawContent, room -> ... }` to customize source
+drawing before processing; invoke `drawContent()` inside that callback to include the source. These
+drawing operations receive surface-local coordinates and `BackdropRoom`, including the full sampling
+extension.
 
 The selected result draws behind children. Children retain the original shape clip.
 `foreground { ... }` draws an explicit transparent-based result above them. Primitive placement is
-part of this declaration, so highlights and shadows have no hidden order.
+explicitly ordered by this declaration.
 
 The modifier isolates compositing offscreen. `backgroundAlpha` applies once to the complete
 background result; children and foreground have independent opacity. Compositing bounds include visible

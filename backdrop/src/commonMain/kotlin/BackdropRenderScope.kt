@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import top.ltfan.backdrop.effects.runtimeShaderEffect
@@ -17,7 +18,7 @@ import top.ltfan.dslutilities.DslBuilder
 import top.ltfan.dslutilities.DslList
 import top.ltfan.dslutilities.DslValue
 
-/** A result within one render declaration. Its receiving node owns the rendering resources. */
+/** An image handle within one declaration. Its evaluating renderer owns the rendering resources. */
 @Immutable
 public class BackdropImage internal constructor(internal val owner: Any, internal val index: Int)
 
@@ -59,19 +60,75 @@ internal constructor(
     size: Size,
     shape: Shape,
     layoutDirection: LayoutDirection,
-    internal val resolveStyle: () -> BackdropStyle = { BackdropStyle.Default },
-) : BackdropImageScope(density, fontScale, size, shape, layoutDirection) {
+    resolveStyle: () -> BackdropStyle = { BackdropStyle.Default },
+    interactionLightsPresent: () -> Boolean = { true },
+) :
+    BackdropImageScope(
+        density,
+        fontScale,
+        size,
+        shape,
+        layoutDirection,
+        interactionLightsPresent = interactionLightsPresent,
+        resolveStyle = resolveStyle,
+    ) {
+    /**
+     * Creates an independent surface-pixel declaration for [BackdropRenderer]. [style] supplies
+     * inherited appearance at use time. Modifier rendering manages window interaction lighting;
+     * independent declarations use caller-supplied optical and decoration inputs.
+     */
+    public constructor(
+        density: Density,
+        size: Size,
+        shape: Shape,
+        layoutDirection: LayoutDirection,
+        style: () -> BackdropStyle = { BackdropStyle.Default },
+    ) : this(
+        density.density,
+        density.fontScale,
+        size,
+        shape,
+        layoutDirection,
+        resolveStyle = style,
+        interactionLightsPresent = { false },
+    ) {
+        require(
+            density.density.isFinite() &&
+                density.density > 0f &&
+                density.fontScale.isFinite() &&
+                density.fontScale > 0f,
+        ) {
+            "Density and font scale must be finite and positive"
+        }
+        require(
+            size.width.isFinite() &&
+                size.height.isFinite() &&
+                size.width >= 0f &&
+                size.height >= 0f,
+        ) {
+            "Surface size must be finite and non-negative"
+        }
+    }
+
     internal var styleInsets: (() -> BackdropInsets)? = null
-    internal var foregroundImage: BackdropImage? = null
-    internal var exportedImage: BackdropImage? = null
+    /** Optional foreground selected by [foreground], drawn separately from the background. */
+    public var foregroundImage: BackdropImage? = null
+        private set
+
+    /**
+     * Optional image selected by [export]; the host owns presentation opacity and source export.
+     */
+    public var exportedImage: BackdropImage? = null
+        private set
 
     public fun foreground(block: BackdropImageScope.() -> Unit) {
         foregroundImage = image(block)
     }
 
     /**
-     * Selects [image] for export with the receiver's background alpha applied. Exported source
-     * bounds are rounded outward to whole layer pixels and exclude unused sampling padding.
+     * Selects [image] as the export output. Modifier hosts apply background alpha and publish
+     * outward-rounded, pixel-aligned source bounds without sampling padding. Independent renderer
+     * hosts own export presentation and source boundaries.
      */
     public fun export(image: BackdropImage = current) {
         checkImage(image)
@@ -88,14 +145,42 @@ public open class BackdropImageScope
 internal constructor(
     density: Float,
     fontScale: Float,
-    public val size: Size,
+    size: Size,
     public val shape: Shape,
     public val layoutDirection: LayoutDirection,
     internal val graph: MutableList<RenderImageNode> = mutableListOf(),
-    private val owner: BackdropGraphOwner = BackdropGraphOwner(),
+    private val owner: BackdropGraphOwner = BackdropGraphOwner(size),
     initial: BackdropImage? = null,
+    private val interactionLightsPresent: () -> Boolean = { true },
+    internal val resolveStyle: () -> BackdropStyle = { BackdropStyle.Default },
 ) {
+    /** Measured surface pixels; declaration reads make graph structure depend on resizing. */
+    public val size: Size
+        get() {
+            if (owner.declaring) owner.readsSize = true
+            return owner.size
+        }
+
+    internal val readsSize: Boolean
+        get() = owner.readsSize
+
+    internal fun updateSize(size: Size) {
+        owner.size = size
+    }
+
+    internal fun surfaceScope(): BackdropSurfaceScope =
+        BackdropSurfaceScope(owner.size, density, shape, layoutDirection, this)
+
     public val density: Density = Density(density, fontScale)
+    /**
+     * Whether the receiver's provider contains light sources in its Compose window. Reading this
+     * during declaration observes source membership; source movement retains the declaration.
+     * Registered sources remain present throughout their release animation, including zero
+     * intensity.
+     */
+    public val hasInteractionLights: Boolean
+        get() = interactionLightsPresent()
+
     /** The original input, independent of the selected result. */
     public val input: BackdropImage =
         if (graph.isEmpty()) add(RenderImageNode.Source) else reference(0)
@@ -120,16 +205,22 @@ internal constructor(
             BackdropImageScope(
                 density.density,
                 density.fontScale,
-                size,
+                owner.size,
                 shape,
                 layoutDirection,
                 graph,
                 owner,
                 add(RenderImageNode.Empty),
+                interactionLightsPresent,
+                resolveStyle,
             )
         nested.block()
         return nested.current
     }
+
+    /** Captures an independent layer without changing the surrounding result. */
+    public fun layer(block: BackdropImageScope.() -> Unit): BackdropImage =
+        add(RenderImageNode.Isolation(image(block).index))
 
     /** Replaces current with a transparent-based group, applying alpha once to that group. */
     public fun group(alpha: Float = 1f, block: BackdropImageScope.() -> Unit) {
@@ -148,12 +239,33 @@ internal constructor(
                 )
     }
 
-    public fun paint(draw: @BackdropRenderDsl DrawScope.(BackdropRoom) -> Unit) {
-        current = add(RenderImageNode.Paint(current.index, draw))
+    /**
+     * Appends drawing to current. [CompositingStrategy.Offscreen] isolates destination-based
+     * blending within this image. Select [CompositingStrategy.Auto] for SrcOver drawing that can
+     * compose directly into its consumer; graph alpha and blend operations still apply as a group.
+     */
+    public fun paint(
+        compositingStrategy: CompositingStrategy = CompositingStrategy.Offscreen,
+        draw: @BackdropRenderDsl DrawScope.(BackdropRoom) -> Unit,
+    ) {
+        current =
+            add(
+                RenderImageNode.Paint(
+                    current.index,
+                    draw,
+                    compositingStrategy = compositingStrategy,
+                ),
+            )
     }
 
-    public fun paintSurface(draw: @BackdropRenderDsl DrawScope.(BackdropRoom) -> Unit) {
-        current = add(RenderImageNode.Paint(current.index, draw, true))
+    /**
+     * Appends [paint] drawing clipped to the visible surface, with the same compositing contract.
+     */
+    public fun paintSurface(
+        compositingStrategy: CompositingStrategy = CompositingStrategy.Offscreen,
+        draw: @BackdropRenderDsl DrawScope.(BackdropRoom) -> Unit,
+    ) {
+        current = add(RenderImageNode.Paint(current.index, draw, true, compositingStrategy))
     }
 
     /** The callback controls input drawing; omit drawContent to replace it. */
@@ -168,20 +280,21 @@ internal constructor(
         current = add(RenderImageNode.DrawWithContent(image.index, sampling, block))
     }
 
-    public fun fill(color: Color): Unit = paintSurface { room ->
-        drawRect(
-            color,
-            room.extension.originInNode,
-            Size(
-                room.size.width + room.extension.left + room.extension.right,
-                room.size.height + room.extension.top + room.extension.bottom,
-            ),
-        )
-    }
+    public fun fill(color: Color): Unit =
+        paintSurface(CompositingStrategy.Auto) { room ->
+            drawRect(
+                color,
+                room.extension.originInNode,
+                Size(
+                    room.size.width + room.extension.left + room.extension.right,
+                    room.size.height + room.extension.top + room.extension.bottom,
+                ),
+            )
+        }
 
     public fun fill(brush: Brush, alpha: Float = 1f) {
         requireAlpha(alpha)
-        paintSurface { room ->
+        paintSurface(CompositingStrategy.Auto) { room ->
             drawRect(
                 brush,
                 room.extension.originInNode,
@@ -290,7 +403,7 @@ internal constructor(
         )
     }
 
-    /** Replaces current with premultiplied interpolation, rather than SrcOver stacking. */
+    /** Replaces current with the premultiplied interpolation of the two images. */
     public fun mix(first: BackdropImage, second: BackdropImage, weight: BackdropImage) {
         checkImage(first)
         checkImage(second)
@@ -322,6 +435,18 @@ internal constructor(
         mix(first, second, coverage)
     }
 
+    internal fun deferredPrimitive(
+        inputs: List<BackdropImage>,
+        resolve: (BackdropGeometry) -> RenderImageNode.Primitive<*>,
+    ) {
+        inputs.forEach(::checkImage)
+        drawPrimitive(
+            RenderImageNode.DeferredPrimitive(inputs.toList(), resolve),
+            1f,
+            BlendMode.SrcOver,
+        )
+    }
+
     internal fun drawPrimitive(node: RenderImageNode, alpha: Float, blendMode: BlendMode) {
         draw(add(node), alpha, blendMode)
     }
@@ -336,6 +461,10 @@ internal constructor(
 
     internal fun checkImage(image: BackdropImage) {
         checkDeclaration()
+        validateImage(image)
+    }
+
+    internal fun validateImage(image: BackdropImage) {
         require(image.owner === owner && image.index in graph.indices) {
             "Image references belong to one render declaration"
         }
@@ -354,6 +483,7 @@ internal fun requireAlpha(alpha: Float) {
     require(alpha.isFinite() && alpha in 0f..1f) { "Alpha must be finite and in 0..1" }
 }
 
-internal class BackdropGraphOwner {
+internal class BackdropGraphOwner(var size: Size) {
     var declaring: Boolean = true
+    var readsSize: Boolean = false
 }

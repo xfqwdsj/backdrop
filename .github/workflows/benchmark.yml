@@ -1,0 +1,108 @@
+name: JVM performance baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or tag to measure (blank selects the workflow commit).
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      release-id:
+        required: false
+        type: number
+        default: 0
+      release-tag:
+        required: false
+        type: string
+        default: ''
+    secrets:
+      GRADLE_ENCRYPTION_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: JMH time and allocation
+    runs-on: ubuntu-latest
+    outputs:
+      report: ${{ steps.report.outputs.markdown }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: Record environment and discover workloads
+        run: |
+          mkdir -p benchmark-environment
+          java -version 2> benchmark-environment/java.txt
+          uname -a > benchmark-environment/system.txt
+          lscpu > benchmark-environment/cpu.txt
+          git rev-parse HEAD > benchmark-environment/commit.txt
+          test -z "$(git status --porcelain --untracked-files=no)"
+          ./gradlew :benchmarkList --console=plain > benchmark-environment/workloads.txt
+      - name: Run isolated JVM benchmarks
+        run: ./gradlew :benchmark -PbenchmarkSmoke=false
+      - name: Generate validated performance table
+        id: report
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { readFileSync, writeFileSync } = await import('node:fs');
+            const { pathToFileURL } = await import('node:url');
+            const { benchmarkReport } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes.mjs`).href);
+            const results = JSON.parse(readFileSync('benchmarks/jvm/build/reports/benchmarks/allocation/jvmBenchmark.json', 'utf8'));
+            const listing = readFileSync('benchmark-environment/workloads.txt', 'utf8');
+            const commit = readFileSync('benchmark-environment/commit.txt', 'utf8').trim();
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const markdown = benchmarkReport(results, listing, { commit, runUrl: run });
+            writeFileSync('benchmark-environment/performance.md', markdown + '\n');
+            core.setOutput('markdown', markdown);
+            await core.summary.addRaw(markdown).write();
+      - name: Upload baseline and environment
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jvm-performance-baseline
+          path: |
+            benchmarks/jvm/build/reports/benchmarks/**
+            benchmark-environment/**
+          overwrite: true
+          retention-days: 90
+
+  release-notes:
+    name: Update release performance section
+    needs: benchmark
+    if: ${{ always() && inputs.release-id > 0 }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        env:
+          RELEASE_ID: ${{ inputs.release-id }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          BENCHMARK_STATUS: ${{ needs.benchmark.result }}
+          BENCHMARK_REPORT: ${{ needs.benchmark.outputs.report }}
+        with:
+          script: |
+            const { pathToFileURL } = await import('node:url');
+            const { updatePerformance } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes.mjs`).href);
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const content = process.env.BENCHMARK_STATUS === 'success' && process.env.BENCHMARK_REPORT
+              ? process.env.BENCHMARK_REPORT
+              : `Benchmark execution did not complete. [Workflow details and available artifacts](${run}).`;
+            await updatePerformance(github, context.repo, Number(process.env.RELEASE_ID), content, process.env.RELEASE_TAG);

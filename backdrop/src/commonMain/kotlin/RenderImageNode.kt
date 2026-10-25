@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 
 internal sealed interface RenderImageNode {
     data object Source : RenderImageNode
@@ -17,6 +18,8 @@ internal sealed interface RenderImageNode {
         val draw: DrawScope.(DrawScope.() -> Unit, BackdropRoom) -> Unit,
     ) : RenderImageNode
 
+    data class Isolation(val input: Int) : RenderImageNode
+
     data class SurfaceClip(val input: Int) : RenderImageNode
 
     data class ShapeClip(val input: Int, val shape: Shape) : RenderImageNode
@@ -25,6 +28,7 @@ internal sealed interface RenderImageNode {
         val input: Int?,
         val draw: DrawScope.(BackdropRoom) -> Unit,
         val surfaceClip: Boolean = false,
+        val compositingStrategy: CompositingStrategy = CompositingStrategy.Offscreen,
     ) : RenderImageNode
 
     data class Process(val input: Int, val effects: BackdropEffectScope.() -> Unit) :
@@ -47,6 +51,11 @@ internal sealed interface RenderImageNode {
     data class Clip(val input: Int, val path: Path) : RenderImageNode
 
     data class Transform(val input: Int, val matrix: Matrix) : RenderImageNode
+
+    data class DeferredPrimitive(
+        val possibleInputs: List<BackdropImage>,
+        val resolve: (BackdropGeometry) -> Primitive<*>,
+    ) : RenderImageNode
 
     data class Primitive<P : BackdropPrimitive<P>>(
         val primitive: P,

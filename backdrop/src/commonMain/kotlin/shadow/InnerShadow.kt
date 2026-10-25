@@ -7,18 +7,19 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
+import top.ltfan.backdrop.BackdropGeometry
 import top.ltfan.backdrop.BackdropImageScope
 import top.ltfan.backdrop.BackdropPrimitive
 import top.ltfan.backdrop.BackdropPrimitiveDrawContext
-import top.ltfan.backdrop.BackdropPrimitiveGeometry
 import top.ltfan.backdrop.BackdropPrimitiveRenderer
-import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.BackdropRenderResources
 import top.ltfan.backdrop.primitive
 
 /** Parameters for a shape inner shadow image. */
@@ -93,13 +94,15 @@ public fun BackdropImageScope.innerShadow(
 
 private data class InnerShadowPrimitive(val config: InnerShadow.Config) :
     BackdropPrimitive<InnerShadowPrimitive> {
-    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect = geometry.surfaceBounds
+    override val compositingStrategy: CompositingStrategy = CompositingStrategy.Auto
+
+    override fun bounds(geometry: BackdropGeometry): Rect = geometry.surfaceBounds
 
     override fun createRenderer(
-        resources: BackdropPrimitiveResources,
+        resources: BackdropRenderResources,
     ): BackdropPrimitiveRenderer<InnerShadowPrimitive> = Renderer(resources)
 
-    private class Renderer(resources: BackdropPrimitiveResources) :
+    private class Renderer(resources: BackdropRenderResources) :
         BackdropPrimitiveRenderer<InnerShadowPrimitive> {
         private val renderer = ShadowRenderer(resources)
 

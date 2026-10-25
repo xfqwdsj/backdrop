@@ -1,44 +1,135 @@
 name: Publish
+
 on:
   release:
     types: [ published ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
 jobs:
-  publish:
-    name: Release build and publish
-    runs-on: macOS-latest
+  prepare:
+    name: Prepare release contract
+    runs-on: ubuntu-latest
     permissions:
-      packages: write
+      contents: write
+    outputs:
+      sha: ${{ steps.contract.outputs.sha }}
+      tag: ${{ steps.contract.outputs.tag }}
     steps:
-      - name: Check out code
-        uses: actions/checkout@v7
-      - name: Set up JDK
-        uses: actions/setup-java@v6
+      - uses: actions/checkout@v7
         with:
-          distribution: temurin
-          java-version: 25
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Ensure performance placeholder and validate release version
+        id: contract
+        uses: actions/github-script@v9
         with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-      - name: Set gradlew executable
-        run: chmod +x gradlew
-      - name: Set up node
-        run: |
-          ./gradlew kotlinNodeJsSetup kotlinWasmNodeJsSetup kotlinNpmInstall kotlinWasmNpmInstall
-      - name: Run tests
-        run: ./gradlew allTests
-      - name: Publish to GitHub Packages
-        continue-on-error: true
-        run: |
-          ./gradlew publishAllPublicationsToGitHubPackagesRepository --continue
-      - name: Publish to Maven Central
-        run: |
-          ./gradlew publishToMavenCentral
+          script: |
+            const { readFileSync } = await import('node:fs');
+            const { execFileSync } = await import('node:child_process');
+            const { pathToFileURL } = await import('node:url');
+            const { updatePerformance, checkVersion } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes.mjs`).href);
+            const release = await updatePerformance(github, context.repo, context.payload.release.id, undefined, context.payload.release.tag_name);
+            if (release.draft) throw new Error('The release must remain published.');
+            checkVersion(release.tag_name, readFileSync('gradle.properties', 'utf8'));
+            const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+            const tagSha = execFileSync('git', ['rev-parse', `refs/tags/${release.tag_name}^{commit}`], { encoding: 'utf8' }).trim();
+            if (sha !== tagSha) throw new Error('The published tag moved after the release event.');
+            core.setOutput('sha', sha);
+            core.setOutput('tag', release.tag_name);
+
+  tests:
+    name: Require passing Test CI
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        env:
+          TESTED_SHA: ${{ needs.prepare.outputs.sha }}
+        with:
+          script: |
+            const { pathToFileURL } = await import('node:url');
+            const { requirePassingTests } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes.mjs`).href);
+            const run = await requirePassingTests(github, context.repo, process.env.TESTED_SHA);
+            await core.summary.addLink('Passing Test CI', run.html_url).write();
+
+  publish:
+    name: Verify and publish artifacts
+    needs: [ prepare, tests ]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      packages: write
     env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       ORG_GRADLE_PROJECT_publishSigningMode: inMemory
-      ORG_GRADLE_PROJECT_gitHubPackagesUsername: xfqwdsj
-      ORG_GRADLE_PROJECT_gitHubPackagesPassword: ${{ secrets.GITHUB_TOKEN }}
-      ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-      ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
       ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_KEY }}
       ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: Check release and assemble artifacts
+        run: ./gradlew :verifyRelease -PreleaseTag="$RELEASE_TAG"
+      - name: Publish to GitHub Packages
+        env:
+          ORG_GRADLE_PROJECT_gitHubPackagesUsername: ${{ github.actor }}
+          ORG_GRADLE_PROJECT_gitHubPackagesPassword: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :publishPackages -PreleaseTag="$RELEASE_TAG" --continue
+      - name: Publish to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: ./gradlew :publishCentral -PreleaseTag="$RELEASE_TAG"
+
+  benchmark:
+    name: Published release benchmarks
+    needs: [ prepare, publish ]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/benchmark.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      release-id: ${{ github.event.release.id }}
+      release-tag: ${{ needs.prepare.outputs.tag }}
+    secrets:
+      GRADLE_ENCRYPTION_KEY: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+  publication-status:
+    name: Record publication failure
+    needs: [ prepare, tests, publish ]
+    if: ${{ always() && (needs.prepare.result != 'success' || needs.publish.result != 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const { pathToFileURL } = await import('node:url');
+            const { updatePerformance } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes.mjs`).href);
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await updatePerformance(github, context.repo, context.payload.release.id, `Publication did not complete; benchmarks have not started. [Workflow details](${run}).`, context.payload.release.tag_name);

@@ -1,12 +1,4 @@
-// The settings file is the entry point of every Gradle build.
-// Its primary purpose is to define the subprojects.
-// It is also used for some aspects of project-wide configuration, like managing plugins,
-// dependencies, etc.
-// https://docs.gradle.org/current/userguide/settings_file_basics.html
-
 pluginManagement {
-    // Use the version catalog to manage dependencies and plugins.
-    // The version catalog is defined in `gradle/libs.versions.toml`.
     repositories {
         gradlePluginPortal()
         mavenCentral()
@@ -15,15 +7,20 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    // Use Maven Central as the default repository (where Gradle will download dependencies) in all
-    // subprojects.
     repositories {
         mavenCentral()
         google()
     }
 }
 
-// Include the `backdrop` subproject in the build.
 include(":backdrop")
+
+// Non-published performance harnesses; library consumers depend only on :backdrop.
+include(
+    ":benchmarks:android-app",
+    ":benchmarks:android-macro",
+    ":benchmarks:jvm",
+    ":benchmarks:scenarios",
+)
 
 rootProject.name = "backdrop"

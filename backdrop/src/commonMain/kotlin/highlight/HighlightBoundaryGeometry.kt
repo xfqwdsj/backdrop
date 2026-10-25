@@ -23,6 +23,41 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
     private var cachedSegmentCapacity: Int = 0
     private var cachedPaddedSegments: FloatArray? = null
     private var cachedPaddedNormalSigns: FloatArray? = null
+    private var cachedGroupSize: Int = 0
+    private var cachedGroupBounds: FloatArray? = null
+
+    /** An open rectangle containing no contour segments, independent of fill topology. */
+    internal val contourFreeBounds: Rect by
+        lazy(LazyThreadSafetyMode.NONE) {
+            if (isAnalytic) Rect.Zero
+            else {
+                val segments = cpuGeometry().segments
+                // Each segment must lie entirely beyond at least one rectangle edge.
+                // Taking the largest per-segment inset certifies the shared empty region.
+                var inset = 0f
+                var i = 0
+                while (i < segments.size) {
+                    val minX = minOf(segments[i], segments[i + 2])
+                    val maxX = maxOf(segments[i], segments[i + 2])
+                    val minY = minOf(segments[i + 1], segments[i + 3])
+                    val maxY = maxOf(segments[i + 1], segments[i + 3])
+                    inset =
+                        maxOf(
+                            inset,
+                            minOf(
+                                maxX - bounds.left,
+                                bounds.right - minX,
+                                maxY - bounds.top,
+                                bounds.bottom - minY,
+                            ),
+                        )
+                    i += 4
+                }
+                // Keep the certificate conservative under shader float rounding.
+                val result = bounds.deflate(inset + coordinateScale * 0.000002f)
+                if (result.isEmpty) Rect.Zero else result
+            }
+        }
 
     internal val isAnalytic: Boolean
         get() = analyticRadii != null
@@ -54,8 +89,33 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
         return requireNotNull(cachedPaddedNormalSigns)
     }
 
+    internal fun segmentGroupBounds(capacity: Int, groupSize: Int): FloatArray {
+        cacheUniformArrays(capacity)
+        if (cachedGroupSize != groupSize || cachedGroupBounds == null) {
+            require(groupSize > 0 && capacity % groupSize == 0)
+            val segments = requireNotNull(cachedPaddedSegments)
+            cachedGroupBounds =
+                FloatArray(capacity / groupSize * 4) { index ->
+                    val group = index / 4
+                    val component = index % 4
+                    var value =
+                        if (component < 2) Float.POSITIVE_INFINITY else Float.NEGATIVE_INFINITY
+                    for (member in 0 until groupSize) {
+                        val start = (group * groupSize + member) * 4
+                        val a = segments[start + component % 2]
+                        val b = segments[start + 2 + component % 2]
+                        value = if (component < 2) minOf(value, a, b) else maxOf(value, a, b)
+                    }
+                    value
+                }
+            cachedGroupSize = groupSize
+        }
+        return requireNotNull(cachedGroupBounds)
+    }
+
     private fun cacheUniformArrays(capacity: Int) {
         if (cachedSegmentCapacity != capacity || cachedPaddedSegments == null) {
+            cachedGroupBounds = null
             cachedSegmentCapacity = capacity
             val geometry = cpuGeometry()
             cachedPaddedSegments = FloatArray(capacity * 4).also { geometry.segments.copyInto(it) }

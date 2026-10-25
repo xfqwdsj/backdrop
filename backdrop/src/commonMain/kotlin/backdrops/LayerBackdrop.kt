@@ -31,14 +31,13 @@ private val DefaultOnDraw: ContentDrawScope.() -> Unit = { drawContent() }
  *
  * The default layer is owned by Backdrop and is recreated whenever Backdrop refreshes its rendering
  * resources, which is what `BackdropHdrScope` triggers. The returned [LayerBackdrop] keeps its
- * identity across those refreshes. A [graphicsLayer] supplied by the caller is owned by the caller
- * and is not recreated by Backdrop.
+ * identity across those refreshes. A supplied [graphicsLayer] keeps its caller-owned lifecycle.
  *
  * [tileMode] defines reads outside the recorded source rectangle before effects run.
  * [TileMode.Clamp] repeats boundary texels, including their alpha. [TileMode.Decal] supplies
  * transparent exterior pixels. Exported surfaces use their visible output bounds, translated into
- * layer pixels and rounded outward, as the source rectangle. Unused effect sampling padding is
- * storage rather than source content. Edge extension requires runtime shader support.
+ * layer pixels and rounded outward, as the source rectangle. Effect sampling padding remains
+ * outside that source domain. Edge extension requires runtime shader support.
  */
 @Composable
 public fun rememberLayerBackdrop(

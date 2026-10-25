@@ -40,8 +40,7 @@ public enum class BackdropSide {
         get() = this == Top || this == Bottom
 
     /**
-     * Whether the scrolled content passes this side, which puts a ramp's zero here rather than at
-     * the surface's opposite edge.
+     * Whether scrolled content passes this side, placing the ramp's zero coordinate at this edge.
      */
     public val carriesContent: Boolean
         get() = this == Top || this == Left

@@ -132,7 +132,8 @@ public data class BackdropRamp(
     /**
      * This ramp painted in [color] from [start] to [end], which a caller places on its own axis.
      * The alpha of the result follows the ramp, so the color's own alpha scales every sample. This
-     * allocates a color list of [stops] entries: remember it rather than calling it on every frame.
+     * allocates a color list of [stops] entries; remembering the brush reuses that list across
+     * frames.
      */
     public fun brush(color: Color, start: Offset, end: Offset): Brush {
         val intensities = intensities()

@@ -94,7 +94,7 @@ class LayerBackdropRebuildRenderingTest {
                             CompositionLocalProvider(LocalBackdropRenderEpoch provides 0) {
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .renderBackdrop(
+                                        .drawBackdrop(
                                             backdrop = source,
                                             shape = { RectangleShape },
                                             render = {
@@ -189,7 +189,7 @@ class LayerBackdropRebuildRenderingTest {
                             ) {
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .renderBackdrop(
+                                        .drawBackdrop(
                                             backdrop = page,
                                             shape = { RectangleShape },
                                             render = {
@@ -216,7 +216,7 @@ class LayerBackdropRebuildRenderingTest {
                             CompositionLocalProvider(LocalBackdropRenderEpoch provides 0) {
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .renderBackdrop(
+                                        .drawBackdrop(
                                             backdrop = combined,
                                             shape = { RectangleShape },
                                             render = {
@@ -298,7 +298,7 @@ class LayerBackdropRebuildRenderingTest {
                             }
                             Box(
                                 Modifier.fillMaxSize()
-                                    .renderBackdrop(
+                                    .drawBackdrop(
                                         backdrop = page,
                                         shape = { RectangleShape },
                                         exportedBackdrop = exported,
@@ -327,7 +327,7 @@ class LayerBackdropRebuildRenderingTest {
                                 Box(Modifier.fillMaxSize().background(Color.Blue))
                                 Box(
                                     Modifier.fillMaxSize()
-                                        .renderBackdrop(
+                                        .drawBackdrop(
                                             backdrop = exported,
                                             shape = { RectangleShape },
                                             render = {

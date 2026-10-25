@@ -45,8 +45,7 @@ paths for component authors and library maintainers.
 
 Backdrop is an independently maintained fork of
 [`Kyant0/AndroidLiquidGlass`](https://github.com/Kyant0/AndroidLiquidGlass), with its own versioning
-and publishing. Its API and behavior differ from upstream; compatibility with upstream callers is
-not a project obligation. Use this project's documentation for integration.
+and publishing. Use this project's documentation for its API and rendering contracts.
 
 Thanks to [Kyant0](https://github.com/Kyant0) for the original work. Issues and pull requests are
 welcome. Licensed under [Apache License 2.0](LICENSE).

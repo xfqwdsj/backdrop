@@ -1,16 +1,16 @@
 package top.ltfan.backdrop.effects
 
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import top.ltfan.backdrop.BackdropEdge
 import top.ltfan.backdrop.BackdropImageScope
+import top.ltfan.backdrop.BackdropPrimitiveInput
 import top.ltfan.backdrop.BackdropRamp
+import top.ltfan.backdrop.BackdropSampling
 import top.ltfan.backdrop.isRenderEffectSupported
+import top.ltfan.backdrop.primitive
 
 /**
  * Approximates spatial blur by mixing adjacent uniformly blurred versions of the current image.
@@ -49,43 +49,25 @@ internal fun BackdropImageScope.layeredProgressiveBlurImpl(
     require(levels >= 2) { "Layered progressive blur needs at least two levels" }
     if (radius == 0f || !supported) return
     val geometry = density.progressiveBlurGeometry(size, layoutDirection, edge, ramp) ?: return
+    effects { cover(geometry.coverage) }
     val original = current
-    val stops = layeredBlurStops(ramp, levels)
-    val scale = levels - 1
-    val firstLevel = floor(minOf(ramp.from, ramp.to) * scale).toInt()
-    val lastLevel = ceil(maxOf(ramp.from, ramp.to) * scale).toInt()
-    group {
-        for (level in firstLevel..lastLevel) {
-            val colors = layeredBlurColors(stops, level, levels)
-            val brush =
-                Brush.linearGradient(
-                    *colors.toTypedArray(),
-                    start = geometry.start,
-                    end = geometry.end,
-                )
-            val blurred = image {
-                replace(original)
-                effects {
-                    cover(geometry.coverage)
-                    if (level != 0) blur(radius * (level.toFloat() / (levels - 1)))
-                }
-                val coverage = image {
-                    paint { room ->
-                        drawRect(
-                            brush,
-                            room.extension.originInNode,
-                            Size(
-                                room.size.width + room.extension.left + room.extension.right,
-                                room.size.height + room.extension.top + room.extension.bottom,
-                            ),
-                        )
-                    }
-                }
-                mask(coverage)
-            }
-            draw(blurred, blendMode = BlendMode.Plus)
-        }
-    }
+    val lastLevel = ceil(maxOf(ramp.from, ramp.to) * (levels - 1)).toInt()
+    val support =
+        if (lastLevel == 0) 0f else gaussianSupport(radius * (lastLevel.toFloat() / (levels - 1)))
+    replace(
+        image {
+            primitive(
+                LayeredBlurPrimitive(radius, ramp, levels, geometry.start, geometry.end),
+                inputs =
+                    listOf(
+                        BackdropPrimitiveInput(
+                            original,
+                            BackdropSampling.outsets(support, support, support, support),
+                        ),
+                    ),
+            )
+        },
+    )
 }
 
 internal fun layeredBlurWeight(intensity: Float, level: Int, levels: Int): Float =

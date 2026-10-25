@@ -111,9 +111,14 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
 
     override fun cover(insets: BackdropInsets) {
         require(
-            listOf(insets.left, insets.top, insets.right, insets.bottom).all {
-                it.value.isFinite() && it.value >= 0f
-            },
+            insets.left.value.isFinite() &&
+                insets.left.value >= 0f &&
+                insets.top.value.isFinite() &&
+                insets.top.value >= 0f &&
+                insets.right.value.isFinite() &&
+                insets.right.value >= 0f &&
+                insets.bottom.value.isFinite() &&
+                insets.bottom.value >= 0f,
         ) {
             "Coverage insets must be finite and non-negative: $insets"
         }

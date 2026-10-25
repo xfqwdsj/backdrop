@@ -108,8 +108,7 @@ class InteractionFieldRuntimeParityTest {
         val actual = render(shader, 1)
         assertEquals(expected[0], actual[0], .002f)
         assertEquals(expected[1], actual[1], .002f)
-        // RGBA_F16 raster readback checks shader numerics only; it does not validate display HDR
-        // output.
+        // RGBA_F16 raster readback checks shader numerics independently of display configuration.
     }
 
     @Test

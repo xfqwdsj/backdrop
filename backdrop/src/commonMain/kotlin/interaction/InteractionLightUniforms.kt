@@ -21,8 +21,12 @@ internal class InteractionLightUniforms(val capacity: Int) {
     var count: Int = 0
         private set
 
+    var mayCoverReceiver: Boolean = true
+        private set
+
     fun clear() {
         count = 0
+        mayCoverReceiver = false
     }
 
     fun prepare(
@@ -89,6 +93,14 @@ internal class InteractionLightUniforms(val capacity: Int) {
         rowX[3] = 0f
         rowY[3] = 0f
         rowW[3] = 0f
+        // Affine maps attain their coordinate extrema at the receiver corners. Perspective
+        // receivers retain the general field path because an interior pole can exceed them.
+        val minX = minOf(a.x, b.x, d.x, e.x)
+        val maxX = maxOf(a.x, b.x, d.x, e.x)
+        val minY = minOf(a.y, b.y, d.y, e.y)
+        val maxY = maxOf(a.y, b.y, d.y, e.y)
+        val scale = maxOf(1f, abs(minX), abs(maxX), abs(minY), abs(maxY))
+        mayCoverReceiver = g != 0f || k != 0f
         positions.fill(0f)
         colors.fill(0f)
         parameters.fill(0f)
@@ -106,6 +118,15 @@ internal class InteractionLightUniforms(val capacity: Int) {
             colors[offset + 3] = linear.alpha
             parameters[offset] = entry.radiusPx
             parameters[offset + 1] = entry.intensity
+            if (!mayCoverReceiver && entry.radiusPx > 0f) {
+                // Include rounding in the uploaded homography and shader coordinate arithmetic.
+                val guard = maxOf(scale, abs(entry.x), abs(entry.y), abs(entry.radiusPx)) * 0.00001f
+                mayCoverReceiver =
+                    entry.x + entry.radiusPx + guard >= minX &&
+                        entry.x - entry.radiusPx - guard <= maxX &&
+                        entry.y + entry.radiusPx + guard >= minY &&
+                        entry.y - entry.radiusPx - guard <= maxY
+            }
             when (val curve = entry.falloff) {
                 BackdropCurve.Linear -> {
                     curves[offset] = 0f

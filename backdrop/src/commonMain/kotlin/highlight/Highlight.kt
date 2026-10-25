@@ -4,21 +4,25 @@ import androidx.annotation.FloatRange
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.ltfan.backdrop.BackdropCurve
+import top.ltfan.backdrop.BackdropGeometry
 import top.ltfan.backdrop.BackdropImage
 import top.ltfan.backdrop.BackdropImageScope
 import top.ltfan.backdrop.BackdropPrimitive
 import top.ltfan.backdrop.BackdropPrimitiveDrawContext
-import top.ltfan.backdrop.BackdropPrimitiveGeometry
 import top.ltfan.backdrop.BackdropPrimitiveInput
 import top.ltfan.backdrop.BackdropPrimitiveRenderer
-import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.BackdropRenderResources
+import top.ltfan.backdrop.BackdropSurfaceScope
 import top.ltfan.backdrop.PrimitiveContext
 import top.ltfan.backdrop.ProcessedBackdropFrame
 import top.ltfan.backdrop.interaction.InteractionLighting
+import top.ltfan.backdrop.internal.ShapeProvider
 import top.ltfan.backdrop.primitive
 
 private val DefaultWidth = 2.dp
@@ -228,22 +232,31 @@ private data class HighlightPrimitive(
     val config: Highlight.Config,
     val lighting: InteractionLighting,
 ) : BackdropPrimitive<HighlightPrimitive> {
-    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect = geometry.surfaceBounds
+    override val compositingStrategy: CompositingStrategy = CompositingStrategy.Auto
+
+    override fun bounds(geometry: BackdropGeometry): Rect = geometry.surfaceBounds
 
     override fun createRenderer(
-        resources: BackdropPrimitiveResources,
+        resources: BackdropRenderResources,
     ): BackdropPrimitiveRenderer<HighlightPrimitive> = Renderer(resources)
 
-    private class Renderer(resources: BackdropPrimitiveResources) :
+    private class Renderer(resources: BackdropRenderResources) :
         BackdropPrimitiveRenderer<HighlightPrimitive> {
         private val renderer = HighlightRenderer(resources)
         private val frame = ProcessedBackdropFrame()
+        private var outlineShape: Shape? = null
+        private var outlineProvider: ShapeProvider? = null
 
         override fun draw(
             scope: DrawScope,
             primitive: HighlightPrimitive,
             context: BackdropPrimitiveDrawContext,
         ) {
+            val shape = context.shape
+            if (outlineShape != shape) {
+                outlineShape = shape
+                outlineProvider = ShapeProvider { shape }
+            }
             val interactions = (context as PrimitiveContext).interactionFrame
             frame.begin(context.inputBounds.isNotEmpty())
             if (context.inputBounds.isNotEmpty()) frame.publish(context.input(0))
@@ -256,11 +269,13 @@ private data class HighlightPrimitive(
                 renderer.draw(
                     scope,
                     primitive.config,
-                    context.shape.createOutline(
-                        context.size,
-                        context.layoutDirection,
-                        context.density,
-                    ),
+                    checkNotNull(outlineProvider)
+                        .shape
+                        .createOutline(
+                            context.size,
+                            context.layoutDirection,
+                            context.density,
+                        ),
                     frame,
                     (primitive.lighting as? InteractionLighting.Config)?.contourOpacity ?: 0f,
                 )
@@ -277,4 +292,9 @@ private data class HighlightPrimitive(
             renderer.release()
         }
     }
+}
+
+/** Configures the contour phase of a fixed-order surface declaration. */
+public fun BackdropSurfaceScope.highlight(block: HighlightScope.() -> Unit) {
+    highlight(Highlight(block))
 }

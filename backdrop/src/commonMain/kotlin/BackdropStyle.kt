@@ -14,7 +14,7 @@ import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
-/** Delayed appearance defaults for the fixed-order [drawBackdrop] surface. */
+/** Delayed appearance defaults for fixed-order [BackdropImageScope.surface] declarations. */
 @Immutable
 public data class BackdropStyle(
     public val blurRadius: () -> Dp = { 0.dp },

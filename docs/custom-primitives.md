@@ -1,10 +1,34 @@
-# Custom primitives
+# Custom rendering
 
-A primitive produces an isolated graph image. It declares its output bounds and every image it
+A primitive produces a graph image. It declares its output bounds and every image it
 reads; the receiver resolves sampling, owns the rendering instance and combines its output with
-other images. Built-in highlights, shadows and interaction light use this registration contract.
+other images. Highlights, shadows, interaction light and fixed-phase surface decorations use this
+registration contract.
 
-## Define a configuration and renderer
+## Surface decorations
+
+`BackdropDecoration<P>` supplies a stateful drawing inside `surface { }`. Register it with
+`drawBehind`, `drawSurface` or `drawForeground`. Its renderer receives the current configuration
+on prepare and draw. `BackdropRenderResources` owns any explicitly requested layers, shader keys and
+resource pools. Compatible renderer keys retain state through parameter updates; omission or detach
+closes the owner. A display refresh calls `refresh` before releasing layers and retains shader keys.
+
+A decoration declares finite, ordered output bounds in surface pixels. Those bounds participate
+in placement outsets and clip its drawing. Surface-phase drawings also follow the visible shape
+clip. The drawing destination belongs to the containing phase. Algorithms needing an isolated
+construction layer can create one from resources and record it with the decoration context's
+`recordLayer` helper; layer and brush coordinates remain surface-local.
+
+A decoration overrides `sampling(geometry)` with its complete `BackdropSampling` footprint when
+it reads the processed source; the default null value declares a drawing without that input.
+`BackdropDecorationContext.inputBounds` reports the resolved footprint.
+`BackdropDecorationDrawContext.processedSource` borrows the finite, shape-clipped source after its
+serial optics and before fill. The view can draw or provide a runtime-shader input during the active
+decoration invocation. Access after return is rejected. Sampling outside that processed domain uses
+transparent pixels. The borrowed context and input remain read-only; callers choose their own effects
+and foreground drawing.
+
+## Define an isolated image configuration and renderer
 
 The configuration type implements `BackdropPrimitive<YourType>`. Its renderer receives the current
 configuration on preparation and drawing, so parameter updates can reuse cached state.
@@ -17,9 +41,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import top.ltfan.backdrop.BackdropPrimitive
 import top.ltfan.backdrop.BackdropPrimitiveDrawContext
-import top.ltfan.backdrop.BackdropPrimitiveGeometry
+import top.ltfan.backdrop.BackdropGeometry
 import top.ltfan.backdrop.BackdropPrimitiveRenderer
-import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.BackdropRenderResources
 
 @Immutable
 data class SolidPanel(val color: Color, val outset: Dp) : BackdropPrimitive<SolidPanel> {
@@ -27,11 +51,11 @@ data class SolidPanel(val color: Color, val outset: Dp) : BackdropPrimitive<Soli
         require(outset.value.isFinite() && outset.value >= 0f)
     }
 
-    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect =
+    override fun bounds(geometry: BackdropGeometry): Rect =
         geometry.surfaceBounds.inflate(with(geometry.density) { outset.toPx() })
 
     override fun createRenderer(
-        resources: BackdropPrimitiveResources,
+        resources: BackdropRenderResources,
     ): BackdropPrimitiveRenderer<SolidPanel> = Renderer()
 
     private class Renderer : BackdropPrimitiveRenderer<SolidPanel> {
@@ -59,6 +83,12 @@ Import `primitive` from `top.ltfan.backdrop`. It appends the primitive with exte
 applied once. Capture it inside `image { }` for reuse, or use `group { }` to start a transparent
 composite. Masks, transforms, foreground selection and exports operate on its result normally.
 Internal Clear drawing erases only that primitive's isolated output.
+
+`BackdropPrimitive.compositingStrategy` defaults to `Offscreen`, which gives destination-dependent
+drawing such as `Clear` its own destination. A renderer that only draws ordinary source-over
+content can opt into `Auto`. The evaluator can then draw a private, single-consumer result into
+its containing recording. Sampling, sharing or explicitly isolating the result retains the required
+image boundary. Choose this contract from the renderer's blending semantics.
 
 ## Declare bounds and dependencies
 
@@ -105,8 +135,67 @@ layer; use the same translation while recording the input. Pixel-align a target 
 left/top and use their negation as `origin`; the aligned width/height determine the recording size.
 Set shader uniforms, record `view.draw(this)` into the owned layer with that translation, then draw
 the layer. Runtime-shader support is required; the caller selects a capability fallback. Several
-inputs can be drawn and composed, but arbitrary independent shader-child bindings are not supplied.
-No graph operation reads rendered pixels back to the CPU.
+inputs can be drawn and composed into the single input image supported by the portable shader
+interface. Graph operations keep intermediate pixels in native graphics resources.
+
+## Retain resources by branch key
+
+Create `resources.resourcePool<Key, Value> { key -> ... }` once in the renderer. Each key has its
+own resource owner and shader namespace. `getOrCreate(key)` reuses the value, while
+`retainOnly(activeKeys)` releases entries that leave the active set. Retention creates no entries;
+call `getOrCreate` for the values needed by the current configuration. Keys have immutable equality
+and hash behavior. Update filters, brushes and other parameter-dependent state on the retained value.
+
+```kotlin
+private val branches = resources.resourcePool<Int, GraphicsLayer> { level ->
+    createGraphicsLayer()
+}
+
+// In prepare:
+branches.retainOnly(activeLevels)
+branches.getOrCreate(level).renderEffect = effectForLevel
+
+// In draw:
+val layer = branches.getOrCreate(level)
+context.recordLayer(layer) {
+    context.input(0).draw(this)
+}
+with(scope) { drawLayer(layer) }
+```
+
+Import `GraphicsLayer` and `drawLayer` from `androidx.compose.ui.graphics.layer`, and
+`recordLayer` from `top.ltfan.backdrop`.
+`activeLevels` is a set of keys selected by the effect, and `effectForLevel` is its resolved native
+filter. Sampling still declares the filter's full input footprint before recording.
+
+A pool follows the receiving primitive's lifecycle automatically. Display refresh disposes values
+and their layers, retaining shader caches for keys still in the pool. The next `getOrCreate`
+rebuilds that value. Clearing, key removal and owner release also clear those shader caches.
+Values remain borrowed until one of these events; obtain them again during subsequent callbacks.
+Renderer `refresh` drops any separately cached value references and geometry-dependent metadata;
+the pool object itself stays with the renderer.
+
+Use `dispose = { value -> ... }` for resources owned by the value outside its entry resource
+owner. Disposal runs before automatic cleanup. Factories clean up their own partially constructed
+external resources when throwing; entry-owned layers, nested pools and shaders are cleaned up by
+the engine. Cleanup continues across entries when a disposer throws. Callbacks work with entry
+resources and do not reenter the same pool. Pools are unsynchronized rendering state and carry no
+Compose stability annotation.
+
+## Record an owned layer
+
+`context.recordLayer(layer) { ... }` records over resolved graph storage in surface coordinates.
+It sets layer placement and translates the origin using `context.extension`, while `size` and
+`drawContext.size` inside the callback remain the surface size. Brushes therefore retain their
+surface sizing even when other branches enlarge storage. Explicitly draw through the extension
+when processing those pixels. The helper is inline and applies no effect, alpha or blend policy;
+configure those on the layer separately.
+
+Record dependency layers before the layers that draw them, keeping recording callbacks sequential.
+Use the helper during primitive drawing. Borrowed input views keep their existing invocation
+lifetime, and expired drawing contexts reject recording. For a target with custom storage bounds,
+use the raw layer-recording procedure described above. The helper records commands; the effect
+still declares its sampling and the resource owner still controls lifetime.
 
 ## Own resources through the receiver
 
@@ -114,8 +203,8 @@ No graph operation reads rendered pixels back to the CPU.
 The receiver reuses that instance while the configuration class and `rendererKey` match. The key
 has immutable equality and hash behavior; change it for incompatible renderer implementations or
 generic type arguments. Keys select compatibility at a position, not relocation across positions.
-Use the current `primitive` argument for changing parameters rather than capturing the initial
-configuration in the renderer factory.
+Read changing parameters from the current `primitive` argument on each callback so the retained
+renderer follows configuration updates.
 
 `resources.createGraphicsLayer()` creates a layer owned by that instance. The renderer can record
 and configure it, and can release it early through `releaseGraphicsLayer`. Releasing a foreign or
@@ -134,3 +223,4 @@ the program. Mutable renderers, resource owners and contexts have no stability a
 reusable shader and CPU caches. `release` handles additional resources the renderer owns outside
 the supplied resource owner. The shared interaction provider retains input and window ownership;
 its built-in primitive adapters consume that domain's frame data through the same graph scheduler.
+Layered progressive blur uses the public resource pool and recording helper for its retained branches.

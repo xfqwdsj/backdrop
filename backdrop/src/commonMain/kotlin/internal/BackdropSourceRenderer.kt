@@ -20,7 +20,7 @@ import top.ltfan.backdrop.BackdropDrawScope
 import top.ltfan.backdrop.RuntimeShader
 import top.ltfan.backdrop.isRuntimeShaderSupported
 
-/** Resources belong to one drawing consumer, rather than to a shared source. */
+/** Boundary resources owned by one drawing consumer. */
 internal class BackdropSourceRenderer(private val context: () -> GraphicsContext) {
     private class Slot(val layer: GraphicsLayer, val shader: RuntimeShader)
 

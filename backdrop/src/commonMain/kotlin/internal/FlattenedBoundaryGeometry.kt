@@ -10,6 +10,9 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sqrt
 
+private const val CERTIFICATE_GROUP_SIZE = 8
+private const val CERTIFICATE_INDEX_MINIMUM_SEGMENTS = 32
+
 /**
  * A line approximation of a filled path boundary. Curves are subdivided until their control points
  * are within 0.05 px of the finite chord. Keep this value in pixel units: these segments are
@@ -32,10 +35,29 @@ internal class FlattenedBoundaryGeometry(path: Path) {
     internal val coordinateScale: Float =
         maxOf(1f, abs(bounds.left), abs(bounds.top), abs(bounds.right), abs(bounds.bottom))
 
+    private fun certificateGroupBounds(): FloatArray? =
+        if (segmentCount < CERTIFICATE_INDEX_MINIMUM_SEGMENTS) null
+        else
+            FloatArray((segmentCount + CERTIFICATE_GROUP_SIZE - 1) / CERTIFICATE_GROUP_SIZE * 4) {
+                index ->
+                val first = index / 4 * CERTIFICATE_GROUP_SIZE
+                val component = index % 4
+                var value = if (component < 2) Float.POSITIVE_INFINITY else Float.NEGATIVE_INFINITY
+                for (segment in first until minOf(first + CERTIFICATE_GROUP_SIZE, segmentCount)) {
+                    val offset = segment * 4
+                    val a = segments[offset + component % 2]
+                    val b = segments[offset + 2 + component % 2]
+                    value = if (component < 2) minOf(value, a, b) else maxOf(value, a, b)
+                }
+                value
+            }
+
     /** A nonzero value certifies the segment's outward normal for its full length. */
     internal val normalSigns: FloatArray by
         lazy(LazyThreadSafetyMode.NONE) {
             val signs = FloatArray(segmentCount)
+            // Build the spatial index while producing the retained certificate.
+            val groups = certificateGroupBounds()
             val tolerance = 9.5367432e-7 * coordinateScale.toDouble()
             val probe = maxOf(0.0001, tolerance * 4.0)
             val distanceLimit = tolerance * 2.0
@@ -61,40 +83,57 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                 val maxX = maxOf(shiftedAx, shiftedBx) + distanceLimit
                 val maxY = maxOf(shiftedAy, shiftedBy) + distanceLimit
                 var touchesBoundary = false
-                for (otherIndex in 0 until segmentCount) {
-                    val otherOffset = otherIndex * 4
-                    val cx = segments[otherOffset].toDouble()
-                    val cy = segments[otherOffset + 1].toDouble()
-                    val ex = segments[otherOffset + 2].toDouble()
-                    val ey = segments[otherOffset + 3].toDouble()
+                val groupCount = if (groups == null) 1 else groups.size / 4
+                for (group in 0 until groupCount) {
+                    val bound = group * 4
                     if (
-                        minOf(cx, ex) > maxX ||
-                            maxOf(cx, ex) < minX ||
-                            minOf(cy, ey) > maxY ||
-                            maxOf(cy, ey) < minY
-                    ) {
+                        groups != null &&
+                            (groups[bound].toDouble() > maxX ||
+                                groups[bound + 2].toDouble() < minX ||
+                                groups[bound + 1].toDouble() > maxY ||
+                                groups[bound + 3].toDouble() < minY)
+                    )
                         continue
+                    val first = if (groups == null) 0 else group * CERTIFICATE_GROUP_SIZE
+                    val last =
+                        if (groups == null) segmentCount
+                        else minOf(first + CERTIFICATE_GROUP_SIZE, segmentCount)
+                    for (otherIndex in first until last) {
+                        val otherOffset = otherIndex * 4
+                        val cx = segments[otherOffset].toDouble()
+                        val cy = segments[otherOffset + 1].toDouble()
+                        val ex = segments[otherOffset + 2].toDouble()
+                        val ey = segments[otherOffset + 3].toDouble()
+                        if (
+                            minOf(cx, ex) > maxX ||
+                                maxOf(cx, ex) < minX ||
+                                minOf(cy, ey) > maxY ||
+                                maxOf(cy, ey) < minY
+                        ) {
+                            continue
+                        }
+                        if (
+                            distanceSquaredBetweenSegments(
+                                shiftedAx,
+                                shiftedAy,
+                                shiftedBx,
+                                shiftedBy,
+                                cx,
+                                cy,
+                                ex,
+                                ey,
+                            ) <= distanceLimitSquared
+                        ) {
+                            touchesBoundary = true
+                            break
+                        }
                     }
-                    if (
-                        distanceSquaredBetweenSegments(
-                            shiftedAx,
-                            shiftedAy,
-                            shiftedBx,
-                            shiftedBy,
-                            cx,
-                            cy,
-                            ex,
-                            ey,
-                        ) <= distanceLimitSquared
-                    ) {
-                        touchesBoundary = true
-                        break
-                    }
+                    if (touchesBoundary) break
                 }
                 if (!touchesBoundary) {
                     val midpointX = (shiftedAx + shiftedBx) * 0.5
                     val midpointY = (shiftedAy + shiftedBy) * 0.5
-                    signs[index] = if (contains(midpointX, midpointY)) -1f else 1f
+                    signs[index] = if (contains(midpointX, midpointY, groups)) -1f else 1f
                 }
             }
             signs
@@ -117,16 +156,35 @@ internal class FlattenedBoundaryGeometry(path: Path) {
         return crossings % 2 != 0
     }
 
-    private fun contains(x: Double, y: Double): Boolean {
+    private fun contains(x: Double, y: Double, groups: FloatArray?): Boolean {
         var crossings = 0
-        for (index in segments.indices step 4) {
-            val x0 = segments[index].toDouble()
-            val y0 = segments[index + 1].toDouble()
-            val x1 = segments[index + 2].toDouble()
-            val y1 = segments[index + 3].toDouble()
-            if ((y0 > y) != (y1 > y)) {
-                val crossingX = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
-                if (crossingX > x) crossings++
+        if (groups == null) {
+            for (index in segments.indices step 4) {
+                val x0 = segments[index].toDouble()
+                val y0 = segments[index + 1].toDouble()
+                val x1 = segments[index + 2].toDouble()
+                val y1 = segments[index + 3].toDouble()
+                if ((y0 > y) != (y1 > y)) {
+                    val crossingX = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
+                    if (crossingX > x) crossings++
+                }
+            }
+            return crossings % 2 != 0
+        }
+        for (group in 0 until groups.size / 4) {
+            val bound = group * 4
+            if (groups[bound + 1].toDouble() > y || groups[bound + 3].toDouble() <= y) continue
+            val first = group * CERTIFICATE_GROUP_SIZE
+            for (segment in first until minOf(first + CERTIFICATE_GROUP_SIZE, segmentCount)) {
+                val index = segment * 4
+                val x0 = segments[index].toDouble()
+                val y0 = segments[index + 1].toDouble()
+                val x1 = segments[index + 2].toDouble()
+                val y1 = segments[index + 3].toDouble()
+                if ((y0 > y) != (y1 > y)) {
+                    val crossingX = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
+                    if (crossingX > x) crossings++
+                }
             }
         }
         return crossings % 2 != 0
@@ -175,7 +233,9 @@ internal class FlattenedBoundaryGeometry(path: Path) {
     )
 
     init {
-        val coordinates = ArrayList<Float>()
+        // Subdivision appends primitive coordinates without allocating boxed Float values.
+        var coordinates = FloatArray(64)
+        var coordinateCount = 0
         require(
             bounds.left.isFinite() &&
                 bounds.top.isFinite() &&
@@ -193,10 +253,14 @@ internal class FlattenedBoundaryGeometry(path: Path) {
         fun add(x0: Float, y0: Float, x1: Float, y1: Float) {
             require(x0.isFinite() && y0.isFinite() && x1.isFinite() && y1.isFinite())
             if (x0 != x1 || y0 != y1) {
-                coordinates.add(x0)
-                coordinates.add(y0)
-                coordinates.add(x1)
-                coordinates.add(y1)
+                if (coordinateCount + 4 > coordinates.size) {
+                    coordinates = coordinates.copyOf(coordinates.size * 2)
+                }
+                coordinates[coordinateCount] = x0
+                coordinates[coordinateCount + 1] = y0
+                coordinates[coordinateCount + 2] = x1
+                coordinates[coordinateCount + 3] = y1
+                coordinateCount += 4
             }
         }
 
@@ -299,7 +363,7 @@ internal class FlattenedBoundaryGeometry(path: Path) {
             }
         }
         closeContour()
-        segments = coordinates.toFloatArray()
+        segments = coordinates.copyOf(coordinateCount)
     }
 
     private companion object {
@@ -329,8 +393,7 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                     val my = (ay + by) * 0.5f
                     val left = floatArrayOf(c[0], c[1], ax, ay, mx, my)
                     val right = floatArrayOf(mx, my, bx, by, c[4], c[5])
-                    val parent = floatArrayOf(c[0], c[1], c[2], c[3], c[4], c[5])
-                    if (left.contentEquals(parent) || right.contentEquals(parent)) {
+                    if (left.contentEquals(c) || right.contentEquals(c)) {
                         add(c[0], c[1], c[4], c[5])
                     } else {
                         stack.add(right)
@@ -377,8 +440,7 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                     val mY = (eY + fY) * 0.5f
                     val left = floatArrayOf(c[0], c[1], aX, aY, eX, eY, mX, mY)
                     val right = floatArrayOf(mX, mY, fX, fY, dX, dY, c[6], c[7])
-                    val parent = floatArrayOf(c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7])
-                    if (left.contentEquals(parent) || right.contentEquals(parent)) {
+                    if (left.contentEquals(c) || right.contentEquals(c)) {
                         add(c[0], c[1], c[6], c[7])
                     } else {
                         stack.add(right)

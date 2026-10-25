@@ -7,15 +7,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import top.ltfan.backdrop.BackdropGeometry
 import top.ltfan.backdrop.BackdropImageScope
 import top.ltfan.backdrop.BackdropPrimitive
 import top.ltfan.backdrop.BackdropPrimitiveDrawContext
-import top.ltfan.backdrop.BackdropPrimitiveGeometry
 import top.ltfan.backdrop.BackdropPrimitiveRenderer
-import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.BackdropRenderResources
 import top.ltfan.backdrop.internal.maskBlurSupport
 import top.ltfan.backdrop.primitive
 
@@ -71,7 +72,9 @@ public fun BackdropImageScope.shadow(
 }
 
 private data class ShadowPrimitive(val config: Shadow.Config) : BackdropPrimitive<ShadowPrimitive> {
-    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect =
+    override val compositingStrategy: CompositingStrategy = CompositingStrategy.Auto
+
+    override fun bounds(geometry: BackdropGeometry): Rect =
         with(geometry.density) {
             val r = maskBlurSupport(config.radius.toPx())
             val x = config.offset.x.toPx()
@@ -85,10 +88,10 @@ private data class ShadowPrimitive(val config: Shadow.Config) : BackdropPrimitiv
         }
 
     override fun createRenderer(
-        resources: BackdropPrimitiveResources,
+        resources: BackdropRenderResources,
     ): BackdropPrimitiveRenderer<ShadowPrimitive> = Renderer(resources)
 
-    private class Renderer(resources: BackdropPrimitiveResources) :
+    private class Renderer(resources: BackdropRenderResources) :
         BackdropPrimitiveRenderer<ShadowPrimitive> {
         private val renderer = ShadowRenderer(resources)
 

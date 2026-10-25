@@ -1,0 +1,50 @@
+name: Prepare release draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag matching the publication version (optional v prefix).
+        required: true
+        type: string
+      previous_tag:
+        description: Previous release tag for GitHub-generated notes (blank selects GitHub's default).
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: Check release automation and tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: ./gradlew :checkReleaseAutomation :checkReleaseVersion -PreleaseTag="$RELEASE_TAG"
+      - name: Create or resume generated-notes draft
+        uses: actions/github-script@v9
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+        with:
+          script: |
+            const { pathToFileURL } = await import('node:url');
+            const { prepareDraft } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes.mjs`).href);
+            const release = await prepareDraft(github, context.repo, process.env.RELEASE_TAG, process.env.PREVIOUS_TAG);
+            await core.summary.addLink('Edit release draft', release.html_url).write();

@@ -19,17 +19,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import top.ltfan.backdrop.BackdropCurve
+import top.ltfan.backdrop.BackdropGeometry
 import top.ltfan.backdrop.BackdropImageScope
 import top.ltfan.backdrop.BackdropPrimitive
 import top.ltfan.backdrop.BackdropPrimitiveDrawContext
-import top.ltfan.backdrop.BackdropPrimitiveGeometry
 import top.ltfan.backdrop.BackdropPrimitiveRenderer
-import top.ltfan.backdrop.BackdropPrimitiveResources
+import top.ltfan.backdrop.BackdropRenderResources
 import top.ltfan.backdrop.PrimitiveContext
 import top.ltfan.backdrop.highlight.HighlightLinearColor
 import top.ltfan.backdrop.highlight.toHighlightLinearExtendedSrgb
 import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.primitive
+import top.ltfan.backdrop.requireAlpha
 
 /** Receiver settings for shared interaction light. */
 @Stable
@@ -127,21 +128,30 @@ internal fun InteractionLightEntry.isFiniteForRendering(): Boolean {
         linear.alpha.isFinite()
 }
 
-/** Draws interior interaction lighting with additive blending by default. */
+/**
+ * Draws interior interaction lighting with additive blending by default. The operation is omitted
+ * while the receiver's window has no registered light sources; source membership is observed.
+ */
 public fun BackdropImageScope.interactionLight(
     config: InteractionLighting.Config,
     alpha: Float = 1f,
     blendMode: BlendMode = BlendMode.Plus,
 ) {
+    requireAlpha(alpha)
+    val present = hasInteractionLights
+    val destination = current
+    // Retain declaration positions so later primitives keep their renderer state.
+    // Only selected lighting nodes receive rendering resources.
     primitive(InteractionPrimitive(config), alpha = alpha, blendMode = blendMode)
+    if (!present) replace(destination)
 }
 
 private data class InteractionPrimitive(val config: InteractionLighting.Config) :
     BackdropPrimitive<InteractionPrimitive> {
-    override fun bounds(geometry: BackdropPrimitiveGeometry): Rect = geometry.surfaceBounds
+    override fun bounds(geometry: BackdropGeometry): Rect = geometry.surfaceBounds
 
     override fun createRenderer(
-        resources: BackdropPrimitiveResources,
+        resources: BackdropRenderResources,
     ): BackdropPrimitiveRenderer<InteractionPrimitive> = Renderer()
 
     private class Renderer : BackdropPrimitiveRenderer<InteractionPrimitive> {

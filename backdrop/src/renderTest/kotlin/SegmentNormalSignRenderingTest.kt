@@ -172,14 +172,15 @@ class SegmentNormalSignRenderingTest : PlatformGraphicsTest() {
         count: Int,
         capacity: Int = geometry.segmentCount,
         groupSize: Int = 0,
-    ): RuntimeShader =
-        RuntimeShader(
+    ): RuntimeShader {
+        val probeCount = minOf(count, MAX_PROBE_POINTS)
+        return RuntimeShader(
             """
             ${genericBoundaryShaderFunctions(geometry.segmentCount, capacity, groupSize)}
-            uniform float2 probePoints[$count];
+            uniform float2 probePoints[$probeCount];
             uniform float outputScale;
             float2 probePoint(int index) {
-              ${ (0 until count).joinToString("\n") { "if (index == $it) return probePoints[$it];" } }
+              ${ (0 until probeCount).joinToString("\n") { "if (index == $it) return probePoints[$it];" } }
               return float2(0.0);
             }
             half4 main(float2 coord) {
@@ -192,6 +193,7 @@ class SegmentNormalSignRenderingTest : PlatformGraphicsTest() {
             """
                 .trimIndent(),
         )
+    }
 
     private fun render(
         shader: RuntimeShader,
@@ -206,17 +208,30 @@ class SegmentNormalSignRenderingTest : PlatformGraphicsTest() {
         shader.setFloatUniform("segments", geometry.segments.copyOf(capacity * 4))
         shader.setFloatUniform("segmentNormalSigns", signs.copyOf(capacity))
         if (groupBounds != null) shader.setFloatUniform("segmentGroupBounds", groupBounds)
-        shader.setFloatUniform(
-            "probePoints",
-            FloatArray(points.size * 2).also { values ->
-                points.forEachIndexed { index, point ->
-                    values[index * 2] = point.x
-                    values[index * 2 + 1] = point.y
-                }
-            },
-        )
         shader.setFloatUniform("outputScale", geometry.coordinateScale)
-        return renderTestShader(shader, points.size, 1)
+        require(points.isNotEmpty())
+        val batchCapacity = minOf(points.size, MAX_PROBE_POINTS)
+        val values = FloatArray(batchCapacity * 2)
+        val result = FloatArray(points.size * 4)
+        for (start in points.indices step batchCapacity) {
+            val batchSize = minOf(batchCapacity, points.size - start)
+            repeat(batchSize) { index ->
+                val point = points[start + index]
+                values[index * 2] = point.x
+                values[index * 2 + 1] = point.y
+            }
+            shader.setFloatUniform("probePoints", values)
+            val pixels = renderTestShader(shader, batchSize, 1)
+            repeat(batchSize) { index ->
+                assertEquals(
+                    1f,
+                    pixels[index * 4 + 3],
+                    "Shader probe alpha at sample ${start + index}",
+                )
+            }
+            pixels.copyInto(result, start * 4)
+        }
+        return result
     }
 
     private fun sampleQueries(geometry: FlattenedBoundaryGeometry): List<Offset> {
@@ -314,6 +329,9 @@ class SegmentNormalSignRenderingTest : PlatformGraphicsTest() {
         }
 
     private companion object {
+        // Bound query uniforms alongside the full contour and normal-sign arrays.
+        const val MAX_PROBE_POINTS = 16
+
         val RectanglePath: Path
             get() =
                 Path().apply {

@@ -42,6 +42,9 @@ helpers. Android captures the test host GraphicsLayer before opaque window blend
 Skia behavior stays in `jvmTest`. Android-specific
 renderer integration stays in `androidDeviceTest`. The device graphics adapter requires API 34;
 use API 35 or newer for the complete shared shader suite.
+Contour normal probes batch query uniforms alongside the complete geometry and retain every
+sample across draws. Each draw checks opaque output before comparing shader numerics, so missing
+shader output is distinguished from geometric mismatches.
 
 ## Choose regression coverage
 

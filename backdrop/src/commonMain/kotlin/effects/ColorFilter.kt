@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorMatrixColorFilter
 import androidx.compose.ui.graphics.LightingColorFilter
+import top.ltfan.backdrop.BackdropColorControls
 import top.ltfan.backdrop.BackdropEffectScope
 import top.ltfan.backdrop.BackdropEffectScopeImpl
 import top.ltfan.backdrop.BackdropSampling
@@ -171,3 +172,13 @@ private fun tintMode(mode: BlendMode): Int? =
         BlendMode.Screen -> 15
         else -> null
     }
+
+/** Applies an immutable color-controls configuration as an additional serial stage. */
+public fun BackdropEffectScope.colorControls(config: BackdropColorControls): Unit =
+    colorControls(config.brightness, config.contrast, config.saturation)
+
+/** Adds saturation after preceding stages; one is neutral and 1.5 matches [vibrancy]. */
+public fun BackdropEffectScope.vibrancy(saturation: Float) {
+    require(saturation.isFinite()) { "Vibrancy saturation must be finite" }
+    if (saturation == 1.5f) vibrancy() else colorControls(saturation = saturation)
+}

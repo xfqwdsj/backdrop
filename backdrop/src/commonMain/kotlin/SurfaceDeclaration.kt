@@ -4,7 +4,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.CompositingStrategy
-import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.interaction.interactionLight
@@ -18,31 +17,30 @@ import top.ltfan.backdrop.shadow.shadow
  */
 public fun BackdropImageScope.surface(block: BackdropSurfaceScope.() -> Unit = {}) {
     val config = surfaceScope().apply(block)
-    fun style(): BackdropStyle = resolveStyle()
-    if (!config.explicitEffects) {
-        val radius = style().blurRadius
-        config.effects { blur(radius().toPx()) }
+    if (this is BackdropRenderScope) {
+        check(!styledSurfaceDeclared) { "surface and styledSurface cannot own the same root" }
+        surfaceDeclared = true
     }
-    val contour = config.contour ?: style().highlight()
-    val outer = config.outer ?: style().shadow()
-    val inner = config.inner ?: style().innerShadow()
-    val lighting = config.lighting ?: style().interactionLighting()
-    val fill =
-        config.fill
-            ?: run {
-                val color = style().fill
-                { bounds: Rect -> drawRect(color(), bounds.topLeft, bounds.size) }
-            }
-    if (this is BackdropRenderScope) styleInsets = { resolveStyle().insets() }
+    val style = BackdropStyleResolver(null, resolveStyle)
+    val contour = config.contour ?: style.highlight()
+    val outer = config.outer ?: style.shadow()
+    val inner = config.inner ?: style.innerShadow()
+    val lighting = config.lighting ?: style.interactionLighting()
+    val inheritedFill = if (config.fill == null) style::fill else null
+    val fillCache = BackdropFillRampCache()
+    if (this is BackdropRenderScope) styleInsets = style::insets
     config.finishDeclaration()
     val original = current
     val material = image {
         replace(original)
-        effects { config.effectBlocks.forEach { it(this) } }
+        if (config.explicitEffects) {
+            effects { config.effectBlocks.forEach { it(this) } }
+            if (inheritedFill != null) fillCoverage(inheritedFill)
+        } else styleEffects(style, inheritedFill)
         clipSurface()
     }
     group {
-        config.behindDrawings.forEach { it.declare(this, material) }
+        config.behindDrawings.forEach { decoration(it.value, material) }
         shadow(outer)
         draw(material)
         paintSurface(CompositingStrategy.Auto) { room ->
@@ -54,16 +52,18 @@ public fun BackdropImageScope.surface(block: BackdropSurfaceScope.() -> Unit = {
                         room.size.height + room.extension.top + room.extension.bottom,
                     ),
                 )
-            fill(this, bounds)
+            val explicitFill = config.fill
+            if (explicitFill != null) explicitFill(this, bounds)
+            else drawStyledFill(checkNotNull(inheritedFill).invoke(), room, fillCache)
             config.paints.forEach { it(this, room) }
         }
-        config.surfaceDrawings.forEach { it.declare(this, material) }
+        config.surfaceDrawings.forEach { decoration(it.value, material) }
         if (lighting is InteractionLighting.Config) interactionLight(lighting)
     }
     val front: BackdropImageScope.() -> Unit = {
         highlight(contour, colorSource = material, interactionLighting = lighting)
         innerShadow(inner)
-        config.foregroundDrawings.forEach { it.declare(this, material) }
+        config.foregroundDrawings.forEach { decoration(it.value, material) }
         if (config.foregroundPaints.isNotEmpty())
             paintSurface(CompositingStrategy.Auto) { room ->
                 config.foregroundPaints.forEach { it(this, room) }
@@ -72,16 +72,21 @@ public fun BackdropImageScope.surface(block: BackdropSurfaceScope.() -> Unit = {
     if (this is BackdropRenderScope) foreground(front) else draw(image(front))
 }
 
-private fun <P : BackdropDecoration<P>> SurfaceDecoration<P>.declare(
-    target: BackdropImageScope,
-    material: BackdropImage,
+/**
+ * Appends a stateful decoration at this graph position, using [processedSource] for declared
+ * sampling. The caller owns source selection and clipping. Auto compositing and renderer resource
+ * reuse match surface decorations; sampled images retain their own recording boundary.
+ */
+public fun <P : BackdropDecoration<P>> BackdropImageScope.decoration(
+    value: P,
+    processedSource: BackdropImage = current,
 ) {
-    target.deferredPrimitive(listOf(material)) { geometry ->
+    deferredPrimitive(listOf(processedSource)) { geometry ->
         val sampling = value.sampling(geometry)
         RenderImageNode.Primitive(
             DecorationPrimitive(value),
             if (sampling == null) emptyList()
-            else listOf(BackdropPrimitiveInput(material, sampling)),
+            else listOf(BackdropPrimitiveInput(processedSource, sampling)),
         )
     }
 }

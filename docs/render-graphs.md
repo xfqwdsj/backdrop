@@ -30,6 +30,11 @@ Modifier.drawBackdrop(backdrop, shape = { shape }) {
 ```
 
 The root `BackdropRenderScope` selects the background, `foreground { }`, and `export(image)`.
+`foreground { }` replaces the selected foreground. `appendForeground { }` builds an additional image
+from transparent pixels and composites it above the retained foreground. Root `styledSurface(style)` owns its fixed foreground
+and rejects replacement or another surface owner. Its independent style-construction DSL and fixed
+rendering contract are described in [Styles and decorations](styles-and-decorations.md).
+
 Nested declarations receive `BackdropImageScope`. DSL markers prevent accidental implicit access
 to outer graph operations from drawing, effect, and nested image receivers. These mutable scopes
 are declaration builders that close when resolution begins. Their `density` is an immutable

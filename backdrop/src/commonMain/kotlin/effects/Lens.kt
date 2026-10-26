@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.util.fastCoerceAtMost
 import top.ltfan.backdrop.BackdropEffectScope
+import top.ltfan.backdrop.BackdropLens
 import top.ltfan.backdrop.internal.RoundedRectRefractionShaderString
 import top.ltfan.backdrop.internal.RoundedRectRefractionWithDispersionShaderString
 import top.ltfan.backdrop.internal.lensSampling
@@ -123,3 +124,14 @@ private fun normalizedRadius(radius: Float, maximum: Float): Float {
 private fun throwUnsupportedSDFException(): Nothing {
     throw UnsupportedOperationException("Only CornerBasedShape is supported in lens effects.")
 }
+
+/**
+ * Applies dp distances with the same shape, validation and platform contract as the pixel overload.
+ */
+public fun BackdropEffectScope.lens(config: BackdropLens): Unit =
+    lens(
+        config.refractionHeight.toPx(),
+        config.refractionAmount.toPx(),
+        config.depthEffect,
+        config.chromaticAberration,
+    )

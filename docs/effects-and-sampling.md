@@ -238,3 +238,19 @@ runtimeShaderEffect(
 
 It scales premultiplied RGB while retaining alpha. If you change the shader to offset or spread its
 lookups, change the sampling declaration with it; the library cannot infer reads from shader code.
+
+## Shared effect configurations
+
+`BackdropColorControls`, `BackdropLens` and `BackdropBlur` are immutable configurations shared by
+styles and explicit graph composition. Effect-scope `colorControls(config)` and `lens(config)` use
+the existing algorithms. `vibrancy(saturation)` adds saturation as a serial stage; `vibrancy()`
+retains its 1.5 setting and cached filter. Earlier brightness, contrast and saturation processing
+remain in the chain.
+
+Image-scope `blur(config)` and `blur { config }` accept all explicit blur algorithms. The producer
+form separates a retained topology selector from resolution-time parameters. Switching between
+layered and filter algorithms redeclares a modifier graph; independent renderer hosts redeclare
+when changing that topology. Uniform/shader parameter changes resolve the existing filter chain;
+layered parameter changes reuse compatible primitive renderers and branch pools. No algorithm
+selection implies automatic fallback or alpha fading. Image-scope `fill(config)` and `fill { config }`
+share the style fill implementation, including brush opacity, independent ramp geometry and caching.

@@ -90,8 +90,11 @@ class LayeredProgressiveBlurCostTest {
         }
     }
 
-    @Test
-    fun recordedWorkReusesLayersAndSharesOneSourceRecordingPerFrame() = runRenderTest {
+    @Test fun recordedWorkReusesLayersAndSharesOneSourceRecordingPerFrame() = recordedWork(false)
+
+    @Test fun styledWorkReusesLayersAndSharesOneSourceRecordingPerFrame() = recordedWork(true)
+
+    private fun recordedWork(styled: Boolean) = runRenderTest {
         val levels = mutableIntStateOf(4)
         val revision = mutableIntStateOf(0)
         val active = mutableSetOf<GraphicsLayer>()
@@ -128,7 +131,23 @@ class LayeredProgressiveBlurCostTest {
                             RectangleShape,
                             LayoutDirection.Ltr,
                         )
-                    if (levels.intValue > 0)
+                    if (styled)
+                        scope.styledSurface(
+                            BackdropStyle.NoEffects {
+                                blur = {
+                                    if (levels.intValue > 0)
+                                        BackdropBlur.LayeredProgressive(
+                                            if (frame % 2 == 0) 16.dp else 12.dp,
+                                            if (frame % 2 == 0) BackdropEdge.Top
+                                            else BackdropEdge.Start,
+                                            BackdropRamp(stops = if (frame % 2 == 0) 16 else 32),
+                                            levels.intValue,
+                                        )
+                                    else BackdropBlur.None
+                                }
+                            },
+                        )
+                    else if (levels.intValue > 0)
                         scope.layeredProgressiveBlur(
                             if (frame % 2 == 0) 16f else 12f,
                             if (frame % 2 == 0) BackdropEdge.Top else BackdropEdge.Start,

@@ -61,7 +61,7 @@ internal constructor(
     internal val surfaceDrawings = mutableListOf<SurfaceDecoration<*>>()
     internal val foregroundDrawings = mutableListOf<SurfaceDecoration<*>>()
 
-    /** Appends optical stages in declaration order and replaces inherited blur. */
+    /** Appends optical stages in declaration order and replaces inherited optical processing. */
     public fun effects(block: @BackdropRenderDsl BackdropEffectScope.() -> Unit) {
         checkDeclaration()
         explicitEffects = true

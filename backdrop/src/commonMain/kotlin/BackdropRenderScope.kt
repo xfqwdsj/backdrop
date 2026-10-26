@@ -110,6 +110,9 @@ internal constructor(
         }
     }
 
+    internal var styledSurfaceDeclared: Boolean = false
+    internal var surfaceDeclared: Boolean = false
+
     internal var styleInsets: (() -> BackdropInsets)? = null
     /** Optional foreground selected by [foreground], drawn separately from the background. */
     public var foregroundImage: BackdropImage? = null
@@ -122,7 +125,26 @@ internal constructor(
         private set
 
     public fun foreground(block: BackdropImageScope.() -> Unit) {
+        check(!styledSurfaceDeclared) { "Use appendForeground after styledSurface" }
         foregroundImage = image(block)
+    }
+
+    /**
+     * Composites a transparent-based declaration above the retained foreground. Operations in
+     * [block] select the additional image; they preserve the previously selected foreground.
+     */
+    public fun appendForeground(block: BackdropImageScope.() -> Unit) {
+        val previous = foregroundImage
+        val addition = image(block)
+        foregroundImage = image {
+            if (previous != null) draw(previous)
+            draw(addition)
+        }
+    }
+
+    internal fun styledForeground(block: BackdropImageScope.() -> Unit) {
+        foregroundImage = image(block)
+        styledSurfaceDeclared = true
     }
 
     /**

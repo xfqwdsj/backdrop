@@ -9,10 +9,10 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import top.ltfan.backdrop.internal.createRuntimeShaderEffect
 
 /**
- * A stateful surface-phase drawing. Mutable configuration is snapshot-backed. Bounds describe
- * finite output in surface pixels, including antialiasing. The renderer draws into its caller's
- * destination; algorithms needing construction layers create them through
- * [BackdropRenderResources].
+ * A stateful drawing for graph composition and surface phases. Mutable configuration is
+ * snapshot-backed. Bounds describe finite output in surface pixels, including antialiasing. The
+ * renderer draws into its caller's destination; algorithms needing construction layers create them
+ * through [BackdropRenderResources].
  */
 @Stable
 public interface BackdropDecoration<P : BackdropDecoration<P>> {
@@ -62,7 +62,7 @@ public sealed interface BackdropDecorationContext : BackdropGeometry {
 
 @BackdropRenderDsl
 public sealed interface BackdropDecorationDrawContext : BackdropDecorationContext {
-    /** Finite, shape-clipped source after the serial effects and before surface painting. */
+    /** Caller-selected source; surface phases supply the clipped input before surface painting. */
     public val processedSource: BackdropImageInput
 }
 

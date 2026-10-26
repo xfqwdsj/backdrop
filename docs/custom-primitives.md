@@ -22,11 +22,18 @@ construction layer can create one from resources and record it with the decorati
 A decoration overrides `sampling(geometry)` with its complete `BackdropSampling` footprint when
 it reads the processed source; the default null value declares a drawing without that input.
 `BackdropDecorationContext.inputBounds` reports the resolved footprint.
-`BackdropDecorationDrawContext.processedSource` borrows the finite, shape-clipped source after its
-serial optics and before fill. The view can draw or provide a runtime-shader input during the active
-decoration invocation. Access after return is rejected. Sampling outside that processed domain uses
+`BackdropDecorationDrawContext.processedSource` borrows the selected graph image. Surface phases
+supply the finite, shape-clipped source after serial optics and before fill. The view can draw or
+provide a runtime-shader input during the active decoration invocation. Access after return is rejected. Sampling outside that processed domain uses
 transparent pixels. The borrowed context and input remain read-only; callers choose their own effects
 and foreground drawing.
+
+Stateful decorations can also join ordinary graph composition through
+`decoration(value, processedSource)`. The selected input belongs to the same declaration; callers
+choose its processing and clipping. This preserves decoration renderer keys, automatic compositing,
+sampling footprints and resource ownership.
+With a fixed styled surface, append native foreground drawing through `appendForeground { }`;
+the additional block starts transparent and composites above the retained foreground.
 
 ## Define an isolated image configuration and renderer
 

@@ -29,6 +29,7 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.ObserverModifierNode
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.node.invalidatePlacement
 import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.node.requireDensity
 import androidx.compose.ui.node.requireGraphicsContext
@@ -132,6 +133,8 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     private var lightWindow: Any? = null
     private var lightsPresent: State<Boolean>? = null
     private var geometry: Geometry? = null
+    private var declarationDirty = false
+    private var resolutionDirty = false
     private var graphDirty = true
     private var graphFrame = 0L
     private var backgroundVisible = false
@@ -143,7 +146,8 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
 
     private inner class ResolutionReads : Modifier.Node(), ObserverModifierNode {
         override fun onObservedReadsChanged() {
-            renderScope?.let(::resolveImages)
+            resolutionDirty = true
+            this@RenderBackdropNode.invalidatePlacement()
             this@RenderBackdropNode.invalidateDraw()
         }
 
@@ -209,7 +213,10 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
                 ),
             )
         }
-        return layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        return layout(placeable.width, placeable.height) {
+            resolvePending()
+            placeable.place(0, 0)
+        }
     }
 
     override fun onAttach() {
@@ -218,8 +225,15 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     }
 
     override fun onObservedReadsChanged() {
-        geometry?.let(::resolve)
+        declarationDirty = true
+        invalidatePlacement()
         invalidateDraw()
+    }
+
+    private fun resolvePending() {
+        val geometry = geometry ?: return
+        if (declarationDirty || renderScope == null) resolve(geometry)
+        else if (resolutionDirty) resolveImages(checkNotNull(renderScope))
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
@@ -239,11 +253,19 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     }
 
     private fun updateGeometry(next: Geometry) {
-        if (geometry == next && renderScope != null) return
+        if (geometry == next && renderScope != null) {
+            resolvePending()
+            return
+        }
         val previous = geometry
         val scope = renderScope
         geometry = next
-        if (scope != null && !scope.readsSize && previous?.copy(size = next.size) == next) {
+        if (
+            !declarationDirty &&
+                scope != null &&
+                !scope.readsSize &&
+                previous?.copy(size = next.size) == next
+        ) {
             scope.updateSize(next.size)
             resolveImages(scope)
         } else {
@@ -252,6 +274,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     }
 
     private fun resolve(draw: Geometry) {
+        declarationDirty = false
         renderScope = null
         graphDirty = true
         observeReads {
@@ -274,6 +297,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     }
 
     private fun resolveImages(scope: BackdropRenderScope) {
+        resolutionDirty = false
         graphDirty = true
         resolutionReads.observe {
             val insets =
@@ -336,6 +360,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
             graphDirty = true
         }
         // Resolve on demand; producer observation covers updates while the graph is invisible.
+        resolvePending()
         if (renderScope == null) resolve(geometry)
         val scope = renderScope!!
         if (alpha == 1f) releasePresentationLayers()

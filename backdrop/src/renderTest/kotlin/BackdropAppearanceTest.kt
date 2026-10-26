@@ -34,24 +34,26 @@ class BackdropAppearanceTest {
     fun parameterDefaultsAndNestedProvidersRetainIndependentFields() = runRenderTest {
         lateinit var root: BackdropStyle
         lateinit var child: BackdropStyle
-        val parent = BackdropStyle(blurRadius = { 8.dp })
+        val parent = BackdropStyle { blur = { BackdropBlur.Uniform(8.dp) } }
         val inner: () -> InnerShadow = { InnerShadow.Default }
         setContent {
             root = LocalBackdropStyle.current
             ProvideBackdropStyle(parent) {
-                ProvideBackdropStyle(innerShadow = inner) { child = LocalBackdropStyle.current }
+                ProvideBackdropStyle(BackdropStyle { innerShadow = inner }) {
+                    child = LocalBackdropStyle.current
+                }
             }
         }
         waitForIdle()
         assertSame(BackdropStyle.Default, root)
-        assertSame(Highlight.Default, root.highlight())
-        assertSame(Shadow.Default, root.shadow())
-        assertSame(InnerShadow.None, root.innerShadow())
-        assertSame(parent.blurRadius, child.blurRadius)
-        assertSame(parent.highlight, child.highlight)
-        assertSame(parent.shadow, child.shadow)
+        assertSame(Highlight.Default, root.highlight!!.invoke())
+        assertSame(Shadow.Default, root.shadow!!.invoke())
+        assertSame(InnerShadow.None, root.innerShadow!!.invoke())
+        assertSame(parent.blur, child.blur)
+        assertSame(BackdropStyle.Default.highlight, child.highlight)
+        assertSame(BackdropStyle.Default.shadow, child.shadow)
         assertSame(inner, child.innerShadow)
-        assertEquals(0.dp, BackdropStyle.NoEffects.blurRadius())
+        assertEquals(BackdropBlur.None, BackdropStyle.NoEffects.blur!!.invoke())
     }
 
     @Test
@@ -89,10 +91,14 @@ class BackdropAppearanceTest {
             val modifier =
                 Modifier.size(40.dp).drawBackdrop(source, { RectangleShape }) { surface {} }
             Row {
-                ProvideBackdropStyle(BackdropStyle.NoEffects.copy(fill = { Color.Red })) {
+                ProvideBackdropStyle(
+                    BackdropStyle.NoEffects { fill = { BackdropFill(Color.Red) } },
+                ) {
                     Box(modifier.testTag("red"))
                 }
-                ProvideBackdropStyle(BackdropStyle.NoEffects.copy(fill = { Color.Blue })) {
+                ProvideBackdropStyle(
+                    BackdropStyle.NoEffects { fill = { BackdropFill(Color.Blue) } },
+                ) {
                     Box(modifier.testTag("blue"))
                 }
             }
@@ -108,7 +114,7 @@ class BackdropAppearanceTest {
         setContent {
             val source = rememberCanvasBackdrop { drawRect(Color.White) }
             SideEffect { compositions++ }
-            ProvideBackdropStyle(BackdropStyle.NoEffects.copy(fill = { color.value })) {
+            ProvideBackdropStyle(BackdropStyle.NoEffects { fill = { BackdropFill(color.value) } }) {
                 Box(
                     Modifier.size(40.dp).testTag("surface").drawBackdrop(
                         source,
@@ -125,9 +131,9 @@ class BackdropAppearanceTest {
         waitForIdle()
         assertTrue(onNodeWithTag("surface").captureToImage().toPixelMap()[20, 20].blue > .98f)
         assertEquals(before, compositions)
-        assertEquals(Highlight.None, BackdropStyle.NoEffects.highlight())
-        assertEquals(Shadow.None, BackdropStyle.NoEffects.shadow())
-        assertEquals(InnerShadow.None, BackdropStyle.NoEffects.innerShadow())
+        assertEquals(Highlight.None, BackdropStyle.NoEffects.highlight!!.invoke())
+        assertEquals(Shadow.None, BackdropStyle.NoEffects.shadow!!.invoke())
+        assertEquals(InnerShadow.None, BackdropStyle.NoEffects.innerShadow!!.invoke())
     }
 
     @Test
@@ -158,7 +164,7 @@ class BackdropAppearanceTest {
         }
         waitForIdle()
         val before = calls
-        runOnIdle { style.value = BackdropStyle.NoEffects.copy(fill = { Color.Blue }) }
+        runOnIdle { style.value = BackdropStyle.NoEffects { fill = { BackdropFill(Color.Blue) } } }
         waitForIdle()
         assertEquals(before, calls)
         assertTrue(onNodeWithTag("surface").captureToImage().toPixelMap()[20, 20].red > .98f)

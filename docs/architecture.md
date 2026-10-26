@@ -143,6 +143,14 @@ position; scope-level shader access supplies the underlying cache and observatio
 
 ## Invalidate at the phase that consumes state
 
+Declaration and resolution observers schedule placement invalidation. Placement coalesces both,
+rebuilds an invalid declaration first, then resolves its effect parameters and updates isolation
+bounds before drawing. This order also covers state shared by algorithm selection and its
+parameters, independently of snapshot observer notification order. Drawing performs the same
+pending-work check when needed. Changing between layered and filter blur changes topology;
+parameter animation within a selected algorithm retains the graph. The topology selector is a
+retained derived state whose equality separates structural from parameter dependencies.
+
 Visual producers are observed by drawing or effect resolution. Explicit producers avoid reading
 replaced style defaults, and inherited producers resolve locals at the modifier's use position.
 Position-only updates invalidate coordinate-dependent source sampling; changes to size, density,

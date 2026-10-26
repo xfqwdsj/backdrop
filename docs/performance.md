@@ -58,10 +58,17 @@ tests, outside timed benchmark methods.
 ```
 
 `GraphBenchmark` isolates declaration and resolution with one or eight receivers.
+
+`StyleBenchmark` measures immutable style construction and derivation, then pairs styled and native
+declaration and retained resolution for uniform and layered blur. The resolution methods prepare
+resources without recording pixels; the suite measures managed allocation and CPU work at each
+boundary.
+
 `GraphTopologyBenchmark` covers shared branches, overlapping transforms, masks and serial
-filters with retained or rebuilt declarations. `MotionBenchmark` renders the shared scenes
-synchronously through a raster `ImageComposeScene`; its result is unpaced raster throughput,
-not displayed frame rate or GPU execution time.
+filters with retained or rebuilt declarations.
+
+`MotionBenchmark` renders the shared scenes synchronously through a raster `ImageComposeScene`;
+its result is unpaced raster throughput, not displayed frame rate or GPU execution time.
 
 The full JMH allocation task uses five one-second warm-ups, eight one-second measurements and two
 forks with a fixed 2 GiB heap. Use `-PbenchmarkHeap=<size>`, such as `2g`, to select another fixed

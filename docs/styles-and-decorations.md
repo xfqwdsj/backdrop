@@ -5,35 +5,72 @@ highlights and shadows work at the root and inside `image` or `layer` blocks. Si
 associative drawing can share its destination recording; a sampled result or explicit `layer`
 retains its own compositing boundary.
 
-## Configure a surface
+## Construct and apply a style
 
 ```kotlin
-ProvideBackdropStyle(
-    blurRadius = { 8.dp },
-    fill = { tint },
-    highlight = { Highlight.Ambient },
-) {
-    Box(Modifier.drawBackdrop(backdrop, shape = { RoundedCornerShape(24.dp) }) { surface {} })
+val glass = BackdropStyle {
+    blur = { BackdropBlur.Uniform(8.dp) }
+    fill = { BackdropFill(tint) }
+    highlight = { Highlight.Ambient }
+}
+val panel = glass {
+    blur = { BackdropBlur.LayeredProgressive(16.dp, BackdropEdge.Top) }
+    fill = null
+}
+ProvideBackdropStyle(glass) {
+    Box(Modifier.drawBackdrop(backdrop, shape = { RoundedCornerShape(24.dp) }) {
+        styledSurface(panel)
+    })
 }
 ```
 
-`surface { }` selects fixed appearance phases. Its `BackdropStyle` contains delayed blur, fill,
-highlight, shadow, inner-shadow, interaction-lighting and inset producers. Style fields provide
-appearance producers; image and effect operations belong to the DSL scopes. The fixed order is outer
-shadow, blurred and clipped source, fill, additive interior light, children, then highlight and
-inner shadow. `backgroundAlpha` fades the background group; foreground decorations and children have
-independent opacity. Use the graph DSL when decorations should fade with the background or need
-another ordering.
+`BackdropStyle { }` creates immutable overrides. `style { }` derives an independent value;
+its raw constructor and mutable builder are private implementation details. Producers remain delayed and derivation
+copies their references without retaining a parent chain. Later assignments replace earlier ones.
+An unset field retains its previous configuration when deriving. Assigning `null` clears that
+override and restores the receiving position's theme, including when the base had an explicit value.
+Use `None` or a neutral value to disable an effect; a transparent value remains explicitly configured.
+An empty block reuses the original value. Equality compares producer references without running them.
 
-Inside `surface { }`, an unset slot inherits its delayed producer at the modifier's use position. A DSL setter
-replaces it; `Highlight.None`, `Shadow.None`, and `InnerShadow.None` omit those decorations.
-An `effects { }` block replaces inherited blur with the declared serial chain. Repeated effect
-blocks append stages; repeated appearance setters select the last value. A null `insets` argument
-inherits the style's inset producer.
-A zero-alpha value configures the primitive with transparent output. `BackdropStyle.NoEffects`
-specifies every style field, with zero blur, transparent fill, no insets, and all decoration
-primitives disabled. Omitted provider fields inherit parent producers;
-providing a complete style replaces all fields. Defaults include highlight and outer shadow.
+`ProvideBackdropStyle(style)` merges explicit producers over its parent. `Default` resets all fields;
+`NoEffects` explicitly selects neutral optical processing, transparent fill, no insets and disabled
+decorations. An empty style overrides nothing. Construction reads no CompositionLocal.
+`styledSurface()` and `styledSurface(style = null)` apply the receiving theme.
+Only inherited fields read theme defaults. Drawing and effect parameters stay observed in their
+consuming phases, so fill-color and blur-radius animations do not rebuild the graph.
+
+`styledSurface` belongs only to the root `BackdropRenderScope`. It owns one background and one
+foreground with this fixed order:
+
+1. Color controls, the selected blur algorithm, vibrancy, lens, then shape clipping.
+2. Background: outer shadow, processed source, fill, then additive interior interaction light.
+3. Compose child content.
+4. Foreground: highlight, then inner shadow.
+
+The highlight samples the processed source before fill, interaction light and child content.
+Vibrancy appends saturation to the existing color processing. `BackdropBlur` explicitly selects
+uniform, shader-progressive or layered-progressive blur; unsupported-platform behavior follows the
+selected native algorithm. The library chooses no fallback. A fill's ramp and edge request their
+own coverage independently of blur. A null fill brush paints nothing and null alpha means one in
+this pipeline; consumers may resolve those values through their own theme before constructing it.
+Modifier insets override style insets. `backgroundAlpha` fades the complete background independently
+of foreground and child content; exports retain the graph's selected image and presentation opacity.
+
+A root accepts one `styledSurface`, without another root `surface` or existing foreground.
+`foreground { }` keeps replacement semantics for free composition; after `styledSurface` use
+`appendForeground { }` to add native drawing without replacing the fixed foreground. Additional
+background drawing uses ordinary `image`, `group`, `draw`, `paint` and `primitive` operations.
+`decoration(value, processedSource)` exposes stateful decoration drawing at any graph position,
+with the same automatic compositing and renderer-resource reuse as surface decorations.
+Style configuration contains no arbitrary optical or drawing callbacks.
+
+## Compose surface phases
+
+`surface { }` remains a separate graph-composition API, also available in images and explicit
+layers. An unset appearance slot inherits its delayed producer at the modifier's use position.
+A setter replaces that slot; repeated `effects { }` blocks append stages while replacing inherited
+optical processing. Drawing callbacks and decoration declarations append within their phases.
+This API lets the caller compose surface phases through its own declaration receiver.
 
 Read optical and decoration state inside the declaration, and drawing state inside a paint callback,
 to update rendering without recomposition:

@@ -25,12 +25,51 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.effects.blur
 
 class BackdropGraphRenderingTest {
+    @Test
+    fun repeatedResolutionRefreshesTransformSamplingAndRejectsInvalidMatrices() = runRenderTest {
+        val bounds = Rect(0f, 0f, 80f, 80f)
+        val renderer = BackdropRenderer { error("Resolution does not record layers") }
+        fun declaration(matrix: Matrix, extraNode: Boolean = false): BackdropRenderScope =
+            BackdropRenderScope(1f, 1f, bounds.size, RectangleShape, LayoutDirection.Ltr).apply {
+                source()
+                if (extraNode) transform(Matrix())
+                transform(matrix)
+            }
+        fun checkResolution(scope: BackdropRenderScope) {
+            val reference = BackdropRenderer { error("Resolution does not record layers") }
+            reference.use {
+                reference.resolve(scope, bounds)
+                renderer.resolve(scope, bounds)
+                assertEquals(reference.visible, renderer.visible)
+                assertEquals(reference.extension, renderer.extension)
+            }
+        }
+        renderer.use {
+            val scope = declaration(Matrix().apply { translate(12f, -7f) })
+            checkResolution(scope)
+            val transform = scope.graph.filterIsInstance<RenderImageNode.Transform>().single()
+            transform.matrix.reset()
+            transform.matrix.scale(.5f, 2f)
+            transform.matrix.translate(-25f, 9f)
+            checkResolution(scope)
+            transform.matrix.scale(0f, 1f)
+            assertFailsWith<IllegalArgumentException> { renderer.resolve(scope, bounds) }
+            transform.matrix.reset()
+            checkResolution(scope)
+            checkResolution(declaration(Matrix().apply { rotateZ(35f) }, extraNode = true))
+            checkResolution(declaration(Matrix().apply { translate(-40f, 17f) }))
+            renderer.close()
+            checkResolution(scope)
+        }
+    }
+
     @Test
     fun removedOutputsReleaseTheirDrawingObservations() = runRenderTest {
         val outputs = mutableStateOf(true)

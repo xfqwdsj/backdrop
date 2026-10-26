@@ -88,7 +88,10 @@ allocation and source-domain bounds serve separate contracts.
 [BackdropRenderer](../backdrop/src/commonMain/kotlin/BackdropRenderer.kt) owns
 intermediate images and primitive renderers per receiver. Resolution traverses only reachable
 images, propagates all input requests backwards, and constructs deferred effects after the final
-storage extension is known. Source domains and sampling requests have separate bounds. Surface
+storage extension is known. Each reachable transform retains an inverse matrix, refreshed and
+validated during forward domain resolution and reused for backward sampling requests. Unused
+transform slots and renderer closure release those matrices.
+Source domains and sampling requests have separate bounds. Surface
 clipping bounds its upstream request by the extended outline, retaining one pixel of antialiasing room.
 Graph recording evaluates the current outline before reusing owned rounded-path geometry. Generic outlines
 retain their fill rule when rebuilt for extended coverage.

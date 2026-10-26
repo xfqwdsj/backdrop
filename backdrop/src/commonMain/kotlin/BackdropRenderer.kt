@@ -64,6 +64,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     private val domains = mutableListOf<Rect>()
     private var requests = arrayOfNulls<Rect>(0)
     private var recorded = BooleanArray(0)
+    private var inverseTransforms = arrayOfNulls<Matrix>(0)
     private var aliases = IntArray(0)
     private var reachable = BooleanArray(0)
     private var storageOrigins = LongArray(0)
@@ -113,6 +114,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         graph = scope.graph
         if (recorded.size != graph.size) {
             recorded = BooleanArray(graph.size)
+            inverseTransforms = inverseTransforms.copyOf(graph.size)
             reachable = BooleanArray(graph.size)
             aliases = IntArray(graph.size)
             storageOrigins = LongArray(graph.size)
@@ -219,14 +221,20 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
                 scope.layoutDirection,
                 coverage,
             )
-        graph = graph.mapIndexed { index, node ->
-            if (reachable[index] && node is RenderImageNode.DeferredPrimitive)
-                node.resolve(primitiveGeometry)
-            else node
+        var resolvedGraph: MutableList<RenderImageNode>? = null
+        for (index in graph.indices) {
+            val node = graph[index]
+            if (reachable[index] && node is RenderImageNode.DeferredPrimitive) {
+                val nodes = resolvedGraph ?: graph.toMutableList().also { resolvedGraph = it }
+                nodes[index] = node.resolve(primitiveGeometry)
+            }
         }
+        graph = resolvedGraph ?: graph
         // Primitive output bounds describe visible pixels independently of their input footprints.
         domains.clear()
         for ((index, node) in graph.withIndex()) {
+            if (!reachable[index] || node !is RenderImageNode.Transform)
+                inverseTransforms[index] = null
             domains +=
                 if (!reachable[index]) coverage
                 else
@@ -243,7 +251,10 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
                         is RenderImageNode.Mask -> domains[node.input]
                         is RenderImageNode.Clip -> domains[node.input]
                         is RenderImageNode.Transform -> {
-                            inverseSourceTransform(node.matrix, Matrix())
+                            val inverse =
+                                inverseTransforms[index]
+                                    ?: Matrix().also { inverseTransforms[index] = it }
+                            inverseSourceTransform(node.matrix, inverse)
                             node.matrix.map(domains[node.input])
                         }
                         else -> coverage
@@ -296,7 +307,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
                 is RenderImageNode.Transform ->
                     request(
                         node.input,
-                        inverseSourceTransform(node.matrix, Matrix()).map(output).inflate(1f),
+                        checkNotNull(inverseTransforms[index]).map(output).inflate(1f),
                     )
                 is RenderImageNode.Primitive<*> -> {
                     val region = intersection(output, domains[index])
@@ -944,6 +955,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         effects.clear()
         filterEffects.fill(null)
         filterRequests.fill(null)
+        inverseTransforms.fill(null)
         recorded.fill(false)
         resolvedScope = null
         graph = emptyList()

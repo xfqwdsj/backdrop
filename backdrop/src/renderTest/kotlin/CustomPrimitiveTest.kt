@@ -40,6 +40,41 @@ import top.ltfan.backdrop.effects.runtimeShaderEffect
 
 class CustomPrimitiveTest : PlatformGraphicsTest() {
     @Test
+    fun retainedDeferredPrimitivesResolveWithEachGeometryWithoutReplacingDeclarations() {
+        val stats = Stats()
+        var resolutions = 0
+        val scope =
+            scope().apply {
+                image {
+                    deferredPrimitive(emptyList()) { error("Unreachable declaration was resolved") }
+                }
+                group {
+                    deferredPrimitive(emptyList()) { geometry ->
+                        resolutions++
+                        RenderImageNode.Primitive(
+                            Probe(stats, box = geometry.surfaceBounds),
+                            emptyList(),
+                        )
+                    }
+                }
+            }
+        val declaration = scope.graph.toList()
+        val renderer = BackdropRenderer { error("Resolution does not record layers") }
+        renderer.use {
+            for (size in listOf(Size(20f, 20f), Size(40f, 30f), Size(10f, 15f))) {
+                scope.updateSize(size)
+                renderer.resolve(scope, Rect(Offset.Zero, size))
+                assertEquals(Rect(Offset.Zero, size), renderer.visible)
+                assertEquals(declaration, scope.graph)
+            }
+            assertEquals(3, resolutions)
+            assertEquals(3, stats.prepares)
+            assertEquals(1, stats.creates)
+        }
+        assertEquals(1, stats.releases)
+    }
+
+    @Test
     fun independentSamplingAndOutputBoundsResolveBeforePreparation() {
         val stats = Stats()
         val scope = scope()

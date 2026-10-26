@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   test:
-    name: JVM and Android device tests
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -30,7 +30,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Run JVM and Android device tests
+      - name: Run tests
         run: ./gradlew :verifyManaged --continue
       - name: Upload test reports
         if: always()
@@ -41,26 +41,5 @@ jobs:
             **/build/reports/tests/**
             **/build/reports/androidTests/**
             **/build/outputs/androidTest-results/**
-          overwrite: true
-          retention-days: 7
-
-  targets:
-    name: Kotlin Multiplatform tests
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-build
-        with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-      - name: Run target tests
-        run: ./gradlew :verifyTargets --continue
-      - name: Upload target test reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: target-test-reports
-          path: '**/build/reports/tests/**'
           overwrite: true
           retention-days: 7

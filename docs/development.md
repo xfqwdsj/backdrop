@@ -16,7 +16,7 @@ For ordinary local verification:
 ./gradlew :verify
 ```
 
-This checks repository formatting, JVM library and scenario tests, generated task documentation,
+This checks formatting, JVM library and scenario tests, generated task documentation,
 and release automation. The dependency-free script tests use Kotlin’s managed Node toolchain.
 
 For rendering, platform, API and test-infrastructure validation, select a connected Android device
@@ -26,10 +26,10 @@ and run:
 ANDROID_SERIAL="<device-serial>" ./gradlew :verifyConnected
 ```
 
-This adds all-target library assembly and the shared Android device tests. CI uses
-`verifyManaged` on Ubuntu with the AGP-managed device declared by the module, and `verifyTargets`
-on macOS for Kotlin Multiplatform tests. AGP selects all connected
-devices unless `ANDROID_SERIAL` identifies one explicitly.
+This adds host-supported library assembly, Kotlin target tests and the shared Android device tests.
+CI runs `verifyManaged` in one Ubuntu job with the AGP-managed device declared by the module.
+Both device entry points include `verifyTargets`, which combines `verify` with the Kotlin target tests
+supported by the host. AGP selects all connected devices unless `ANDROID_SERIAL` identifies one explicitly.
 
 Run IDE inspections at warning severity on touched files and report unavailable checks explicitly.
 Formatting uses ktfmt's Kotlin language style; review formatting changes for unrelated edits.
@@ -171,9 +171,9 @@ without also selecting a plugin task of the same name in a subproject.
 | Root task | Contract |
 | --- | --- |
 | `./gradlew :verify` | Checks formatting, JVM tests and release automation. |
-| `./gradlew :verifyTargets` | Runs Kotlin Multiplatform target tests. |
-| `./gradlew :verifyConnected` | Builds the library and runs Android tests on the selected connected device. |
-| `./gradlew :verifyManaged` | Builds the library and runs Android tests on AGP-managed devices. |
+| `./gradlew :verifyTargets` | Runs the verify task and Kotlin target tests supported by the host. |
+| `./gradlew :verifyConnected` | Builds the library and runs Kotlin target tests plus selected Android device tests. |
+| `./gradlew :verifyManaged` | Builds the library and runs Kotlin target tests plus AGP-managed Android device tests. |
 | `./gradlew :verifyRelease` | Checks the release tag, clean checkout and library artifacts. |
 | `./gradlew :publishLocal` | Runs JVM tests and publishes artifacts to Maven Local. |
 | `./gradlew :publishCentral` | Verifies the release and publishes to Maven Central. |

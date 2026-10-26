@@ -22,13 +22,22 @@ val commands =
                     "checkBuildDocs",
                 )),
         "verifyTargets" to
-            ("Runs Kotlin Multiplatform target tests." to listOf("verify", ":backdrop:allTests")),
+            ("Runs the verify task and Kotlin target tests supported by the host." to
+                listOf("verify", ":backdrop:allTests")),
         "verifyConnected" to
-            ("Builds the library and runs Android tests on the selected connected device." to
-                listOf("verify", ":backdrop:assemble", ":backdrop:connectedAndroidDeviceTest")),
+            ("Builds the library and runs Kotlin target tests plus selected Android device tests." to
+                listOf(
+                    "verifyTargets",
+                    ":backdrop:assemble",
+                    ":backdrop:connectedAndroidDeviceTest",
+                )),
         "verifyManaged" to
-            ("Builds the library and runs Android tests on AGP-managed devices." to
-                listOf("verify", ":backdrop:assemble", ":backdrop:allDevicesAndroidDeviceTest")),
+            ("Builds the library and runs Kotlin target tests plus AGP-managed Android device tests." to
+                listOf(
+                    "verifyTargets",
+                    ":backdrop:assemble",
+                    ":backdrop:allDevicesAndroidDeviceTest",
+                )),
         "verifyRelease" to
             ("Checks the release tag, clean checkout and library artifacts." to
                 listOf("checkReleaseVersion", "checkReleaseTree", ":backdrop:assemble")),

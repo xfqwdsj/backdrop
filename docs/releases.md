@@ -26,10 +26,10 @@ captured by the release event. All subsequent jobs use that exact commit.
 Publication checks the latest existing push run of [Test](../.github/workflows/test.yml) for the
 exact release commit. Push CI tests that commit directly, while pull-request CI can use a merge
 ref. A completed successful run satisfies the prerequisite. An in-progress run
-is observed for up to 20 minutes. Missing, failed, cancelled or timed-out CI prevents publication;
-the release workflow does not dispatch another test run. Test CI runs `verifyManaged` on Ubuntu
-and `verifyTargets` on macOS for device and Kotlin target coverage. Both use Gradle's `--continue`
-to collect independent failures while retaining a failing workflow conclusion.
+is observed for up to 20 minutes. Missing, failed, canceled or timed-out CI prevents publication;
+the release workflow does not dispatch another test run. Test CI runs `verifyManaged` in one Ubuntu
+job, combining `verify`, host-supported Kotlin target tests and AGP-managed Android device
+tests. Gradle's `--continue` collects independent failures while retaining a failing workflow conclusion.
 
 `verifyRelease` checks version and clean-tag provenance and assembles library artifacts. Test CI
 provides test verification. Publication uses in-memory signing and credentials scoped to upload steps.
@@ -38,7 +38,7 @@ Packages publication failure fails the step and prevents Maven Central publicati
 runs after all Packages publications succeed. Publication failure records the workflow link in
 the performance section and skips benchmarks.
 
-`publishLocal` runs repository JVM tests and publishes to Maven Local for integration work.
+`publishLocal` runs JVM tests and publishes to Maven Local for integration work.
 `publishCentral` and `publishPackages` require `-PreleaseTag=<tag>` and depend on release verification.
 Publication tasks depend directly on the relevant verification task, so a failed gate stops
 uploads even when Gradle runs with `--continue`.

@@ -107,6 +107,12 @@ into retained recording passes within and across effect blocks; pointwise stages
 Gaussian filters still compose where safe. Pass input recordings round sampling requests outward
 to complete texels, independently of visible output clipping and finite source domains. Resizing
 or changing uniforms reuses compatible pass layers; omission, refresh and closure release them.
+Resolution reuses pass descriptors, fusion lists and input-retention flags. Each receiver retains
+native blur filters and their sampling contracts by positive-radius declaration position. Equal
+radius and tile policy reuse a filter; changed parameters replace it, and unused trailing slots
+are released. Native filter composition is reused while both child effect identities remain
+unchanged. Effect producers and deferred factories still run in their observing phases on each
+resolution, preserving snapshot dependencies and geometry-dependent effects.
 An exclusively consumed source records directly into that filtered layer. Independent foreground,
 export and primitive readers retain their own shared images; fusion preserves every declared
 sampling request and effect observation.

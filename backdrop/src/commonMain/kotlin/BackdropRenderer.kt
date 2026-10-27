@@ -24,7 +24,6 @@ import androidx.compose.ui.util.unpackInt2
 import kotlin.math.ceil
 import kotlin.math.floor
 import top.ltfan.backdrop.internal.SurfaceClipPath
-import top.ltfan.backdrop.internal.chain
 import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.internal.clipToExtendedShape
 import top.ltfan.backdrop.internal.extendedSurfaceClipBounds
@@ -73,7 +72,8 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     private var consumers = IntArray(0)
     private var filterInputs = IntArray(0)
     private var filterRequests = arrayOfNulls<Rect>(0)
-    private var filterPasses = arrayOfNulls<List<BackdropEffectScopeImpl.Pass>>(0)
+    private var filterPlans = arrayOfNulls<BackdropFilterPlan>(0)
+    private var imageInputs = BooleanArray(0)
     private var inlinedSources = BooleanArray(0)
     private var inlineDrawing = BooleanArray(0)
     private var fused = BooleanArray(0)
@@ -123,7 +123,8 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             consumers = IntArray(graph.size)
             filterInputs = IntArray(graph.size)
             filterRequests = arrayOfNulls(graph.size)
-            filterPasses = arrayOfNulls(graph.size)
+            filterPlans = filterPlans.copyOf(graph.size)
+            imageInputs = BooleanArray(graph.size)
             inlinedSources = BooleanArray(graph.size)
             fused = BooleanArray(graph.size)
             inlineDrawing = BooleanArray(graph.size)
@@ -332,7 +333,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
                 ceil(maxOf(0f, bounds.bottom - scope.size.height)),
             )
         for ((index, effect) in effects) {
-            if (requests[index] != null) effect.buildEffects(extension)
+            if (requests[index] != null) effect.buildEffects(extension) else effect.passes.clear()
         }
         for (index in graph.indices) {
             val requestedOutput = requests[index] ?: continue
@@ -394,7 +395,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             val (index, owned) = effectLayerIterator.next()
             val count =
                 if (index in graph.indices && requests[index] != null && !fused[index])
-                    (filterPasses[index]?.size ?: 1) - 1
+                    (filterPlans[index]?.passes?.size ?: 1) - 1
                 else 0
             while (owned.size > count) context()
                 .releaseGraphicsLayer(owned.removeAt(owned.lastIndex))
@@ -451,7 +452,14 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         consumers.fill(0)
         fused.fill(false)
         inlinedSources.fill(false)
-        filterPasses.fill(null)
+        for (index in filterPlans.indices) {
+            if (
+                requests[index] == null ||
+                    aliases[index] != index ||
+                    graph[index] !is RenderImageNode.Process
+            )
+                filterPlans[index] = null
+        }
         filterRequests.fill(null)
         fun use(index: Int) {
             consumers[aliases[index]]++
@@ -491,25 +499,12 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             val input = aliases[node.input]
             filterInputs[index] = input
             filterRequests[index] = own.samplingBounds.pixelAligned()
-            filterPasses[index] = own.passes
-            val previous = filterPasses[input]
-            if (previous != null && consumers[input] == 1) {
+            val previous = filterPlans[input]?.takeIf { consumers[input] == 1 }
+            val plan = filterPlans[index] ?: BackdropFilterPlan().also { filterPlans[index] = it }
+            plan.update(previous, own)
+            if (previous != null) {
                 filterInputs[index] = filterInputs[input]
                 filterRequests[index] = filterRequests[input]
-                filterPasses[index] =
-                    buildList(previous.size + own.passes.size) {
-                        addAll(previous)
-                        if (!own.requiresInputImage) {
-                            val last = removeAt(lastIndex)
-                            add(
-                                BackdropEffectScopeImpl.Pass(
-                                    checkNotNull(last.effect.chain(own.passes.first().effect)),
-                                    last.inputBounds,
-                                ),
-                            )
-                            addAll(own.passes.subList(1, own.passes.size))
-                        } else addAll(own.passes)
-                    }
                 fused[input] = true
             }
             val source = filterInputs[index]
@@ -519,7 +514,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             }
         }
         inlineDrawing.fill(false)
-        val imageInputs = BooleanArray(graph.size)
+        imageInputs.fill(false)
         fun retain(index: Int) {
             imageInputs[aliases[index]] = true
         }
@@ -732,7 +727,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         layer.blendMode = BlendMode.SrcOver
         val dimensions = storageSizes[index]
         val storage = IntSize(unpackInt1(dimensions), unpackInt2(dimensions))
-        val passes = filterPasses[index].orEmpty()
+        val passes = filterPlans[index]?.passes.orEmpty()
         if (passes.isEmpty()) {
             layer.renderEffect = null
             recordImage(index, layer, storage, request, null, source)
@@ -1020,7 +1015,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         primitiveNeedsPrepare.clear()
         effects.values.forEach { effect -> dispose { effect.reset() } }
         effects.clear()
-        filterPasses.fill(null)
+        filterPlans.fill(null)
         filterRequests.fill(null)
         inverseTransforms.fill(null)
         recorded.fill(false)

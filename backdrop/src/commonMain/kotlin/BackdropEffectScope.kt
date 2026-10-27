@@ -2,13 +2,15 @@ package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.ceil
-import top.ltfan.backdrop.internal.chain
+import top.ltfan.backdrop.effects.gaussianSupport
 import top.ltfan.backdrop.internal.pixelAligned
 import top.ltfan.backdrop.internal.requiresSampledEffectInputImage
 
@@ -35,16 +37,49 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         val requiresInputImage: Boolean,
     )
 
-    internal data class Pass(val effect: RenderEffect, val inputBounds: Rect)
+    internal class Pass(var effect: RenderEffect, var inputBounds: Rect)
 
     internal val passes = mutableListOf<Pass>()
     internal val requiresInputImage: Boolean
         get() = stages.firstOrNull()?.requiresInputImage == true && requiresSampledEffectInputImage
 
+    /** Retains a blur filter and its footprint for one positive-radius declaration slot. */
+    internal class NativeBlur(private var radius: Float, private var edgeTreatment: TileMode) {
+        var effect = BlurEffect(radius, radius, edgeTreatment)
+            private set
+
+        var sampling = sampling(radius)
+            private set
+
+        fun update(radius: Float, edgeTreatment: TileMode) {
+            if (this.radius == radius && this.edgeTreatment == edgeTreatment) return
+            this.radius = radius
+            this.edgeTreatment = edgeTreatment
+            effect = BlurEffect(radius, radius, edgeTreatment)
+            sampling = sampling(radius)
+        }
+
+        private fun sampling(radius: Float): BackdropSampling {
+            val support = gaussianSupport(radius)
+            return BackdropSampling.outsets(support, support, support, support)
+        }
+    }
+
+    private val nativeBlurs = mutableListOf<NativeBlur>()
+    private var nativeBlurIndex = 0
+
+    internal fun obtainNativeBlur(radius: Float, edgeTreatment: TileMode): NativeBlur {
+        val index = nativeBlurIndex++
+        val retained = nativeBlurs.getOrNull(index)
+        if (retained != null) return retained.apply { update(radius, edgeTreatment) }
+        return NativeBlur(radius, edgeTreatment).also { nativeBlurs += it }
+    }
+
     private var tintEffectIndex = 0
     private var lightingEffectIndex = 0
     private var runtimeShaderEffectIndex = 0
     private val stages = mutableListOf<Stage>()
+    private val compositions = mutableListOf<BackdropFilterComposition?>()
 
     internal fun nextTintEffectKey(): String = "BackdropTint${tintEffectIndex++}"
 
@@ -201,10 +236,11 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         tintEffectIndex = 0
         lightingEffectIndex = 0
         runtimeShaderEffectIndex = 0
-        passes.clear()
+        nativeBlurIndex = 0
         stages.clear()
         cover = BackdropInsets.None
         effects()
+        while (nativeBlurs.size > nativeBlurIndex) nativeBlurs.removeAt(nativeBlurs.lastIndex)
     }
 
     private fun resolveStages(visible: Rect, width: Float, height: Float) {
@@ -228,12 +264,21 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         stageSamplingBounds.reverse()
         val bounds =
             stageSamplingBounds.fold(visible) { bounds, input ->
-                Rect(
-                    minOf(bounds.left, input.left),
-                    minOf(bounds.top, input.top),
-                    maxOf(bounds.right, input.right),
-                    maxOf(bounds.bottom, input.bottom),
-                )
+                val left = minOf(bounds.left, input.left)
+                val top = minOf(bounds.top, input.top)
+                val right = maxOf(bounds.right, input.right)
+                val bottom = maxOf(bounds.bottom, input.bottom)
+                when {
+                    input.left.toRawBits() == left.toRawBits() &&
+                        input.top.toRawBits() == top.toRawBits() &&
+                        input.right.toRawBits() == right.toRawBits() &&
+                        input.bottom.toRawBits() == bottom.toRawBits() -> input
+                    bounds.left.toRawBits() == left.toRawBits() &&
+                        bounds.top.toRawBits() == top.toRawBits() &&
+                        bounds.right.toRawBits() == right.toRawBits() &&
+                        bounds.bottom.toRawBits() == bottom.toRawBits() -> bounds
+                    else -> Rect(left, top, right, bottom)
+                }
             }
         resolvedExtension =
             BackdropExtension(
@@ -249,21 +294,44 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     internal fun buildEffects(extension: BackdropExtension) {
         resolvedExtension = extension
         val needed = samplingBounds
-        passes.clear()
+        var passCount = 0
+        while (compositions.size < stages.size) compositions += null
+        while (compositions.size > stages.size) compositions.removeAt(compositions.lastIndex)
         var current: RenderEffect? = null
         var inputBounds = needed
         stages.forEachIndexed { index, stage ->
             if (current != null && stage.requiresInputImage && requiresSampledEffectInputImage) {
-                passes += Pass(current, inputBounds)
+                setPass(passCount++, current, inputBounds)
                 current = null
             }
             contextStageIndex = index
             samplingBounds = stageSamplingBounds[index]
             if (current == null) inputBounds = samplingBounds
-            current = current.chain(stage.factory(this))
+            val effect = stage.factory(this)
+            val previous = current
+            current =
+                if (previous == null) {
+                    compositions[index] = null
+                    effect
+                } else {
+                    val chain =
+                        compositions[index]
+                            ?: BackdropFilterComposition().also { compositions[index] = it }
+                    chain.compose(previous, effect)
+                }
         }
-        current?.let { passes += Pass(it, inputBounds) }
+        current?.let { setPass(passCount++, it, inputBounds) }
+        while (passes.size > passCount) passes.removeAt(passes.lastIndex)
         samplingBounds = needed
+    }
+
+    private fun setPass(index: Int, effect: RenderEffect, input: Rect) {
+        val retained = passes.getOrNull(index)
+        if (retained == null) passes += Pass(effect, input)
+        else {
+            retained.effect = effect
+            retained.inputBounds = input
+        }
     }
 
     private fun validate(rect: Rect) {
@@ -292,10 +360,13 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         cover = BackdropInsets.None
         passes.clear()
         stages.clear()
+        compositions.clear()
         stageSamplingBounds.clear()
         stageVisibleBounds = Rect.Zero
         samplingBounds = Rect.Zero
         runtimeShaderCache.clear()
+        nativeBlurs.clear()
+        nativeBlurIndex = 0
     }
 }
 

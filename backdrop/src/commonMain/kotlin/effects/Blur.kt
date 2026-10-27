@@ -1,12 +1,10 @@
 package top.ltfan.backdrop.effects
 
 import androidx.annotation.FloatRange
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import kotlin.math.ceil
 import top.ltfan.backdrop.BackdropEffectScope
-import top.ltfan.backdrop.BackdropSampling
-import top.ltfan.backdrop.addEffect
+import top.ltfan.backdrop.BackdropEffectScopeImpl
 import top.ltfan.backdrop.isRenderEffectSupported
 
 public fun BackdropEffectScope.blur(
@@ -17,10 +15,9 @@ public fun BackdropEffectScope.blur(
     if (!isRenderEffectSupported()) return
     if (radius == 0f) return
 
-    val support = gaussianSupport(radius)
-    addEffect(BackdropSampling.outsets(support, support, support, support)) {
-        BlurEffect(radius, radius, edgeTreatment)
-    }
+    val native = (this as BackdropEffectScopeImpl).obtainNativeBlur(radius, edgeTreatment)
+    val effect = native.effect
+    addEffect(native.sampling) { effect }
 }
 
 private const val MaxBlurSigma = 532f

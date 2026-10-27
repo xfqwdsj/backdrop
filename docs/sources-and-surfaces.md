@@ -67,10 +67,13 @@ Modifier.drawBackdrop(backdrop, shape = { shape }) {
 }
 ```
 
-A fixed `surface` declaration processes its selected source with one serial effect chain. Surface paint and interior lighting draw before
-children; contour highlights and inner shadows draw after them. Unset appearance slots inherit
-[styles](styles-and-decorations.md). Background opacity below one uses one grouped output so
-alpha applies once. A stateful decoration owns only the construction resources its algorithm needs.
+`surface { }` processes its selected input through ordered optical stages and surface drawing
+phases. Unset appearance slots inherit [styles](styles-and-decorations.md). At the root, surface
+paint and interior lighting draw before children; highlights and inner shadows draw after them.
+Inside an image or layer, all phases complete that image before it is composed elsewhere.
+Use `styledSurface(style)` at the root to apply a fixed-order appearance without declaring its
+individual stages. Background opacity below one applies once to the complete background result.
+A stateful decoration owns only the construction resources its algorithm needs.
 
 The same DSL also exposes [image operations](render-graphs.md). Select a processed image with
 `replace(image)`, composite images with `draw(image)`, and paint with `paint` or `paintSurface`.

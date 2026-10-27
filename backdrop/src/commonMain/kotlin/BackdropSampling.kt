@@ -14,8 +14,9 @@ import androidx.compose.ui.geometry.Rect
  * the output region, as with a translated or remapped lookup.
  *
  * Backdrop evaluates declarations from the last effect to the first, so sampling regions for serial
- * stages accumulate. It unions the output and every intermediate input region to derive the
- * recording bounds. Implementations should be deterministic for a given output rectangle.
+ * stages accumulate. Serial effect stages round each input request outward to complete texels
+ * before passing it to the preceding stage. Recording bounds union the output and every
+ * intermediate input region. Implementations should be deterministic for a given output rectangle.
  */
 @Stable
 public fun interface BackdropSampling {

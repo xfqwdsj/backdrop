@@ -6,10 +6,11 @@ import androidx.compose.ui.graphics.Shape
 import top.ltfan.backdrop.backdrops.LayerBackdrop
 
 /**
- * Draws a declaration using the same image and surface operations at every nesting level. Ordinary
- * drawing is fused into its destination when dependencies and compositing permit it.
- * [BackdropImageScope.layer] requests an independent compositing boundary. [backgroundAlpha]
- * applies once to the background; foreground and child content retain their own opacity.
+ * Draws a receiver declaration with image composition and surface phases. The root selects
+ * presentation outputs; nested images retain their own compositing semantics. Ordinary drawing
+ * shares its destination when dependencies and compositing permit it. [BackdropImageScope.layer]
+ * requests an independent compositing boundary. [backgroundAlpha] applies once to the background;
+ * foreground and child content retain their own opacity.
  */
 public fun Modifier.drawBackdrop(
     backdrop: Backdrop,

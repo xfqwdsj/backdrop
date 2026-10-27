@@ -13,6 +13,8 @@ import org.jetbrains.skia.Rect as SkiaRect
 import top.ltfan.backdrop.RuntimeShader
 import top.ltfan.backdrop.asSkikoRuntimeShader
 
+internal actual val requiresSampledEffectInputImage: Boolean = false
+
 internal actual fun RenderEffect?.chain(other: RenderEffect): RenderEffect {
     return if (this != null) {
         ImageFilter.makeCompose(other.skiaImageFilter, this.skiaImageFilter).asComposeRenderEffect()
@@ -25,6 +27,7 @@ internal actual fun createRuntimeShaderEffect(
     runtimeShader: RuntimeShader,
     uniformShaderName: String,
     inputBounds: Rect?,
+    outputBounds: Rect?,
 ): RenderEffect {
     val input = inputBounds?.let { bounds ->
         val rect =
@@ -34,9 +37,18 @@ internal actual fun createRuntimeShaderEffect(
                 ceil(bounds.right),
                 ceil(bounds.bottom),
             )
-        // Pixel-aligned tile bounds retain every declared input texel without fractional crop
-        // alpha.
-        ImageFilter.makeTile(rect, rect, null)
+        // Pixel-aligned source bounds retain complete input texels. The destination also covers
+        // the output domain so a remapping can produce pixels outside its sampled input region.
+        val output =
+            outputBounds?.let {
+                SkiaRect(
+                    floor(minOf(bounds.left, it.left)),
+                    floor(minOf(bounds.top, it.top)),
+                    ceil(maxOf(bounds.right, it.right)),
+                    ceil(maxOf(bounds.bottom, it.bottom)),
+                )
+            } ?: rect
+        ImageFilter.makeTile(rect, output, null)
     }
     return ImageFilter.makeRuntimeShader(
             runtimeShader.asSkikoRuntimeShader(),

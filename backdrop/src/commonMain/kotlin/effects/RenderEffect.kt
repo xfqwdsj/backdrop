@@ -25,6 +25,10 @@ public fun BackdropEffectScope.effect(effect: RenderEffect, sampling: BackdropSa
  * pixels; translate [BackdropEffectContext.inputBounds] by the extension's left/top margins when
  * constructing an effect in storage coordinates. Unsupported platform render effects skip this
  * stage and its factory. The factory constructs one effect and cannot register stages implicitly.
+ * It owns any native chain it returns. Register sampled shaders as separate stages so the executor
+ * can preserve their intermediate input images. [BackdropSampling.Identity] permits same-coordinate
+ * stages to share native filter composition; other custom sampling retains an input image when
+ * required by the backend.
  */
 public fun BackdropEffectScope.effect(
     sampling: BackdropSampling,
@@ -32,10 +36,16 @@ public fun BackdropEffectScope.effect(
 ) {
     if (!isRenderEffectSupported()) return
     val context = (this as BackdropEffectScopeImpl).context
-    addEffect(sampling) { context.factory() }
+    addEffect(sampling, requiresInputImage = sampling !== BackdropSampling.Identity) {
+        context.factory()
+    }
 }
 
-/** Adds a runtime shader and declares the input region it samples for each output region. */
+/**
+ * Adds one runtime-shader stage with its complete sampling footprint. The executor supplies
+ * resolved input and output domains and retains intermediate GPU images where required by the
+ * backend.
+ */
 public fun BackdropEffectScope.runtimeShaderEffect(
     key: String,
     @Language("AGSL") shaderString: String,
@@ -45,11 +55,13 @@ public fun BackdropEffectScope.runtimeShaderEffect(
 ) {
     if (!isRuntimeShaderSupported()) return
     val stageKey = nextRuntimeShaderEffectKey(key)
+    val scope = this as BackdropEffectScopeImpl
     effect(sampling) {
         createRuntimeShaderEffect(
             runtimeShader = obtainRuntimeShader(stageKey, shaderString).apply(block),
             uniformShaderName = uniformShaderName,
             inputBounds = inputBounds.translate(Offset(extension.left, extension.top)),
+            outputBounds = scope.stageOutputBounds.translate(Offset(extension.left, extension.top)),
         )
     }
 }

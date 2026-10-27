@@ -9,7 +9,6 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.effects.layeredBlurStops
 import top.ltfan.backdrop.effects.layeredBlurWeight
@@ -82,7 +81,7 @@ class LayeredProgressiveBlurTest {
         }
         assertEquals(BackdropInsets.None, shader.cover)
         assertEquals(BackdropExtension.None, shader.extension)
-        assertNull(shader.renderEffect)
+        assertTrue(shader.passes.isEmpty())
         val layered = scope()
         val original = layered.current
         val count = layered.graph.size

@@ -47,6 +47,29 @@ class BackdropSamplingTest {
     }
 
     @Test
+    fun fractionalIntermediateTexelsContributeToEarlierSampling() = runRenderTest {
+        val scope = testScope(Size(10f, 10f))
+        val stageBounds = mutableListOf<Rect>()
+        scope.resolveEffects {
+            addEffect(
+                sampling = { output ->
+                    Rect(output.left * 10f, output.top, output.right * 10f, output.bottom)
+                },
+            ) {
+                stageBounds += scope.samplingBounds
+                blurEffect()
+            }
+            addEffect(BackdropSampling.translated(.25f, -.25f)) {
+                stageBounds += scope.samplingBounds
+                blurEffect()
+            }
+        }
+        assertEquals(Rect(0f, -1f, 110f, 10f), stageBounds[0])
+        assertEquals(Rect(0f, -1f, 11f, 10f), stageBounds[1])
+        assertEquals(BackdropExtension(0f, 1f, 100f, 0f), scope.extension)
+    }
+
+    @Test
     fun samplerMustReturnFiniteNonInvertedBounds() {
         val scope = testScope(Size(10f, 10f))
 

@@ -5,12 +5,16 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RenderEffect
 import top.ltfan.backdrop.RuntimeShader
 
+/** Whether custom sampled stages require a recorded predecessor instead of native composition. */
+internal expect val requiresSampledEffectInputImage: Boolean
+
 internal expect fun RenderEffect?.chain(other: RenderEffect): RenderEffect
 
 internal expect fun createRuntimeShaderEffect(
     runtimeShader: RuntimeShader,
     uniformShaderName: String,
     inputBounds: Rect? = null,
+    outputBounds: Rect? = null,
 ): RenderEffect
 
 internal expect fun createColorFilterEffect(

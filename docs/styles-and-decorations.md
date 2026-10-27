@@ -50,7 +50,7 @@ foreground with this fixed order:
 The highlight samples the processed source before fill, interaction light and child content.
 Vibrancy appends saturation to the existing color processing. `BackdropBlur` explicitly selects
 uniform, shader-progressive or layered-progressive blur; unsupported-platform behavior follows the
-selected native algorithm. The library chooses no fallback. A fill's ramp and edge request their
+selected algorithm. The library chooses no fallback. A fill's ramp and edge request their
 own coverage independently of blur. A null fill brush paints nothing and null alpha means one in
 this pipeline; consumers may resolve those values through their own theme before constructing it.
 Modifier insets override style insets. `backgroundAlpha` fades the complete background independently
@@ -58,7 +58,7 @@ of foreground and child content; exports retain the graph's selected image and p
 
 A root accepts one `styledSurface`, without another root `surface` or existing foreground.
 `foreground { }` keeps replacement semantics for free composition; after `styledSurface` use
-`appendForeground { }` to add native drawing without replacing the fixed foreground. Additional
+`appendForeground { }` to add drawing without replacing the fixed foreground. Additional
 background drawing uses ordinary `image`, `group`, `draw`, `paint` and `primitive` operations.
 `decoration(value, processedSource)` exposes stateful decoration drawing at any graph position,
 with the same automatic compositing and renderer-resource reuse as surface decorations.
@@ -72,8 +72,8 @@ A setter replaces that slot; repeated `effects { }` blocks append stages while r
 optical processing. Drawing callbacks and decoration declarations append within their phases.
 This API lets the caller compose surface phases through its own declaration receiver.
 
-Read optical and decoration state inside the declaration, and drawing state inside a paint callback,
-to update rendering without recomposition:
+Read optical parameters inside `effects { }`, decoration configuration inside `surface { }`, and
+drawing values inside paint callbacks. Each read then invalidates the phase that consumes it:
 
 ```kotlin
 Modifier.drawBackdrop(

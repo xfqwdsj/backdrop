@@ -93,7 +93,7 @@ class BackdropSamplingRenderingTest {
             ImageInfo(width, height, ColorType.RGBA_F16, ColorAlphaType.PREMUL, ColorSpace.sRGB)
         Surface.makeRaster(info).use { surface ->
             Paint().use { effectPaint ->
-                effectPaint.imageFilter = requireNotNull(scope.renderEffect).skiaImageFilter
+                effectPaint.imageFilter = scope.passes.single().effect.skiaImageFilter
                 surface.canvas.saveLayer(
                     Canvas.SaveLayerRec(
                         paint = effectPaint,

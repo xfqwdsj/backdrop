@@ -11,8 +11,9 @@ import kotlin.math.floor
 
 /**
  * Records an explicitly owned layer in surface coordinates. Storage rounds [bounds] outward to
- * pixels; drawing and brush sizes remain the measured surface size. Call during decoration drawing
- * and configure layer effects, alpha and blending separately.
+ * pixels; drawing and brush sizes remain the measured surface size. The default covers output only.
+ * For a filtered layer, pass bounds covering both output and its required input footprint. Call
+ * during decoration drawing and configure layer effects, alpha and blending separately.
  */
 public inline fun BackdropDecorationDrawContext.recordLayer(
     layer: GraphicsLayer,

@@ -19,6 +19,9 @@ public sealed interface BackdropEffectContext : RuntimeShaderCache {
     public val layoutDirection: LayoutDirection
     /** Final storage extension shared by the consuming image graph. */
     public val extension: BackdropExtension
-    /** Required input for this stage, in surface-local pixels, before storage translation. */
+    /**
+     * Required complete input texels for this stage, in surface-local pixels before storage
+     * translation.
+     */
     public val inputBounds: Rect
 }

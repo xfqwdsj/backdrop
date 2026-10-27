@@ -9,12 +9,12 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * Minimum interval between HDR layer refreshes, 200 milliseconds by default. When events keep
- * arriving, the latest display ratio is delivered after the final event.
+ * Minimum interval between HDR layer refreshes, 200 milliseconds by default. Updates are throttled;
+ * the latest pending display ratio is delivered when the current interval ends.
  *
  * The value must be finite and non-negative; [BackdropHdrScope] throws [IllegalArgumentException]
- * otherwise. Set it once: changing a static composition local recomposes the whole subtree it
- * provides to.
+ * otherwise. Provide it at a stable boundary: changing this static composition local recomposes its
+ * subtree.
  */
 public val LocalBackdropHdrRefreshInterval: ProvidableCompositionLocal<Duration> =
     staticCompositionLocalOf {

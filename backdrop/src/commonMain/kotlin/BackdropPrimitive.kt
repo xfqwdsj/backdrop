@@ -116,8 +116,10 @@ public sealed interface BackdropImageInput {
     public fun draw(scope: DrawScope)
 
     /**
-     * Creates a platform effect for this input's sampling bounds. [origin] locates the surface
-     * origin in the target layer. Runtime shaders must be supported; callers choose their fallback.
+     * Creates a platform effect for this input and the active consumer's output domain. [origin]
+     * locates the surface origin in the target layer. Record storage covering the required output
+     * and input sampling footprint with the same translation. Runtime shaders must be supported;
+     * callers choose their fallback and own any additional native effect stages.
      */
     public fun runtimeShaderEffect(
         shader: RuntimeShader,

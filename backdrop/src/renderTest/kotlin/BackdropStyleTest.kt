@@ -26,8 +26,6 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.effects.blur
@@ -274,7 +272,7 @@ class BackdropRenderStyleTest {
     @Test
     fun effectsAnimationResetsPaddingAndRenderEffectWithoutRecomposition() = runRenderTest {
         val enabled = mutableStateOf(false)
-        lateinit var scope: BackdropEffectScope
+        lateinit var scope: BackdropEffectScopeImpl
         var compositions = 0
         setContent {
             ProvideBackdropRenderStyle(
@@ -282,7 +280,7 @@ class BackdropRenderStyleTest {
                     group {
                         source()
                         effects {
-                            scope = this
+                            scope = this as BackdropEffectScopeImpl
                             if (enabled.value) blur(3f, TileMode.Decal)
                         }
                         clipSurface()
@@ -294,18 +292,18 @@ class BackdropRenderStyleTest {
         }
         waitForIdle()
         val baseline = compositions
-        assertNull(scope.renderEffect)
+        assertTrue(scope.passes.isEmpty())
         assertEquals(BackdropExtension.None, scope.extension)
         val blank = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
         enabled.value = true
         waitForIdle()
-        assertNotNull(scope.renderEffect)
+        assertTrue(scope.passes.isNotEmpty())
         assertEquals(7f, scope.extension.left)
         val blurred = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
         assertTrue(blurred.alpha < blank.alpha - 0.1f)
         enabled.value = false
         waitForIdle()
-        assertNull(scope.renderEffect)
+        assertTrue(scope.passes.isEmpty())
         assertEquals(BackdropExtension.None, scope.extension)
         assertColor(blank, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
         assertEquals(baseline, compositions)

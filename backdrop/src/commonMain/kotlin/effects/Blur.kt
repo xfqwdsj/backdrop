@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.TileMode
 import kotlin.math.ceil
 import top.ltfan.backdrop.BackdropEffectScope
 import top.ltfan.backdrop.BackdropSampling
+import top.ltfan.backdrop.addEffect
 import top.ltfan.backdrop.isRenderEffectSupported
 
 public fun BackdropEffectScope.blur(
@@ -17,7 +18,7 @@ public fun BackdropEffectScope.blur(
     if (radius == 0f) return
 
     val support = gaussianSupport(radius)
-    effect(BackdropSampling.outsets(support, support, support, support)) {
+    addEffect(BackdropSampling.outsets(support, support, support, support)) {
         BlurEffect(radius, radius, edgeTreatment)
     }
 }

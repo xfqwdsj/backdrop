@@ -84,7 +84,12 @@ internal class PrimitiveImage(
         ) {
             "Primitive input bounds must be finite"
         }
-        return createRuntimeShaderEffect(shader, uniformName, storageBounds)
+        return createRuntimeShaderEffect(
+            shader,
+            uniformName,
+            storageBounds,
+            context.requestedBounds.translate(origin),
+        )
     }
 }
 

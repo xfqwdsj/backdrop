@@ -122,6 +122,11 @@ private class DecorationInput(
         check(isRuntimeShaderSupported()) {
             "Runtime shaders are required for filtered decoration inputs"
         }
-        return createRuntimeShaderEffect(shader, uniformName, bounds.translate(origin))
+        return createRuntimeShaderEffect(
+            shader,
+            uniformName,
+            bounds.translate(origin),
+            context.outputBounds.translate(origin),
+        )
     }
 }

@@ -1,7 +1,7 @@
 package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect as ComposeRect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -249,7 +249,7 @@ class HdrRenderingTest : PlatformGraphicsTest() {
 
     @Test
     fun highlightColorResponseSamplesTheCoveredPixelBackdrop() {
-        val geometry = HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f)))
+        val geometry = HighlightBoundaryGeometry(Rectangle(Rect(0f, 0f, 16f, 16f)))
         val shader =
             RuntimeShader(
                 staticHighlightTileShader(
@@ -383,8 +383,7 @@ class HdrRenderingTest : PlatformGraphicsTest() {
             val cpu =
                 renderStaticHighlightPixels(
                     geometry =
-                        HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f)))
-                            .cpuGeometry(),
+                        HighlightBoundaryGeometry(Rectangle(Rect(0f, 0f, 16f, 16f))).cpuGeometry(),
                     size = Size(16f, 16f),
                     widthPx = widthPx,
                     falloff = Highlight().falloff,
@@ -426,7 +425,7 @@ class HdrRenderingTest : PlatformGraphicsTest() {
         pixels: List<Pair<Int, Int>> = listOf(8 to 0, 8 to 1, 8 to 2, 8 to 4, 0 to 8, 2 to 8),
     ) {
         val genericGeometry =
-            HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f))).cpuGeometry()
+            HighlightBoundaryGeometry(Rectangle(Rect(0f, 0f, 16f, 16f))).cpuGeometry()
         val cpu =
             renderStaticHighlightPixels(
                 geometry = genericGeometry,
@@ -458,7 +457,7 @@ class HdrRenderingTest : PlatformGraphicsTest() {
         exclusions: Set<HighlightAngularCut> = emptySet(),
     ): FloatArray {
         val genericGeometry =
-            HighlightBoundaryGeometry(Rectangle(ComposeRect(0f, 0f, 16f, 16f))).cpuGeometry()
+            HighlightBoundaryGeometry(Rectangle(Rect(0f, 0f, 16f, 16f))).cpuGeometry()
         val shader =
             RuntimeShader(staticHighlightTileShader(genericGeometry, style, exclusions.size))
         shader.setFloatUniform("origin", 0f, 0f)
@@ -606,7 +605,9 @@ class HdrRenderingTest : PlatformGraphicsTest() {
                 )
                 .apply { uniform("color", input) }
                 .makeShader()
-        return renderShader(shader) { imageFilter = scope.renderEffect?.skiaImageFilter }
+        return renderShader(shader) {
+            imageFilter = scope.passes.singleOrNull()?.effect?.skiaImageFilter
+        }
     }
 
     private fun renderShader(

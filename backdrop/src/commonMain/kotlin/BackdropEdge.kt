@@ -33,15 +33,11 @@ public enum class BackdropSide {
     Left,
     Right;
 
-    /**
-     * Whether this side runs along the surface's height, which decides the axis an effect ramps on.
-     */
+    /** Whether this edge selects the surface's height as its ramp axis: top and bottom do. */
     public val isVertical: Boolean
         get() = this == Top || this == Bottom
 
-    /**
-     * Whether scrolled content passes this side, placing the ramp's zero coordinate at this edge.
-     */
+    /** Whether ramp coordinates reflect across the surface thickness, as for top and left edges. */
     public val carriesContent: Boolean
         get() = this == Top || this == Left
 }

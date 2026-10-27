@@ -32,7 +32,7 @@ Stateful decorations can also join ordinary graph composition through
 `decoration(value, processedSource)`. The selected input belongs to the same declaration; callers
 choose its processing and clipping. This preserves decoration renderer keys, automatic compositing,
 sampling footprints and resource ownership.
-With a fixed styled surface, append native foreground drawing through `appendForeground { }`;
+With a fixed styled surface, append foreground drawing through `appendForeground { }`;
 the additional block starts transparent and composites above the retained foreground.
 
 ## Define an isolated image configuration and renderer
@@ -122,7 +122,7 @@ primitive(myPrimitive, inputs = listOf(BackdropPrimitiveInput(material)))
 
 `prepare` receives final graph `extension`, the declared `outputBounds`, the active `requestedBounds`
 and an ordered list of per-input `inputBounds`. It runs under snapshot observation after sampling
-resolution. Inputs are recorded before their consumer and shared dependencies record once per draw.
+resolution. Inputs are recorded before their consumer and shared dependencies record once per frame.
 Unreachable branches do not construct renderers or evaluate their bounds and sampling.
 
 Graph construction ends when resolution begins. Configuration, preparation and drawing callbacks
@@ -135,15 +135,25 @@ surface coordinates, clipped to that dependency's declared input request. Retain
 using it in another invocation throws. The input graph layer cannot be modified or released through
 this view.
 
-`view.runtimeShaderEffect(shader, uniformName, origin)` creates a single-input platform effect with
-the declared sampling bounds. `origin` locates the surface origin in the renderer-owned target
-layer; use the same translation while recording the input. Pixel-align a target covering
-`outputBounds` by flooring its left/top and ceiling its right/bottom. Place the layer at that integer
-left/top and use their negation as `origin`; the aligned width/height determine the recording size.
-Set shader uniforms, record `view.draw(this)` into the owned layer with that translation, then draw
-the layer. Runtime-shader support is required; the caller selects a capability fallback. Several
-inputs can be drawn and composed into the single input image supported by the portable shader
-interface. Graph operations keep intermediate pixels in native graphics resources.
+`view.runtimeShaderEffect(shader, uniformName, origin)` creates a single-input platform effect
+for the declared input and active output domains. `origin` locates the surface origin in the
+renderer-owned target layer; use the same translation while recording the input.
+
+For a filtered layer, storage must cover both the output and its input sampling footprint.
+The primitive context's `recordLayer` helper uses the complete resolved graph storage, preserving
+surface coordinates and brush sizes. Pass `Offset(extension.left, extension.top)` as `origin`,
+set shader uniforms in that coordinate space, assign the effect, record `view.draw(this)` through
+the helper, then draw the layer.
+
+When managing storage manually, union the required output and input rectangles, round left/top
+down and right/bottom up, and place the layer at that integer origin. Use its negation for shader
+coordinates. For a decoration, pass that union as the `bounds` argument to `recordLayer`; its
+default bounds cover the decoration output only.
+
+Runtime-shader support is required; the caller selects a capability fallback. Several inputs can
+be composed into the single input image supported by the portable shader interface. A custom
+renderer owns the sampling and intermediate images of any native filter chain it constructs.
+Graph operations keep intermediate pixels in native graphics resources.
 
 ## Retain resources by branch key
 

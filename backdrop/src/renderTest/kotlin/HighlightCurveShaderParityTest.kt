@@ -1,6 +1,6 @@
 package top.ltfan.backdrop
 
-import androidx.compose.ui.geometry.Rect as ComposeRect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import kotlin.test.Test
@@ -15,8 +15,7 @@ import top.ltfan.backdrop.internal.staticHighlightTileShader
 class HighlightCurveShaderParityTest : PlatformGraphicsTest() {
     @Test
     fun falloffVariantsDoNotReplaceTheIndependentDirectionCurve() {
-        val geometry =
-            FlattenedBoundaryGeometry(Path().apply { addRect(ComposeRect(0f, 0f, 20f, 20f)) })
+        val geometry = FlattenedBoundaryGeometry(Path().apply { addRect(Rect(0f, 0f, 20f, 20f)) })
         val general = BackdropCurve.CubicBezier(.2f, .3f, .7f, .9f)
 
         val linearFalloff =

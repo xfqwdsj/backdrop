@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.OffsetEffect
@@ -107,20 +106,12 @@ class BackdropRampRenderingTest {
                                                         requested = BackdropInsets(top = inset.dp),
                                                     )
                                                     cover(inspection.cover)
-                                                    val room = inspection.extension
-                                                    effect(
-                                                        requireNotNull(
-                                                            inspection.renderEffect,
-                                                        ),
-                                                        sampling = {
-                                                            Rect(
-                                                                -room.left,
-                                                                -room.top,
-                                                                size.width + room.right,
-                                                                size.height + room.bottom,
-                                                            )
-                                                        },
-                                                    )
+                                                    inspection.passes.forEach { pass ->
+                                                        effect(
+                                                            pass.effect,
+                                                            sampling = { pass.inputBounds },
+                                                        )
+                                                    }
                                                 }
                                             }
                                             clipSurface()

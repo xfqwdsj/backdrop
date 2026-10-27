@@ -63,9 +63,8 @@ public fun interface BackdropRampAnchors {
         public val Auto: BackdropRampAnchors = SpanAnchors { axis -> axis.occupied }
 
         /**
-         * Full strength from the content side inwards for [plateau], spent over [fade] beyond it.
-         * The [fade] is what the ramp asks for past the surface, so it is also how far the effects
-         * cover.
+         * Places the interpolation span from negative [fade] beyond the content side to [plateau]
+         * inside it. The portion outside the surface requests additional effect coverage.
          */
         public fun offsets(plateau: Dp, fade: Dp): BackdropRampAnchors = SpanAnchors { axis ->
             val plateauPx = with(axis) { plateau.toPx() }
@@ -74,8 +73,8 @@ public fun interface BackdropRampAnchors {
         }
 
         /**
-         * The same shape with both parts taken as shares of the content a surface carries, so the
-         * ramp reads the same at any height, font scale or inset.
+         * Places the span from negative [fade] to positive [plateau], each multiplied by the axis's
+         * content thickness. The anchors therefore scale with the available content span.
          */
         public fun ratio(plateau: Float, fade: Float): BackdropRampAnchors = SpanAnchors { axis ->
             val content = axis.contentThickness

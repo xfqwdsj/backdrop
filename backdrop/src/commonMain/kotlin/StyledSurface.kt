@@ -23,8 +23,9 @@ import top.ltfan.backdrop.shadow.shadow
  * input, fill and interior light. Foreground contains highlight and inner shadow. Highlight samples
  * the processed input before fill. Child content stays between the two outputs.
  *
- * A root may declare this once, without another surface or foreground owner. Use native graph
- * operations for additional background drawing and [appendForeground] for later foreground drawing.
+ * A root may declare this once, without another surface or foreground owner. Use graph operations
+ * for additional background drawing and [BackdropRenderScope.appendForeground] for later foreground
+ * drawing.
  */
 public fun BackdropRenderScope.styledSurface(
     style: BackdropStyle? = null,

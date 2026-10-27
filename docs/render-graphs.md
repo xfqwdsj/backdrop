@@ -1,8 +1,9 @@
 # Render graphs
 
 `Modifier.drawBackdrop` creates independently sampled and composited images using receiver-owned
-`GraphicsLayer` objects. Ordinary fixed-phase surfaces use the direct [surface DSL](styles-and-decorations.md). Graph
-operations keep intermediate pixels in native graphics resources. The declaration runs under snapshot
+`GraphicsLayer` objects. Use [styled surfaces](styles-and-decorations.md) for fixed-order appearance
+and `surface { }` for optical and drawing declarations within surface phases. Graph operations
+keep intermediate pixels in native graphics resources. The declaration runs under snapshot
 observation; read animated state there or in drawing callbacks to avoid recomposition.
 
 ## Declare operations in order

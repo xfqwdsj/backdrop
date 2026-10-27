@@ -180,7 +180,9 @@ effects {
 ```
 
 The resolver walks from the last stage to the first, propagating each input request into its
-predecessor. Recording bounds union the visible output and every intermediate request, including
+predecessor. Each input request rounds outward to complete texels before the predecessor resolves
+its sampling; a fractional remapping can therefore require additional upstream pixels. Recording
+bounds union the visible output and every intermediate request, including
 translated regions that do not overlap the output. Contracts must be deterministic, finite, and
 non-inverted. Validation checks rectangle shape, while the effect author must prove it covers
 the actual reads.
@@ -200,7 +202,9 @@ The factory's shader cache uses stage-local keys: equal keys in different stages
 mutable shaders, while repeated resolutions reuse a stage's cached instance. A source change under
 one key replaces that shader; the receiver releases caches when the process node is omitted
 or detached. Display refresh invalidates recorded layers and reuses compiled programs. Custom
-factories own their complete sampling declaration just like built-ins.
+factories own their complete sampling declaration just like built-ins. A factory returning an
+opaque native filter chain also owns that chain's internal sampling. Register neighboring-pixel
+shaders as separate stages so the executor can retain their intermediate input images.
 
 User-defined `BackdropEffectScope` extensions can register platform effects through this factory or
 use `runtimeShaderEffect` for a single-input shader. The latter manages shader-stage keys, input
@@ -210,8 +214,14 @@ composition extensions.
 
 The effects producer runs once per resolution. Stage construction and runtime-shader uniform blocks
 run after the extension is resolved. Read `extension` inside the uniform block when translating
-between layer and surface coordinates. The Skiko backend supplies the complete declared stage input
-to neighboring-pixel shaders. See [BackdropSampling](../backdrop/src/commonMain/kotlin/BackdropSampling.kt),
+between layer and surface coordinates. The executor supplies complete input texels to sampled
+stages. Android retains GPU
+intermediate images before neighboring-pixel custom effects and runtime shaders because its native
+shader-effect factory cannot express their sampling radius. Skiko supplies pixel-aligned input
+and output domains through native image filters, including remappings whose output lies outside
+the input region. These backend choices preserve declaration order and require no caller-inserted
+layers. Native Gaussian filters and same-coordinate stages retain safe filter composition.
+See [BackdropSampling](../backdrop/src/commonMain/kotlin/BackdropSampling.kt),
 [BackdropEffectScope](../backdrop/src/commonMain/kotlin/BackdropEffectScope.kt), and the
 [custom-effect entry points](../backdrop/src/commonMain/kotlin/effects/RenderEffect.kt).
 

@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -30,6 +29,7 @@ import top.ltfan.backdrop.internal.clipOutline
 import top.ltfan.backdrop.internal.clipToExtendedShape
 import top.ltfan.backdrop.internal.extendedSurfaceClipBounds
 import top.ltfan.backdrop.internal.inverseSourceTransform
+import top.ltfan.backdrop.internal.pixelAligned
 
 /**
  * Evaluates image declarations through recorded layers and platform effects.
@@ -46,6 +46,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     private var frameReady = false
     private val outlinePath = SurfaceClipPath()
     private val layers = mutableMapOf<Int, GraphicsLayer>()
+    private val effectLayers = mutableMapOf<Int, MutableList<GraphicsLayer>>()
     private val primitives = mutableMapOf<Int, PrimitiveInstance>()
     private val primitiveNeedsPrepare = mutableSetOf<Int>()
     private val primitiveContexts = mutableMapOf<Int, PrimitiveContext>()
@@ -72,7 +73,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     private var consumers = IntArray(0)
     private var filterInputs = IntArray(0)
     private var filterRequests = arrayOfNulls<Rect>(0)
-    private var filterEffects = arrayOfNulls<RenderEffect>(0)
+    private var filterPasses = arrayOfNulls<List<BackdropEffectScopeImpl.Pass>>(0)
     private var inlinedSources = BooleanArray(0)
     private var inlineDrawing = BooleanArray(0)
     private var fused = BooleanArray(0)
@@ -122,7 +123,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             consumers = IntArray(graph.size)
             filterInputs = IntArray(graph.size)
             filterRequests = arrayOfNulls(graph.size)
-            filterEffects = arrayOfNulls(graph.size)
+            filterPasses = arrayOfNulls(graph.size)
             inlinedSources = BooleanArray(graph.size)
             fused = BooleanArray(graph.size)
             inlineDrawing = BooleanArray(graph.size)
@@ -276,7 +277,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
                 is RenderImageNode.Process -> {
                     val effectScope = effects.getValue(index)
                     effectScope.measureStages(output, scope.size.width, scope.size.height)
-                    request(node.input, effectScope.samplingBounds)
+                    request(node.input, effectScope.samplingBounds.pixelAligned())
                     bounds =
                         union(
                             bounds,
@@ -358,7 +359,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             val input =
                 when (val node = graph[index]) {
                     is RenderImageNode.Process ->
-                        if (effects.getValue(index).renderEffect == null) node.input else index
+                        if (effects.getValue(index).passes.isEmpty()) node.input else index
                     is RenderImageNode.Composite ->
                         if (
                             graph[node.destination] == RenderImageNode.Empty &&
@@ -387,6 +388,17 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             val layer = entry.value
             layerIterator.remove()
             context().releaseGraphicsLayer(layer)
+        }
+        val effectLayerIterator = effectLayers.iterator()
+        while (effectLayerIterator.hasNext()) {
+            val (index, owned) = effectLayerIterator.next()
+            val count =
+                if (index in graph.indices && requests[index] != null && !fused[index])
+                    (filterPasses[index]?.size ?: 1) - 1
+                else 0
+            while (owned.size > count) context()
+                .releaseGraphicsLayer(owned.removeAt(owned.lastIndex))
+            if (owned.isEmpty()) effectLayerIterator.remove()
         }
         primitiveContexts.clear()
         val primitiveIterator = primitives.iterator()
@@ -439,7 +451,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         consumers.fill(0)
         fused.fill(false)
         inlinedSources.fill(false)
-        filterEffects.fill(null)
+        filterPasses.fill(null)
         filterRequests.fill(null)
         fun use(index: Int) {
             consumers[aliases[index]]++
@@ -478,13 +490,26 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             val own = effects.getValue(index)
             val input = aliases[node.input]
             filterInputs[index] = input
-            filterRequests[index] = own.samplingBounds
-            filterEffects[index] = own.renderEffect
-            val previous = filterEffects[input]
+            filterRequests[index] = own.samplingBounds.pixelAligned()
+            filterPasses[index] = own.passes
+            val previous = filterPasses[input]
             if (previous != null && consumers[input] == 1) {
                 filterInputs[index] = filterInputs[input]
                 filterRequests[index] = filterRequests[input]
-                filterEffects[index] = previous.chain(checkNotNull(own.renderEffect))
+                filterPasses[index] =
+                    buildList(previous.size + own.passes.size) {
+                        addAll(previous)
+                        if (!own.requiresInputImage) {
+                            val last = removeAt(lastIndex)
+                            add(
+                                BackdropEffectScopeImpl.Pass(
+                                    checkNotNull(last.effect.chain(own.passes.first().effect)),
+                                    last.inputBounds,
+                                ),
+                            )
+                            addAll(own.passes.subList(1, own.passes.size))
+                        } else addAll(own.passes)
+                    }
                 fused[input] = true
             }
             val source = filterInputs[index]
@@ -707,30 +732,64 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         layer.blendMode = BlendMode.SrcOver
         val dimensions = storageSizes[index]
         val storage = IntSize(unpackInt1(dimensions), unpackInt2(dimensions))
-        layer.renderEffect = if (node is RenderImageNode.Process) filterEffects[index] else null
+        val passes = filterPasses[index].orEmpty()
+        if (passes.isEmpty()) {
+            layer.renderEffect = null
+            recordImage(index, layer, storage, request, null, source)
+        } else {
+            val owned =
+                if (passes.size > 1) effectLayers.getOrPut(index) { mutableListOf() } else null
+            var input: GraphicsLayer? = null
+            passes.forEachIndexed { passIndex, pass ->
+                val output =
+                    if (passIndex == passes.lastIndex) layer
+                    else {
+                        checkNotNull(owned)
+                        (owned.getOrNull(passIndex)
+                                ?: context().createGraphicsLayer().also { owned += it })
+                            .apply {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                                clip = false
+                                topLeft = layer.topLeft
+                            }
+                    }
+                output.renderEffect = pass.effect
+                // Source storage and each sampled intermediate retain complete texels. Visible
+                // output clipping and finite source policies are applied independently.
+                recordImage(index, output, storage, pass.inputBounds.pixelAligned(), input, source)
+                input = output
+            }
+        }
+        recorded[index] = true
+        return layer
+    }
+
+    private fun recordImage(
+        index: Int,
+        layer: GraphicsLayer,
+        storage: IntSize,
+        request: Rect,
+        input: GraphicsLayer?,
+        source: DrawScope.(Rect) -> Unit,
+    ) {
         layer.record(scope.density, scope.layoutDirection, storage) {
             val ds =
                 object : DrawScope by this {
                     override val size: Size
                         get() = scope.size
                 }
-            with(this) {
-                val origin = storageOrigins[index]
-                translate(-unpackInt1(origin).toFloat(), -unpackInt2(origin).toFloat()) {
-                    clipRect(request.left, request.top, request.right, request.bottom) {
-                        val storageSize = drawContext.size
-                        drawContext.size = scope.size
-                        try {
-                            drawNode(index, ds, source)
-                        } finally {
-                            drawContext.size = storageSize
-                        }
+            translate(-layer.topLeft.x.toFloat(), -layer.topLeft.y.toFloat()) {
+                clipRect(request.left, request.top, request.right, request.bottom) {
+                    val storageSize = drawContext.size
+                    drawContext.size = scope.size
+                    try {
+                        if (input != null) drawLayer(input) else drawNode(index, ds, source)
+                    } finally {
+                        drawContext.size = storageSize
                     }
                 }
             }
         }
-        recorded[index] = true
-        return layer
     }
 
     private fun prepareInputs(index: Int, target: DrawScope, source: DrawScope.(Rect) -> Unit) {
@@ -922,6 +981,10 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             layers.values.forEach(graphics::releaseGraphicsLayer)
             layers.clear()
         }
+        effectLayers.values.forEach { owned ->
+            owned.forEach { context().releaseGraphicsLayer(it) }
+        }
+        effectLayers.clear()
         recorded.fill(false)
         primitives.forEach { (index, instance) ->
             instance.refresh()
@@ -948,12 +1011,16 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             }
             layers.clear()
         }
+        effectLayers.values.forEach { owned ->
+            owned.forEach { layer -> dispose { context().releaseGraphicsLayer(layer) } }
+        }
+        effectLayers.clear()
         dispose { closePrimitives() }
         primitiveContexts.clear()
         primitiveNeedsPrepare.clear()
         effects.values.forEach { effect -> dispose { effect.reset() } }
         effects.clear()
-        filterEffects.fill(null)
+        filterPasses.fill(null)
         filterRequests.fill(null)
         inverseTransforms.fill(null)
         recorded.fill(false)

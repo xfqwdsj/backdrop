@@ -87,7 +87,9 @@ public data class BackdropColorControls(
     }
 }
 
-/** Lens distances use dp; supported shapes and platform behavior follow the native lens effect. */
+/**
+ * Lens distances use dp; supported shapes and platform behavior follow the pixel-based lens effect.
+ */
 @Immutable
 public data class BackdropLens(
     public val refractionHeight: Dp,

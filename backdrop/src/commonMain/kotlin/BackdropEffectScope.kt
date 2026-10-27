@@ -9,9 +9,12 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.ceil
 import top.ltfan.backdrop.internal.chain
+import top.ltfan.backdrop.internal.pixelAligned
+import top.ltfan.backdrop.internal.requiresSampledEffectInputImage
 
 /**
- * The surface an effect chain runs against: its size, shape, density, and resolved sampling room.
+ * Declares ordered optical stages against the surface's size, shape, density and sampling room. The
+ * backend executes those stages through native filters and any required intermediate images.
  */
 public sealed interface BackdropEffectScope : Density, RuntimeShaderCache {
     public val size: Size
@@ -29,7 +32,14 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     private data class Stage(
         val sampling: BackdropSampling,
         val factory: BackdropEffectScope.() -> RenderEffect,
+        val requiresInputImage: Boolean,
     )
+
+    internal data class Pass(val effect: RenderEffect, val inputBounds: Rect)
+
+    internal val passes = mutableListOf<Pass>()
+    internal val requiresInputImage: Boolean
+        get() = stages.firstOrNull()?.requiresInputImage == true && requiresSampledEffectInputImage
 
     private var tintEffectIndex = 0
     private var lightingEffectIndex = 0
@@ -54,13 +64,13 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     final override var cover: BackdropInsets = BackdropInsets.None
         private set
 
-    internal var renderEffect: RenderEffect? = null
-        private set
-
     internal var samplingBounds: Rect = Rect.Zero
         private set
 
     private val stageSamplingBounds = mutableListOf<Rect>()
+    private var stageVisibleBounds: Rect = Rect.Zero
+    internal val stageOutputBounds: Rect
+        get() = stageSamplingBounds.getOrElse(contextStageIndex + 1) { stageVisibleBounds }
 
     private val runtimeShaderCache = RuntimeShaderCacheImpl()
 
@@ -133,9 +143,10 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
 
     internal fun addEffect(
         sampling: BackdropSampling,
+        requiresInputImage: Boolean = false,
         factory: BackdropEffectScope.() -> RenderEffect,
     ) {
-        stages += Stage(sampling, factory)
+        stages += Stage(sampling, factory, requiresInputImage)
     }
 
     internal fun update(scope: DrawScope): Boolean {
@@ -190,9 +201,9 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         tintEffectIndex = 0
         lightingEffectIndex = 0
         runtimeShaderEffectIndex = 0
+        passes.clear()
         stages.clear()
         cover = BackdropInsets.None
-        renderEffect = null
         effects()
     }
 
@@ -202,11 +213,15 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     }
 
     internal fun measureStages(visible: Rect, width: Float, height: Float) {
+        stageVisibleBounds = visible
         stageSamplingBounds.clear()
         val needed =
             stages.asReversed().fold(visible) { output, stage ->
-                val input = stage.sampling.requiredInput(output)
-                validate(input)
+                val requestedInput = stage.sampling.requiredInput(output)
+                validate(requestedInput)
+                // A downstream lookup reads complete predecessor texels. Propagate that raster
+                // extent before evaluating an earlier stage's sampling, including remappings.
+                val input = requestedInput.pixelAligned()
                 stageSamplingBounds += input
                 input
             }
@@ -234,12 +249,20 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
     internal fun buildEffects(extension: BackdropExtension) {
         resolvedExtension = extension
         val needed = samplingBounds
-        renderEffect =
-            stages.foldIndexed(null) { index, current, stage ->
-                contextStageIndex = index
-                samplingBounds = stageSamplingBounds[index]
-                current.chain(stage.factory(this))
+        passes.clear()
+        var current: RenderEffect? = null
+        var inputBounds = needed
+        stages.forEachIndexed { index, stage ->
+            if (current != null && stage.requiresInputImage && requiresSampledEffectInputImage) {
+                passes += Pass(current, inputBounds)
+                current = null
             }
+            contextStageIndex = index
+            samplingBounds = stageSamplingBounds[index]
+            if (current == null) inputBounds = samplingBounds
+            current = current.chain(stage.factory(this))
+        }
+        current?.let { passes += Pass(it, inputBounds) }
         samplingBounds = needed
     }
 
@@ -267,9 +290,10 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         resolvedExtension = BackdropExtension.None
         layoutDirection = LayoutDirection.Ltr
         cover = BackdropInsets.None
+        passes.clear()
         stages.clear()
         stageSamplingBounds.clear()
-        renderEffect = null
+        stageVisibleBounds = Rect.Zero
         samplingBounds = Rect.Zero
         runtimeShaderCache.clear()
     }
@@ -277,13 +301,11 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
 
 internal fun BackdropEffectScope.addEffect(
     sampling: BackdropSampling,
+    requiresInputImage: Boolean = false,
     factory: BackdropEffectScope.() -> RenderEffect,
 ) {
-    (this as BackdropEffectScopeImpl).addEffect(sampling, factory)
+    (this as BackdropEffectScopeImpl).addEffect(sampling, requiresInputImage, factory)
 }
 
 internal fun BackdropEffectScope.nextRuntimeShaderEffectKey(key: String): String =
     (this as BackdropEffectScopeImpl).nextRuntimeShaderEffectKey(key)
-
-internal val BackdropEffectScope.renderEffect: RenderEffect?
-    get() = (this as BackdropEffectScopeImpl).renderEffect

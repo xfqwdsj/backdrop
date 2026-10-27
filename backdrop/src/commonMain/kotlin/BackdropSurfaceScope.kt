@@ -14,10 +14,11 @@ import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
 
 /**
- * Declares one surface: a serial source effect chain, surface drawing, and decorations. Outer
- * shadows precede the processed source; fill, surface drawing and interior light precede children;
- * highlight, inner shadow and foreground drawing follow children. Repeated appearance setters
- * replace that slot. Effect and drawing blocks append in their respective phases.
+ * Declares ordered source effects, surface drawing and decorations. Outer shadows precede the
+ * processed source, followed by fill, surface drawing and interior light. Highlight, inner shadow
+ * and foreground drawing complete the surface. At the root, child content separates background and
+ * foreground; nested surfaces complete their image. Repeated appearance setters replace that slot.
+ * Effect and drawing blocks append in their respective phases.
  *
  * Unset appearance slots inherit at the receiving modifier's position. Draw callbacks use their
  * destination directly. The enclosing [BackdropImageScope] provides images, masks and explicit

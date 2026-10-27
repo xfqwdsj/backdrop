@@ -15,8 +15,9 @@ The concrete draw and export ordering is in [Sources and surfaces](sources-and-s
 The sampling coordinate contract is in [Effects and sampling](effects-and-sampling.md).
 
 A unified declaration describes ordered image operations and optional fixed surface phases.
-Fixed surfaces resolve `BackdropStyle` fields at their use position and combine a serial optical
-chain. Lowering shares associative SrcOver drawing with a single consumer; sampled dependencies,
+Styled surfaces resolve `BackdropStyle` fields at their use position and apply fixed optical and
+presentation phases. A `surface { }` declaration retains caller-selected optical order within its
+surface phases. Lowering shares associative SrcOver drawing with a single consumer; sampled dependencies,
 destination-dependent operations and explicit isolation retain image boundaries. Sampling geometry is resolved before
 placement configures surface isolation. Actual measurement resolves size-dependent bounds before
 enclosing isolation layers are placed. Global position changes update source mapping without resolving
@@ -99,7 +100,13 @@ A wider shadow branch still contributes its complete output bounds to graph stor
 forcing the clipped material's filters to sample that entire branch. Identity processing stages
 and SrcOver draws with alpha 1 over a transparent base reuse their input storage;
 resolution still observes their declarations and retains their complete sampling and coverage.
-Adjacent native filters share one recording when each intermediate has a single consumer.
+Adjacent native filters share one recording when each intermediate has a single consumer and
+its sampling can be represented by the backend. On Android, a neighboring-pixel custom effect
+or runtime shader retains a GPU image of its predecessor. The executor lowers effect stages
+into retained recording passes within and across effect blocks; pointwise stages and native
+Gaussian filters still compose where safe. Pass input recordings round sampling requests outward
+to complete texels, independently of visible output clipping and finite source domains. Resizing
+or changing uniforms reuses compatible pass layers; omission, refresh and closure release them.
 An exclusively consumed source records directly into that filtered layer. Independent foreground,
 export and primitive readers retain their own shared images; fusion preserves every declared
 sampling request and effect observation.

@@ -25,11 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import top.ltfan.backdrop.BackdropBlur
+import top.ltfan.backdrop.BackdropStyle
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.drawBackdrop
-import top.ltfan.backdrop.effects.blur
-import top.ltfan.backdrop.surface
+import top.ltfan.backdrop.styledSurface
 
 @Composable
 fun BackdropExample() {
@@ -47,7 +48,7 @@ fun BackdropExample() {
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(24.dp) },
             ) {
-                surface { effects { blur(12.dp.toPx()) } }
+                styledSurface(BackdropStyle { blur = { BackdropBlur.Uniform(12.dp) } })
             }
         )
     }
@@ -59,11 +60,15 @@ into the receiver's coordinates, processes it, and draws the receiver's content 
 background and receiver in separate branches as shown. Give both a real layout size; recording an
 empty source provides no pixels to sample.
 
-The effect scope is a `Density`, so convert dp distances with `toPx()` inside `effects { }`.
-A `surface { }` declaration inherits [appearance defaults](styles-and-decorations.md); explicit
-setters select each slot. Its fixed phases order outer shadow, processed source, fill and interior
-lighting before children, then contour highlight and inner shadow. See [Render graphs](render-graphs.md)
-for independently sampled images, masks, arbitrary ordering and export.
+`BackdropStyle { }` constructs delayed appearance overrides, with distances expressed in dp.
+`styledSurface` inherits unspecified fields from the receiving [theme](styles-and-decorations.md)
+and applies a fixed order: color controls, blur, vibrancy and lens, followed by shape clipping.
+Outer shadow, processed source, fill and interior lighting draw before children; highlight and
+inner shadow draw after them.
+
+Use `surface { }` to configure optical stages and drawing within surface phases, or use the
+[image DSL](render-graphs.md) for independent branches, masks, arbitrary ordering and export.
+Inside an `effects { }` block, the scope is a `Density`; convert dp distances with `toPx()` there.
 
 For a uniform gradient, blur has little visible structure to soften; replace it with textured or
 scrolling background content to inspect the sampling. Capability and fallback behavior are covered

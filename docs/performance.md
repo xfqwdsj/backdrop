@@ -69,6 +69,10 @@ filters with retained or rebuilt declarations.
 
 `MotionBenchmark` renders the shared scenes synchronously through a raster `ImageComposeScene`;
 its result is unpaced raster throughput, not displayed frame rate or GPU execution time.
+Frame cost varies across each journey. A short measurement window can cover only part of a
+transition, especially when raster frames are slow. For focused animation comparisons, also
+measure complete open/close cycles after whole-cycle warm-up and repeat both revisions in
+reversed order. Keep these cycle measurements separate from the standard JMH report.
 
 The full JMH allocation task uses five one-second warm-ups, eight one-second measurements and two
 forks with a fixed 2 GiB heap. Use `-PbenchmarkHeap=<size>`, such as `2g`, to select another fixed

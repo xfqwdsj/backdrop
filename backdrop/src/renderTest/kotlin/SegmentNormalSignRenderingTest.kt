@@ -205,6 +205,7 @@ class SegmentNormalSignRenderingTest : PlatformGraphicsTest() {
     ): FloatArray {
         shader.setFloatUniform("origin", 0f, 0f)
         shader.setFloatUniform("geometryScale", geometry.coordinateScale)
+        shader.setIntUniform("activeSegmentCount", geometry.segmentCount)
         shader.setFloatUniform("segments", geometry.segments.copyOf(capacity * 4))
         shader.setFloatUniform("segmentNormalSigns", signs.copyOf(capacity))
         if (groupBounds != null) shader.setFloatUniform("segmentGroupBounds", groupBounds)

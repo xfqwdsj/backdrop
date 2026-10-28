@@ -8,7 +8,7 @@ import top.ltfan.backdrop.highlight.angularDirectionShader
 import top.ltfan.backdrop.highlight.exclusionShader
 import top.ltfan.backdrop.interaction.interactionFieldShader
 
-/** Static fixed-width shading from the nearest contour boundary. */
+/** Shades one nearest contour response with independently configured width and strength. */
 internal fun staticHighlightTileShader(
     geometry: FlattenedBoundaryGeometry,
     style: HighlightStyle,
@@ -20,9 +20,15 @@ internal fun staticHighlightTileShader(
     interactionCapacity: Int = 0,
     angularCapacity: Int = 0,
     segmentGroupSize: Int = 0,
+    certifiedNormalsOnly: Boolean = false,
 ): String =
     nearestBandShader(
-        genericBoundaryShaderFunctions(geometry.segmentCount, segmentCapacity, segmentGroupSize),
+        genericBoundaryShaderFunctions(
+            geometry.segmentCount,
+            segmentCapacity,
+            segmentGroupSize,
+            certifiedNormalsOnly,
+        ),
         style,
         exclusionCount,
         colorTransform,
@@ -30,6 +36,7 @@ internal fun staticHighlightTileShader(
         sharedDirectionCurve,
         interactionCapacity,
         angularCapacity,
+        boundedSearch = true,
     )
 
 internal fun staticHighlightTileShader(
@@ -43,6 +50,7 @@ internal fun staticHighlightTileShader(
     interactionCapacity: Int = 0,
     angularCapacity: Int = 0,
     segmentGroupSize: Int = 0,
+    certifiedNormalsOnly: Boolean = false,
 ): String =
     if (boundary.isAnalytic) {
         nearestBandShader(
@@ -67,6 +75,7 @@ internal fun staticHighlightTileShader(
             interactionCapacity,
             angularCapacity,
             segmentGroupSize,
+            certifiedNormalsOnly,
         )
     }
 
@@ -79,6 +88,7 @@ private fun nearestBandShader(
     sharedDirectionCurve: Boolean,
     interactionCapacity: Int,
     angularCapacity: Int,
+    boundedSearch: Boolean = false,
 ): String {
     val colorResponseShader =
         if (colorTransform == null) ""
@@ -218,7 +228,7 @@ half4 shadeAt(float2 coord) {
       p.x < emptyBoundaryBounds.z - conservativeUpper &&
       p.y < emptyBoundaryBounds.w - conservativeUpper) return half4(0.0);
   float2 nearestPosition;
-  float3 nearest = nearestBoundaryWithPosition(p, nearestPosition);
+  float3 nearest = ${if (boundedSearch) "nearestBoundaryWithPosition(p, conservativeUpper + geometryScale * 0.000004, nearestPosition)" else "nearestBoundaryWithPosition(p, nearestPosition)"};
   if (nearest.x >= conservativeUpper) return half4(0.0);
   float2 normal = nearest.yz;
   float projection = dot(normal, directionVector);

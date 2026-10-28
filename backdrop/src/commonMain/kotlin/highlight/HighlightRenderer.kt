@@ -44,6 +44,7 @@ internal fun boundaryUniformCapacity(candidateCount: Int): Int {
 
 private data class StaticShaderSignature(
     val geometryKey: String,
+    val certifiedNormalsOnly: Boolean,
     val segmentCapacity: Int,
     val falloffVariant: String,
     val sharedDirectionCurve: Boolean,
@@ -56,6 +57,7 @@ private data class StaticShaderSignature(
 ) {
     fun matches(
         geometryKey: String,
+        certifiedNormalsOnly: Boolean,
         segmentCapacity: Int,
         falloffVariant: String,
         sharedDirectionCurve: Boolean,
@@ -67,6 +69,7 @@ private data class StaticShaderSignature(
         angularCapacity: Int,
     ): Boolean =
         this.geometryKey == geometryKey &&
+            this.certifiedNormalsOnly == certifiedNormalsOnly &&
             this.segmentCapacity == segmentCapacity &&
             this.falloffVariant == falloffVariant &&
             this.sharedDirectionCurve == sharedDirectionCurve &&
@@ -187,6 +190,7 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
             } else null
         val colorTransform = response.transform.takeIf { sourceImage != null }
         val colorTransformSource = colorTransform?.shaderSource.orEmpty()
+        val certifiedNormalsOnly = geometry.certifiesNormalsFor(size)
         val segmentCapacity = boundaryUniformCapacity(geometry.segmentCount)
         val segmentGroupSize = if (!geometry.isAnalytic && segmentCapacity >= 32) 8 else 0
         val falloffVariant = highlightCurveVariant(highlight.falloff)
@@ -195,6 +199,7 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
         val signatureMatches =
             staticShaderSignature?.matches(
                 geometry.shaderKey,
+                certifiedNormalsOnly,
                 segmentCapacity,
                 falloffVariant,
                 sharedDirectionCurve,
@@ -212,6 +217,7 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
                 val signature =
                     StaticShaderSignature(
                         geometry.shaderKey,
+                        certifiedNormalsOnly,
                         segmentCapacity,
                         falloffVariant,
                         sharedDirectionCurve,
@@ -240,6 +246,7 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
                     interactionCapacity,
                     angularCapacity,
                     segmentGroupSize,
+                    certifiedNormalsOnly,
                 )
             }
         geometry.configureShader(shader)

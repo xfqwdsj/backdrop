@@ -4,7 +4,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.internal.genericBoundaryShaderFunctions
 
@@ -35,12 +37,43 @@ class BoundaryShaderGeometryCapacityTest : PlatformGraphicsTest() {
         }
     }
 
+    @Test
+    fun oneShaderObservesActiveCountChangesWithoutReadingInactiveTailSegments() {
+        val geometry = FlattenedBoundaryGeometry(Path().apply { addRect(Rect(2f, 2f, 10f, 10f)) })
+        val tail = FlattenedBoundaryGeometry(Path().apply { addRect(Rect(-2f, -2f, 12f, 12f)) })
+        val segments = geometry.segments + tail.segments
+        val points =
+            listOf(
+                Offset(6f, 6f),
+                Offset(1f, 6f),
+                Offset(2f, 2f),
+                Offset(1f, 1f),
+                Offset(2.25f, 2.25f),
+            )
+        val expected = renderQueries(geometry, geometry.segments.copyOf(8 * 4), 8, points)
+        val shader = queryShader(geometry, segments, 8, points)
+        val first = renderTestShader(shader, points.size, 1)
+        assertContentEquals(expected, first)
+        shader.setIntUniform("activeSegmentCount", 8)
+        assertFalse(first.contentEquals(renderTestShader(shader, points.size, 1)))
+        shader.setIntUniform("activeSegmentCount", 4)
+        assertContentEquals(first, renderTestShader(shader, points.size, 1))
+    }
+
     private fun renderQueries(
         geometry: FlattenedBoundaryGeometry,
         segments: FloatArray,
         segmentCapacity: Int,
         points: List<Offset>,
-    ): FloatArray {
+    ): FloatArray =
+        renderTestShader(queryShader(geometry, segments, segmentCapacity, points), points.size, 1)
+
+    private fun queryShader(
+        geometry: FlattenedBoundaryGeometry,
+        segments: FloatArray,
+        segmentCapacity: Int,
+        points: List<Offset>,
+    ): RuntimeShader {
         val pointUniform = FloatArray(points.size * 2)
         points.forEachIndexed { index, point ->
             pointUniform[index * 2] = point.x
@@ -68,8 +101,9 @@ class BoundaryShaderGeometryCapacityTest : PlatformGraphicsTest() {
             )
         shader.setFloatUniform("origin", 0f, 0f)
         shader.setFloatUniform("geometryScale", geometry.coordinateScale)
+        shader.setIntUniform("activeSegmentCount", geometry.segmentCount)
         shader.setFloatUniform("segments", segments)
         shader.setFloatUniform("testPoints", pointUniform)
-        return renderTestShader(shader, points.size, 1)
+        return shader
     }
 }

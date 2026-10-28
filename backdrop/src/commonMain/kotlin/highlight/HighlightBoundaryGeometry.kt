@@ -2,6 +2,7 @@ package top.ltfan.backdrop.highlight
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import kotlin.math.abs
@@ -58,6 +59,23 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
                 if (result.isEmpty) Rect.Zero else result
             }
         }
+
+    private val allNormalsCertified: Boolean by
+        lazy(LazyThreadSafetyMode.NONE) {
+            !isAnalytic &&
+                cpuGeometry().segmentCount > 0 &&
+                cpuGeometry().normalSigns.all { it != 0f }
+        }
+
+    /** Whether every point in the surface-local tile from zero to [size] has certified normals. */
+    internal fun certifiesNormalsFor(size: Size): Boolean =
+        size.width.isFinite() &&
+            size.height.isFinite() &&
+            size.width >= 0f &&
+            size.height >= 0f &&
+            size.width <= coordinateScale &&
+            size.height <= coordinateScale &&
+            allNormalsCertified
 
     internal val isAnalytic: Boolean
         get() = analyticRadii != null
@@ -178,6 +196,7 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
     internal fun configureShader(shader: RuntimeShader, originX: Float = 0f, originY: Float = 0f) {
         shader.setFloatUniform("origin", originX, originY)
         shader.setFloatUniform("geometryScale", coordinateScale)
+        if (!isAnalytic) shader.setIntUniform("activeSegmentCount", segmentCount)
         if (isAnalytic) {
             shader.setFloatUniform(
                 "boundaryBounds",

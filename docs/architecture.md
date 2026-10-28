@@ -190,15 +190,28 @@ outlines keep the generic path.
 Generic contour geometry also certifies a central rectangle containing no boundary segments.
 The highlight shader shrinks this rectangle by its maximum band width and antialiasing room,
 then rejects transparent interior pixels before scanning segments. Holes, concavities and
-independent contours contribute to the same certificate; shapes without a usable empty region
-retain the complete nearest-contour calculation.
+independent contours contribute to the same certificate. Shapes without a usable empty region
+use the band-limited segment search directly.
 
-Generic shaders scan a power-of-two segment capacity. Once a nearest candidate exists, a segment's
-axis-aligned distance lower bound can reject candidates beyond that distance plus a float guard.
-Remaining candidates retain declaration order and the nearest-boundary tie tolerance. Padding is
-degenerate and skipped, preserving nearest-boundary and containment results. Geometry caches segment orientation only
-when its normal probe is separated from every boundary segment; uncertain segments retain the
+Generic shaders retain power-of-two segment storage and pass the active segment count as a
+uniform. Segment, group and containment traversal stop at that count, including partially filled
+groups. Active count changes reuse the shader program while the remaining shader signature
+stays unchanged.
+Highlight passes bound the search by the maximum directional band width plus antialiasing and
+coordinate-tolerance margins. Segment and
+group bounds reject candidates beyond that limit before a nearest candidate exists; pixels
+outside the limit skip normal classification. Unbounded geometry queries retain the complete
+search. Once a nearest candidate exists, a segment's axis-aligned distance lower bound can reject
+candidates beyond that distance plus a float guard.
+Remaining candidates retain declaration order and the nearest-boundary tie tolerance. Storage
+padding stays outside active traversal; degenerate active segments are skipped, preserving
+nearest-boundary and containment results. Geometry caches segment orientation only when its
+normal probe is separated from every boundary segment; uncertain segments retain the
 containment probe at draw time. These conditions matter for thin features and nearby contours.
+When every segment has a certified normal and the complete surface-local shader tile lies within
+the certificate coordinate domain, the shader variant uses retained signs directly. Its cache
+signature includes this specialization, so changes in geometry or tile size select the matching
+variant. Other generic contours retain containment classification.
 The containment loop keeps uniform participation and gates crossing work within each iteration,
 preserving per-pixel execution masks when certified and uncertified segments share a pixel group.
 

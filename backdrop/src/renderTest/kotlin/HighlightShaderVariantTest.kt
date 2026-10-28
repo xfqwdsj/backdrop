@@ -37,7 +37,10 @@ class HighlightShaderVariantTest : PlatformGraphicsTest() {
                 exclusionCount = 0,
             )
 
-        assertContains(shader, "nearestBoundaryWithPosition(p, nearestPosition)")
+        assertContains(
+            shader,
+            "nearestBoundaryWithPosition(p, conservativeUpper + geometryScale * 0.000004, nearestPosition)",
+        )
         assertContains(shader, "shadeHighlight(nearestPosition, normal, projection, color)")
         assertContains(shader, "float bandWidth = width * widthScale")
         assertContains(

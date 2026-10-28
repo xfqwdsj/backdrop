@@ -25,7 +25,7 @@ class HighlightShaderVariantTest : PlatformGraphicsTest() {
         assertEquals(32, padded.size)
         assertFalse(padded.drop(16).any { it != 0f })
         assertContains(shader, "uniform float4 segments[8]")
-        assertEquals(1, Regex("if \\(denominator <= 0.0\\) continue;").findAll(shader).count())
+        assertContains(shader, "if (denominator > 0.0)")
     }
 
     @Test

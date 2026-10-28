@@ -200,7 +200,7 @@ stays unchanged.
 Highlight passes bound the search by the maximum directional band width plus antialiasing and
 coordinate-tolerance margins. Segment and
 group bounds reject candidates beyond that limit before a nearest candidate exists; pixels
-outside the limit skip normal classification. Unbounded geometry queries retain the complete
+outside the limit skip containment probes. Unbounded geometry queries retain the complete
 search. Once a nearest candidate exists, a segment's axis-aligned distance lower bound can reject
 candidates beyond that distance plus a float guard.
 Remaining candidates retain declaration order and the nearest-boundary tie tolerance. Storage
@@ -214,6 +214,9 @@ signature includes this specialization, so changes in geometry or tile size sele
 variant. Other generic contours retain containment classification.
 The containment loop keeps uniform participation and gates crossing work within each iteration,
 preserving per-pixel execution masks when certified and uncertified segments share a pixel group.
+Segment and group rejection also gate work within the traversal body. The nearest-boundary
+function returns after normal classification; the distance limit gates containment work while
+the caller rejects responses outside the visible band.
 
 Larger contours build a temporary group-bound index while generating orientation certificates.
 It rejects disjoint segment groups and containment groups outside the query's vertical range.

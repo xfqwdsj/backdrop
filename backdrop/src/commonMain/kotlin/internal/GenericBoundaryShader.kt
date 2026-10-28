@@ -34,17 +34,15 @@ internal fun genericBoundaryShaderFunctions(
             """
         for (int group = 0; group < ${segmentCapacity / segmentGroupSize}; ++group) {
           if (group * $segmentGroupSize >= activeSegmentCount) break;
-          {
-            float4 bounds = segmentGroupBounds[group];
-            float2 lower = max(bounds.xy - p, p - bounds.zw);
-            if (max(lower.x, lower.y) > min(selectedDistance, maximumDistance) + tolerance * 2.0) continue;
-          }
-          for (int member = 0; member < $segmentGroupSize; ++member) {
-            if (group * $segmentGroupSize + member >= activeSegmentCount) break;
+          float4 bounds = segmentGroupBounds[group];
+          float2 groupLower = max(bounds.xy - p, p - bounds.zw);
+          if (max(groupLower.x, groupLower.y) <= min(selectedDistance, maximumDistance) + tolerance * 2.0) {
+            for (int member = 0; member < $segmentGroupSize; ++member) {
+              if (group * $segmentGroupSize + member >= activeSegmentCount) break;
         """
                 .trimIndent()
         }
-    val searchEnd = if (segmentGroupSize == 0) "}" else "}\n  }"
+    val searchEnd = if (segmentGroupSize == 0) "}" else "}\n    }\n  }"
     val segments = "uniform float4 segments[$segmentCapacity];"
     val normalSigns = "uniform float segmentNormalSigns[$segmentCapacity];"
     val classifyNormal =
@@ -53,7 +51,7 @@ internal fun genericBoundaryShaderFunctions(
             """
             bool certified = bestNormalSign != 0.0 && abs(p.x) <= geometryScale && abs(p.y) <= geometryScale;
             float probeDistance = max(0.0001, tolerance * 4.0);
-            bool inward = containsPoint(closest + outward * probeDistance, !certified);
+            bool inward = containsPoint(closest + outward * probeDistance, !certified && selectedDistance < maximumDistance);
             outward *= certified ? bestNormalSign : (inward ? -1.0 : 1.0);
             """
                 .trimIndent()
@@ -99,26 +97,25 @@ float3 nearestBoundaryWithPosition(float2 p, float maximumDistance, out float2 c
     float4 segment = segments[$segmentIndex];
     float2 a = segment.xy;
     float2 b = segment.zw;
-    {
-      float2 lower = max(min(a, b) - p, p - max(a, b));
-      if (max(lower.x, lower.y) > min(selectedDistance, maximumDistance) + tolerance * 2.0) continue;
-    }
-    float2 ab = b - a;
-    float denominator = dot(ab, ab);
-    if (denominator <= 0.0) continue;
-    float t = clamp(dot(p - a, ab) / denominator, 0.0, 1.0);
-    float2 delta = a + t * ab - p;
-    float distance = length(delta);
-    if (!hasBest || distance < selectedDistance - tolerance) {
-      selectedDistance = distance;
-      bestDelta = delta;
-      bestTangent = ab;
-      bestNormalSign = segmentNormalSigns[$segmentIndex];
-      hasBest = true;
+    float2 lower = max(min(a, b) - p, p - max(a, b));
+    if (max(lower.x, lower.y) <= min(selectedDistance, maximumDistance) + tolerance * 2.0) {
+      float2 ab = b - a;
+      float denominator = dot(ab, ab);
+      if (denominator > 0.0) {
+        float t = clamp(dot(p - a, ab) / denominator, 0.0, 1.0);
+        float2 delta = a + t * ab - p;
+        float distance = length(delta);
+        if (!hasBest || distance < selectedDistance - tolerance) {
+          selectedDistance = distance;
+          bestDelta = delta;
+          bestTangent = ab;
+          bestNormalSign = segmentNormalSigns[$segmentIndex];
+          hasBest = true;
+        }
+      }
     }
   $searchEnd
   closest = p + bestDelta;
-  if (selectedDistance >= maximumDistance) return float3(selectedDistance, 0.0, -1.0);
   float tangentLength = length(bestTangent);
   float2 outward = tangentLength > 0.0 ? float2(bestTangent.y, -bestTangent.x) / tangentLength : float2(0.0, -1.0);
   $classifyNormal

@@ -5,6 +5,7 @@ import android.graphics.BlendMode
 import android.graphics.ColorSpace
 import android.graphics.HardwareBufferRenderer
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RenderNode
 import android.hardware.HardwareBuffer
 import android.os.Build
@@ -26,6 +27,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.unit.IntRect
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
@@ -47,6 +49,7 @@ internal actual fun renderTestShader(
     width: Int,
     height: Int,
     premultiplied: Boolean,
+    tiles: List<IntRect>?,
 ): FloatArray {
     val buffer =
         HardwareBuffer.create(
@@ -61,16 +64,26 @@ internal actual fun renderTestShader(
     try {
         node.setPosition(0, 0, width, height)
         val canvas = node.beginRecording(width, height)
-        canvas.drawRect(
-            0f,
-            0f,
-            width.toFloat(),
-            height.toFloat(),
+        canvas.drawColor(0, BlendMode.SRC)
+        val paint =
             Paint().apply {
                 this.shader = shader.asAndroidRuntimeShader()
                 blendMode = BlendMode.SRC
-            },
-        )
+            }
+        if (tiles != null) {
+            val clip =
+                Path().apply {
+                    for ((left, top, right, bottom) in tiles) addRect(
+                        left.toFloat(),
+                        top.toFloat(),
+                        right.toFloat(),
+                        bottom.toFloat(),
+                        Path.Direction.CW,
+                    )
+                }
+            canvas.clipPath(clip)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
         node.endRecording()
         renderer.setContentRoot(node)
         val complete = CountDownLatch(1)

@@ -188,10 +188,18 @@ clip preserves holes, concavities, and disconnected regions. Elliptical or unsui
 outlines keep the generic path.
 
 Generic contour geometry also certifies a central rectangle containing no boundary segments.
-The highlight shader shrinks this rectangle by its maximum band width and antialiasing room,
-then rejects transparent interior pixels before scanning segments. Holes, concavities and
-independent contours contribute to the same certificate. Shapes without a usable empty region
-use the band-limited segment search directly.
+The renderer shrinks this rectangle by the maximum band width and antialiasing room, rounds the
+remaining transparent interior inward to pixel boundaries, and records disjoint output tiles
+around it. Holes, concavities and independent contours contribute to the same certificate.
+Shapes without a usable empty region retain one complete output tile.
+
+Internal tile edges retain one pixel of neighboring storage for presentation interpolation;
+disjoint output clips partition those edges while the original outline owns outer-edge antialiasing.
+Shader origins translate tile coordinates into surface coordinates; processed-color lookup uses
+the corresponding tile-local input coordinates. Color response samples the same pixel, so each
+filtered tile owns its complete recorded input domain. Receiver-owned tile layers are reused
+across frames, and unused layers are released when the layout contracts. Shader signatures and
+geometry storage remain independent of tile layout.
 
 Generic shaders retain power-of-two segment storage and pass the active segment count as a
 uniform. Segment, group and containment traversal stop at that count, including partially filled
@@ -208,10 +216,11 @@ padding stays outside active traversal; degenerate active segments are skipped, 
 nearest-boundary and containment results. Geometry caches segment orientation only when its
 normal probe is separated from every boundary segment; uncertain segments retain the
 containment probe at draw time. These conditions matter for thin features and nearby contours.
-When every segment has a certified normal and the complete surface-local shader tile lies within
+When every segment has a certified normal and the complete receiving surface lies within
 the certificate coordinate domain, the shader variant uses retained signs directly. Its cache
-signature includes this specialization, so changes in geometry or tile size select the matching
+signature includes this specialization, so changes in geometry or surface size select the matching
 variant. Other generic contours retain containment classification.
+Transparent interior rejection belongs to output geometry, keeping it outside shader traversal.
 The containment loop keeps uniform participation and gates crossing work within each iteration,
 preserving per-pixel execution masks when certified and uncertified segments share a pixel group.
 Segment and group rejection also gate work within the traversal body. The nearest-boundary

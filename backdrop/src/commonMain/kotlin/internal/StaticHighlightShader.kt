@@ -118,7 +118,7 @@ private fun nearestBandShader(
         }
     val colorResponseCall =
         if (colorTransform == null) ""
-        else "linearColor = applyBackdropColorResponse(p, linearColor);"
+        else "linearColor = applyBackdropColorResponse(p + origin, linearColor);"
     val interactionUniforms =
         if (interactionCapacity == 0) ""
         else
@@ -199,7 +199,6 @@ uniform float2 directionVector;
 $directionUniforms
 uniform float4 falloffCurve;
 uniform float4 tileBounds;
-uniform float4 emptyBoundaryBounds;
 layout(color) uniform half4 color;
 ${style.shaderSource}
 $colorResponseShader
@@ -223,10 +222,6 @@ half4 shadeAt(float2 coord) {
   if (width <= 0.0) return half4(0.0);
   float maxBandWidth = width * $maximumWidth;
   float conservativeUpper = maxBandWidth + max(0.0001, abs(maxBandWidth) * 0.000001) + 0.5;
-  if (p.x > emptyBoundaryBounds.x + conservativeUpper &&
-      p.y > emptyBoundaryBounds.y + conservativeUpper &&
-      p.x < emptyBoundaryBounds.z - conservativeUpper &&
-      p.y < emptyBoundaryBounds.w - conservativeUpper) return half4(0.0);
   float2 nearestPosition;
   float3 nearest = ${if (boundedSearch) "nearestBoundaryWithPosition(p, conservativeUpper + geometryScale * 0.000004, nearestPosition)" else "nearestBoundaryWithPosition(p, nearestPosition)"};
   if (nearest.x >= conservativeUpper) return half4(0.0);

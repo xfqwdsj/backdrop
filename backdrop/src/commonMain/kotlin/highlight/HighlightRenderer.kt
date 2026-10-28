@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.PI
 import kotlin.math.ceil
@@ -29,6 +30,7 @@ import top.ltfan.backdrop.interaction.interactionFieldResponse
 import top.ltfan.backdrop.interaction.interactionLightWeight
 import top.ltfan.backdrop.interaction.isFiniteForRendering
 import top.ltfan.backdrop.internal.clipOutline
+import top.ltfan.backdrop.internal.createRuntimeShaderEffect
 import top.ltfan.backdrop.internal.highlightCurveVariant
 import top.ltfan.backdrop.internal.setRuntimeShader
 import top.ltfan.backdrop.internal.staticHighlightTileShader
@@ -96,6 +98,8 @@ private data class CpuFallbackKey(
 internal class HighlightRenderer(private val resources: BackdropRenderResources) {
     private var processedFrame = ProcessedBackdropFrame()
     private var highlightLayer: GraphicsLayer? = null
+    private val additionalLayers = mutableListOf<GraphicsLayer>()
+    private val tiles = HighlightTiles()
     private var boundaryOutline: Outline? = null
     private var boundaryGeometry: HighlightBoundaryGeometry? = null
     private var surfaceSize = Size.Zero
@@ -250,14 +254,6 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
                 )
             }
         geometry.configureShader(shader)
-        val emptyBounds = geometry.contourFreeBounds
-        shader.setFloatUniform(
-            "emptyBoundaryBounds",
-            emptyBounds.left,
-            emptyBounds.top,
-            emptyBounds.right,
-            emptyBounds.bottom,
-        )
         if (!geometry.isAnalytic) {
             shader.setFloatUniform("segments", geometry.paddedSegments(segmentCapacity))
             shader.setFloatUniform(
@@ -316,31 +312,74 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
         fieldUniforms?.upload(shader)
         if (fieldUniforms != null)
             shader.setFloatUniform("interactionContourOpacity", interactionContourOpacity)
-        val layer = highlightLayer ?: resources.createGraphicsLayer().also { highlightLayer = it }
-        layer.alpha = highlight.opacity
-        layer.blendMode = BlendMode.SrcOver
-        val canvas = drawContext.canvas
         if (colorTransform != null) {
             shader.setFloatUniform("colorResponseAmount", response.amount)
             colorTransform.configureShader(shader)
-            val source = requireNotNull(sourceImage)
-            layer.renderEffect = source.runtimeShaderEffect(shader, "content")
-            layer.record(Density(density, fontScale), layoutDirection, safeSize) {
-                source.draw(this)
-            }
-            canvas.save()
+        }
+        tiles.prepare(safeSize, geometry.contourFreeBounds, width * maximumWidthScale)
+        trimOutputLayers(tiles.count)
+        val recordingDensity = Density(density, fontScale)
+        val canvas = drawContext.canvas
+        canvas.save()
+        try {
             canvas.clipOutline(outline, roundedClipPath)
-            drawLayer(layer)
-            canvas.restore()
-        } else {
-            layer.renderEffect = null
-            paint.setRuntimeShader(shader)
-            layer.record(Density(density, fontScale), layoutDirection, safeSize) {
-                drawContext.canvas.drawRect(Rect(0f, 0f, size.width, size.height), paint)
+            for (index in 0 until tiles.count) {
+                val output = tiles[index]
+                // Neighbor texels preserve interpolation across independently recorded tile edges.
+                val storage =
+                    IntRect(
+                        maxOf(0, output.left - 1),
+                        maxOf(0, output.top - 1),
+                        if (output.right < safeSize.width) output.right + 1 else output.right,
+                        if (output.bottom < safeSize.height) output.bottom + 1 else output.bottom,
+                    )
+                val storageSize = IntSize(storage.width, storage.height)
+                val origin = Offset(-storage.left.toFloat(), -storage.top.toFloat())
+                shader.setFloatUniform("origin", origin.x, origin.y)
+                val layer = outputLayer(index)
+                layer.alpha = highlight.opacity
+                layer.blendMode = BlendMode.SrcOver
+                if (colorTransform != null) {
+                    val localBounds =
+                        Rect(0f, 0f, storage.width.toFloat(), storage.height.toFloat())
+                    // Color response samples the same pixel; the tile owns its complete input
+                    // domain.
+                    layer.renderEffect =
+                        createRuntimeShaderEffect(shader, "content", localBounds, localBounds)
+                    layer.record(recordingDensity, layoutDirection, storageSize) {
+                        val recording = drawContext.canvas
+                        recording.save()
+                        try {
+                            recording.translate(origin.x, origin.y)
+                            requireNotNull(sourceImage).draw(this)
+                        } finally {
+                            recording.restore()
+                        }
+                    }
+                } else {
+                    layer.renderEffect = null
+                    paint.setRuntimeShader(shader)
+                    layer.record(recordingDensity, layoutDirection, storageSize) {
+                        drawContext.canvas.drawRect(Rect(0f, 0f, size.width, size.height), paint)
+                    }
+                }
+                canvas.save()
+                try {
+                    // The outline owns outer-edge antialiasing; only internal tile edges partition
+                    // output.
+                    canvas.clipRect(
+                        output.left.toFloat() - if (output.left == 0) 1f else 0f,
+                        output.top.toFloat() - if (output.top == 0) 1f else 0f,
+                        output.right.toFloat() + if (output.right == safeSize.width) 1f else 0f,
+                        output.bottom.toFloat() + if (output.bottom == safeSize.height) 1f else 0f,
+                    )
+                    canvas.translate(storage.left.toFloat(), storage.top.toFloat())
+                    drawLayer(layer)
+                } finally {
+                    canvas.restore()
+                }
             }
-            canvas.save()
-            canvas.clipOutline(outline, roundedClipPath)
-            drawLayer(layer)
+        } finally {
             canvas.restore()
         }
     }
@@ -350,7 +389,8 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
         outline: Outline,
         interactionContourOpacity: Float,
     ) {
-        val layer = highlightLayer ?: resources.createGraphicsLayer().also { highlightLayer = it }
+        trimOutputLayers(1)
+        val layer = outputLayer(0)
         val roundedClipPath =
             if (outline is Outline.Rounded) clipPath ?: Path().also { clipPath = it } else null
         val safeSize = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())
@@ -556,10 +596,28 @@ internal class HighlightRenderer(private val resources: BackdropRenderResources)
     }
 
     private fun releaseOutputLayer() {
+        trimOutputLayers(0)
+        paint.setRuntimeShader(null)
+    }
+
+    private fun outputLayer(index: Int): GraphicsLayer {
+        if (index == 0)
+            return highlightLayer ?: resources.createGraphicsLayer().also { highlightLayer = it }
+        while (additionalLayers.size < index) additionalLayers += resources.createGraphicsLayer()
+        return additionalLayers[index - 1]
+    }
+
+    private fun trimOutputLayers(count: Int) {
+        while (additionalLayers.size > maxOf(0, count - 1)) {
+            additionalLayers.removeAt(additionalLayers.lastIndex).let {
+                it.renderEffect = null
+                resources.releaseGraphicsLayer(it)
+            }
+        }
+        if (count > 0) return
         highlightLayer?.let {
             it.renderEffect = null
             resources.releaseGraphicsLayer(it)
-            paint.setRuntimeShader(null)
         }
         highlightLayer = null
     }

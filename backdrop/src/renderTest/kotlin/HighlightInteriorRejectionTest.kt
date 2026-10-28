@@ -9,11 +9,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.unit.IntSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
 import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.HighlightTiles
 import top.ltfan.backdrop.highlight.boundaryUniformCapacity
 import top.ltfan.backdrop.internal.staticHighlightTileShader
 
@@ -106,7 +108,6 @@ class HighlightInteriorRejectionTest : PlatformGraphicsTest() {
                 }
                 for (width in listOf(.25f, 2f, 12f, 40f)) {
                     unbounded.setFloatUniform("width", width)
-                    unbounded.setFloatUniform("emptyBoundaryBounds", 0f, 0f, 0f, 0f)
                     val expected = renderTestShader(unbounded, 80, 80)
                     fun assertCornerEmission(pixels: FloatArray, context: String) {
                         if (pathIndex != 0 || width != .25f) return
@@ -125,14 +126,17 @@ class HighlightInteriorRejectionTest : PlatformGraphicsTest() {
                     for ((variant, shader) in variants) {
                         shader.setFloatUniform("width", width)
                         for (empty in listOf(Rect.Zero, geometry.contourFreeBounds)) {
-                            shader.setFloatUniform(
-                                "emptyBoundaryBounds",
-                                empty.left,
-                                empty.top,
-                                empty.right,
-                                empty.bottom,
-                            )
-                            val actual = renderTestShader(shader, 80, 80)
+                            val layout =
+                                HighlightTiles().apply {
+                                    prepare(IntSize(80, 80), empty, width * 2f)
+                                }
+                            val actual =
+                                renderTestShader(
+                                    shader,
+                                    80,
+                                    80,
+                                    tiles = (0 until layout.count).map { layout[it] },
+                                )
                             val context =
                                 "path=$pathIndex, width=$width, group=$groupSize, variant=$variant, empty=$empty"
                             assertCornerEmission(actual, context)
@@ -195,6 +199,10 @@ class HighlightInteriorRejectionTest : PlatformGraphicsTest() {
     private fun paths(): List<Path> =
         listOf(
             certifiedContour(),
+            // Translations vary the fragment-group alignment around the rejected interior.
+            certifiedContour().apply { translate(Offset(1f, 0f)) },
+            certifiedContour().apply { translate(Offset(0f, 1f)) },
+            certifiedContour().apply { translate(Offset(1f, 1f)) },
             Path().apply { addRoundRect(RoundRect(Rect(3f, 5f, 77f, 75f), CornerRadius(18f))) },
             Path().apply {
                 fillType = PathFillType.EvenOdd

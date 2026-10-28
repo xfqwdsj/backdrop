@@ -7,14 +7,17 @@ import androidx.compose.ui.platform.registerSkikoComposeImplementation
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage as captureWindowImage
+import androidx.compose.ui.unit.IntRect
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.ClipMode
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Paint
+import org.jetbrains.skia.PathBuilder
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
 
@@ -28,6 +31,7 @@ internal actual fun renderTestShader(
     width: Int,
     height: Int,
     premultiplied: Boolean,
+    tiles: List<IntRect>?,
 ): FloatArray {
     val info =
         ImageInfo(
@@ -38,9 +42,25 @@ internal actual fun renderTestShader(
             ColorSpace.sRGB,
         )
     Surface.makeRaster(info).use { surface ->
+        surface.canvas.clear(0)
         Paint().use { paint ->
             shader.asSkikoRuntimeShader().makeShader().use { native ->
                 paint.shader = native
+                if (tiles != null) {
+                    PathBuilder().use { clip ->
+                        for ((left, top, right, bottom) in tiles) clip.addRect(
+                            Rect(
+                                left.toFloat(),
+                                top.toFloat(),
+                                right.toFloat(),
+                                bottom.toFloat(),
+                            ),
+                        )
+                        clip.snapshot().use { path ->
+                            surface.canvas.clipPath(path, ClipMode.INTERSECT, false)
+                        }
+                    }
+                }
                 surface.canvas.drawRect(Rect.makeWH(width.toFloat(), height.toFloat()), paint)
             }
         }

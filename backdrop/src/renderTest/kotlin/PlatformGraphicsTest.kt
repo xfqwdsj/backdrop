@@ -1,5 +1,6 @@
 package top.ltfan.backdrop
 
+import androidx.compose.ui.unit.IntRect
 import kotlin.math.pow
 import kotlin.test.BeforeTest
 
@@ -13,12 +14,17 @@ abstract class PlatformGraphicsTest {
 
 internal expect fun initializeTestGraphics()
 
-/** Reads shader numerics through a floating-point target independently of display configuration. */
+/**
+ * Reads shader numerics through a floating-point target independently of display configuration.
+ * Optional [tiles] clip one complete draw, preserving the local-coordinate interpolation used by
+ * the unmasked shader comparison.
+ */
 internal expect fun renderTestShader(
     shader: RuntimeShader,
     width: Int,
     height: Int,
     premultiplied: Boolean = true,
+    tiles: List<IntRect>? = null,
 ): FloatArray
 
 internal fun testHalfToFloat(bits: Int): Float {

@@ -68,6 +68,8 @@ class HighlightVariantCacheTest : PlatformGraphicsTest() {
                 assertTrue(shaders.size <= 2, "Returning signatures reuse their original shaders")
                 val key = field(renderer, "currentStaticShaderKey") as String
                 val shader = field(checkNotNull(shaders[key]), "shader") as RuntimeShader
+                // This probe uses surface coordinates instead of the last output tile's origin.
+                shader.setFloatUniform("origin", 0f, 0f)
                 val pixels = renderTestShader(shader, 80, 80)
                 val edge = 40 * 4
                 assertEquals(1f - .5f / width, pixels[edge + 3], .002f, "width update $index")

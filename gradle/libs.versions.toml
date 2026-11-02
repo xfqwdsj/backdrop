@@ -14,7 +14,7 @@ dslUtilities = "2.2.0"
 spotless = "8.10.4"
 dokka = "2.2.0"
 mavenPublish = "0.37.0"
-ksp = "2.3.12"
+ksp = "2.3.13"
 
 [libraries]
 skiko-runtime = { module = "org.jetbrains.skiko:skiko-awt-runtime-all", version.ref = "skiko" }

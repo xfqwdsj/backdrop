@@ -24,8 +24,8 @@ shaders, so it also works on Android API 31–32. It preserves its input without
 when render effects are unavailable. Consumers select algorithms and any mask, fill or other
 fallback according to their component requirements.
 
-Finite source boundaries use transparent exterior pixels without their shader extension. Static highlight emission is
-visible, and interior interaction lighting has an SDR mesh fallback.
+Without runtime shaders, finite source boundaries use transparent exterior pixels. Contour
+highlights draw as an inner stroke, and interior interaction lighting uses an SDR vertex mesh.
 
 ## Preserve extended-range color
 
@@ -79,9 +79,10 @@ intentional. See [BackdropHdrScope](../backdrop/src/commonMain/kotlin/BackdropHd
 ## Validate the right layer
 
 Public APIs do not provide a layer's HDR luminance, and screenshot/readback paths do not prove HDR
-display output. The rendering tests use floating-point Skia surfaces to check owned color math;
-Compose screenshots check geometry, alpha, and updates through their 8-bit path. Neither replaces
-verification on the application's configured HDR window and display.
+display output. The rendering tests use floating-point Skia surfaces and Android hardware buffers
+to check shader numerics and recorded output. A floating-point destination preserves the range
+supplied by its intermediates. Compose screenshots check geometry, alpha, and updates through their
+8-bit path. Verify display output on the application's configured HDR window and display.
 
 ## Render graph capability boundaries
 

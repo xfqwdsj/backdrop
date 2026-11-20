@@ -174,9 +174,13 @@ class LayeredProgressiveBlurCostTest {
             runOnIdle { levels.intValue = count }
             onNodeWithTag("cost").captureToImage()
             assertEquals(1, sourceCalls, "Branches re-recorded their shared source")
-            // One shared source and primitive output, plus at most two layers per level.
-            val layerBudget = 2 * count + 2
-            assertTrue(active.size <= layerBudget, "Layer budget exceeded for $count levels")
+            // One shared source, primitive output and contour output, plus at most two layers per
+            // level.
+            val layerBudget = 2 * count + 3
+            assertTrue(
+                active.size <= layerBudget,
+                "Layer budget exceeded for $count levels: ${active.size} > $layerBudget",
+            )
             // Radius 16 needs at most 30px support per side: each layer fits within 156 x 156.
             // This bounds logical recording pixels, not native texture allocation or GPU memory.
             assertTrue(recordedPixels <= layerBudget.toLong() * 156 * 156)
@@ -194,7 +198,11 @@ class LayeredProgressiveBlurCostTest {
         }
         runOnIdle { levels.intValue = 0 }
         onNodeWithTag("cost").captureToImage()
-        assertEquals(1, active.size, "Omitted blur retained intermediate layers")
+        assertEquals(
+            if (styled) 2 else 1,
+            active.size,
+            "Omitted blur or highlight retained intermediate layers",
+        )
         runOnIdle { levels.intValue = -1 }
         waitForIdle()
         assertTrue(active.isEmpty())

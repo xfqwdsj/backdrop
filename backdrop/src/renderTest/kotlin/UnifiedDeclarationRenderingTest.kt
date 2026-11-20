@@ -27,7 +27,6 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.shadow.InnerShadow
@@ -90,7 +89,7 @@ class UnifiedDeclarationRenderingTest {
                             drawRect(Color.Transparent, size = Size(radius.floatValue, 1f))
                         }
                         highlight(
-                            Highlight.Config(colorResponse = HighlightColorResponse(amount = 0f)),
+                            Highlight.Contour(),
                         )
                     }
                 },

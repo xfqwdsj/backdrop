@@ -21,7 +21,6 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.shadow.InnerShadow
@@ -95,7 +94,8 @@ class BackdropPrimitiveRenderingTest {
             Highlight(
                 width = 8.dp,
                 direction = HighlightDirection.Uniform,
-                colorResponse = HighlightColorResponse(0f),
+                baseBrightness = 1f,
+                environmentGain = 0f,
             )
         setContent {
             val source = rememberCanvasBackdrop {}

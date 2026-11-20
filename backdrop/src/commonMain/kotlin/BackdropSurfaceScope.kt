@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.HighlightScope
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
@@ -52,7 +53,7 @@ internal constructor(
     internal val effectBlocks = mutableListOf<BackdropEffectScope.() -> Unit>()
     internal var explicitEffects: Boolean = false
     internal var fill: (DrawScope.(Rect) -> Unit)? = null
-    internal var contour: Highlight? = null
+    internal var contour: (() -> Highlight)? = null
     internal var outer: Shadow? = null
     internal var inner: InnerShadow? = null
     internal var lighting: InteractionLighting? = null
@@ -96,7 +97,13 @@ internal constructor(
 
     public fun highlight(config: Highlight) {
         checkDeclaration()
-        contour = config
+        contour = { config }
+    }
+
+    /** Observes the environment blur at resolution and the visual response while drawing. */
+    public fun highlight(block: HighlightScope.() -> Unit) {
+        checkDeclaration()
+        contour = { Highlight(block) }
     }
 
     public fun shadow(config: Shadow) {

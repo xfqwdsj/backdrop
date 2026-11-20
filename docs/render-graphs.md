@@ -25,7 +25,7 @@ Modifier.drawBackdrop(backdrop, shape = { shape }) {
         shadow(Shadow.Default)
         draw(glass)
         fill(tint)
-        highlight(Highlight.Ambient, colorSource = glass)
+        highlight(Highlight.Default, environment = glass)
     }
 }
 ```
@@ -130,7 +130,7 @@ val weight = image {
 }
 mix(near, far, weight)
 val material = current
-highlight(Highlight.Default, colorSource = material)
+highlight(Highlight.Default, environment = material)
 ```
 
 Add independent branches and weight images for more transitions. To accumulate processing,
@@ -152,7 +152,7 @@ Modifier.drawBackdrop(backdrop, shape = { shape }, backgroundAlpha = { alpha.val
     effects { blur(8.dp.toPx()) }
     clipSurface()
     val material = current
-    highlight(Highlight.Default, colorSource = material)
+    highlight(Highlight.Default, environment = material)
     export()
     foreground { innerShadow(InnerShadow.Default) }
 }

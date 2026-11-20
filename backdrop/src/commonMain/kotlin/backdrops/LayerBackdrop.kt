@@ -62,8 +62,18 @@ internal constructor(
     public val tileMode: TileMode = TileMode.Clamp,
 ) : Backdrop {
 
-    public var graphicsLayer: GraphicsLayer by mutableStateOf(graphicsLayer)
-        internal set
+    private var graphicsLayerState: GraphicsLayer by mutableStateOf(graphicsLayer)
+
+    public var graphicsLayer: GraphicsLayer
+        get() = graphicsLayerState
+        internal set(value) {
+            if (graphicsLayerState === value) return
+            graphicsLayerState = value
+            publishInvalidation()
+        }
+
+    internal var sourceRevision: Long by mutableStateOf(0L, neverEqualPolicy())
+        private set
 
     override val isCoordinatesDependent: Boolean = true
 
@@ -78,6 +88,14 @@ internal constructor(
     /** Pixel-aligned source domain in layer storage; null uses the recorded layer size. */
     internal var sourceBounds: Rect? by mutableStateOf(null, neverEqualPolicy())
 
+    internal fun publishRecording() {
+        sourceRevision++
+    }
+
+    internal fun publishInvalidation() {
+        sourceRevision++
+    }
+
     override fun BackdropDrawScope.drawBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
@@ -88,6 +106,8 @@ internal constructor(
         // content as soon as the layer has any: the recorded size of a graphics layer is not
         // observable, so a surface that returns before reading these stays empty until something
         // else invalidates it.
+        val revision = sourceRevision
+        if (revision < 0L) return
         val recorded = sourceBounds
         val offset = layerOffset
         val recordedLayer = graphicsLayer

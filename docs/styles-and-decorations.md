@@ -11,7 +11,7 @@ retains its own compositing boundary.
 val glass = BackdropStyle {
     blur = { BackdropBlur.Uniform(8.dp) }
     fill = { BackdropFill(tint) }
-    highlight = { Highlight.Ambient }
+    highlight = { Highlight.Default }
 }
 val panel = glass {
     blur = { BackdropBlur.LayeredProgressive(16.dp, BackdropEdge.Top) }
@@ -43,11 +43,13 @@ consuming phases, so fill-color and blur-radius animations do not rebuild the gr
 foreground with this fixed order:
 
 1. Color controls, the selected blur algorithm, vibrancy, lens, then shape clipping.
-2. Background: outer shadow, processed source, fill, then additive interior interaction light.
+2. Background: outer shadow, processed source, fill, additive interior interaction light, then the
+   environment-lit highlight.
 3. Compose child content.
-4. Foreground: highlight, then inner shadow.
+4. Foreground: inner shadow.
 
-The highlight samples the processed source before fill, interaction light and child content.
+The highlight samples a Gaussian-filtered input built from the processed source and interior
+interaction light before fill and child content.
 Vibrancy appends saturation to the existing color processing. `BackdropBlur` explicitly selects
 uniform, shader-progressive or layered-progressive blur; unsupported-platform behavior follows the
 selected algorithm. The library chooses no fallback. A fill's ramp and edge request their
@@ -86,7 +88,7 @@ Modifier.drawBackdrop(
     }
     val overlay = layer {
         fill(Color.White.copy(alpha = .1f))
-        highlight(Highlight.Ambient)
+        highlight(Highlight.Default)
     }
     draw(overlay)
 }
@@ -103,11 +105,19 @@ is an empty render declaration. See [Render graphs](render-graphs.md) for compos
 
 ## Shape the contour response
 
-`Highlight(width, direction, style, ...)` configures a contour highlight.
+`Highlight.Contour`, also built by `Highlight(...)` or `Highlight { ... }`, defaults to a
+`2.dp` band. An environment image passes through a standard Gaussian blur and is sampled in place
+by visible inner-band pixels. Set `blurRadius = 0.dp` to sample the environment directly.
+
+Use `highlight(Highlight.Basic())` for a uniform white inner stroke. Its default width is `1.dp`,
+and its parameters are `width`, `baseBrightness`, and `opacity`. The environment input and Gaussian
+blur belong to contour highlights. Platforms without runtime shaders use the same stroke drawing
+path with the configured width, base brightness, and opacity.
+
 `HighlightDirection(angle, mode, strength, widthScale)` uses normal incidence: the normal's dot
 product with the chosen direction is truncated for Single or folded by absolute value for Double.
 Its width and strength have independent curves. `Uniform` removes directional modulation.
-`falloff` shapes the profile across the band; `opacity` controls the primitive's output layer.
+The inner-band profile is fixed to `1 - smoothstep(0, localWidth, distance)`.
 
 For explicit angular curves, surface and graph declarations accept the same configuration values.
 Import `highlight` and `angles` from `top.ltfan.backdrop.highlight`:
@@ -125,9 +135,10 @@ highlight {
 ```
 
 `Highlight { ... }` also builds that configuration independently. Graph declarations accept an
-explicit `colorSource` image; the surface DSL uses its processed source. `incidence(...)` inside the builder
-selects the normal-incidence response; import that extension from the highlight package. Both branches use `angle` for orientation: 0 points
-right, 90 down, 180 left, 270 up. Angular segments are relative to that orientation.
+explicit `environment` image. The surface DSL uses its processed source and interior interaction
+light. Import `incidence` from the highlight package to select a normal-incidence response inside
+the builder. Both branches use `angle` for orientation: 0 points right, 90 down, 180 left, 270 up.
+Angular segments are relative to that orientation.
 
 | Domain | Relative coordinate |
 | --- | --- |
@@ -148,20 +159,22 @@ Shaders are specialized by segment capacity, not individual values or rotation.
 Parameterized `disabledAngles: Set<ClosedFloatingPointRange<Float>>` applies a final hard cut.
 `disabledAngleDomain` supports the same Unsigned and Directed meanings. These ranges are also
 relative to the direction's `angle`.
-For a uniform response, the orientation is zero. Cuts affect static and interaction contour light.
+For a uniform response, the orientation is zero. Cuts affect the complete environment-lit response.
 
 ## Color and geometry
 
 The renderer evaluates one nearest-contour response and clips through the original outline,
-including holes and disconnected contours. `Default` uses solid shading, `Ambient` two-tone
-shading, and `Plain` uniform direction. Two-tone shading can emit black RGB while retaining emission.
+including holes and disconnected contours. `baseBrightness` contributes fixed white light and
+`environmentGain` controls the colored contribution from the blurred environment. Environment alpha
+scales that contribution. The fixed base and environment terms are evaluated in linear extended-sRGB
+and emitted with premultiplied alpha. Display headroom signals resource refresh; color strength is
+caller-configured.
 
-`HighlightColorResponse` samples the processed source in the surface DSL. In a graph, pass an
-explicit `colorSource` image to choose that domain and exclude later tints and children. Zero amount
-permits omitting that source. Source alpha scales the response, while highlight alpha and
-directional response determine emission. `PreservePeak` rescales positive sample RGB in linear
-extended-sRGB to the base peak when a finite positive scale exists. Color response changes RGB while
-preserving emission. Display headroom signals resource refresh; color strength is caller-configured.
+The experimental `ContourShape` contract can provide the same ordered line, arc and cubic segments
+used for clipping and Backdrop geometry. The bundled `CapsuleShape` uses a G2 continuous profile and
+is available as a normal Compose `Shape`.
+
+## Shadows
 
 Outer and inner shadows are independent primitives. Their parameter objects retain radius, offset,
 color and alpha; configuration factories and `copy` produce configured values, while `None` omits

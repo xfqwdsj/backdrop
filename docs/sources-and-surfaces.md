@@ -57,11 +57,11 @@ Modifier.drawBackdrop(backdrop, shape = { shape }) {
     surface {
         effects { blur(12.dp.toPx()) }
         fill(tint)
-        highlight(Highlight.Ambient)
+        highlight(Highlight.Default)
     }
     val overlay = layer {
         fill(Color.White.copy(alpha = .1f))
-        highlight(Highlight.Ambient)
+        highlight(Highlight.Default)
     }
     draw(overlay)
 }
@@ -69,7 +69,8 @@ Modifier.drawBackdrop(backdrop, shape = { shape }) {
 
 `surface { }` processes its selected input through ordered optical stages and surface drawing
 phases. Unset appearance slots inherit [styles](styles-and-decorations.md). At the root, surface
-paint and interior lighting draw before children; highlights and inner shadows draw after them.
+paint, interior lighting and the additive highlight draw before children; inner shadows draw after
+them.
 Inside an image or layer, all phases complete that image before it is composed elsewhere.
 Use `styledSurface(style)` at the root to apply a fixed-order appearance without declaring its
 individual stages. Background opacity below one applies once to the complete background result.

@@ -1,167 +1,53 @@
 package top.ltfan.backdrop.internal
 
-import top.ltfan.backdrop.BackdropCurve
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
-import top.ltfan.backdrop.highlight.HighlightColorTransform
-import top.ltfan.backdrop.highlight.HighlightStyle
+import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.angularDirectionShader
 import top.ltfan.backdrop.highlight.exclusionShader
-import top.ltfan.backdrop.interaction.interactionFieldShader
 
-/** Shades one nearest contour response with independently configured width and strength. */
-internal fun staticHighlightTileShader(
-    geometry: FlattenedBoundaryGeometry,
-    style: HighlightStyle,
-    exclusionCount: Int,
-    colorTransform: HighlightColorTransform? = null,
-    segmentCapacity: Int = geometry.segmentCount,
-    falloff: BackdropCurve = BackdropCurve.Default,
-    sharedDirectionCurve: Boolean = false,
-    interactionCapacity: Int = 0,
-    angularCapacity: Int = 0,
-    segmentGroupSize: Int = 0,
-    certifiedNormalsOnly: Boolean = false,
-): String =
-    nearestBandShader(
-        genericBoundaryShaderFunctions(
-            geometry.segmentCount,
-            segmentCapacity,
-            segmentGroupSize,
-            certifiedNormalsOnly,
-        ),
-        style,
-        exclusionCount,
-        colorTransform,
-        falloff,
-        sharedDirectionCurve,
-        interactionCapacity,
-        angularCapacity,
-        boundedSearch = true,
-    )
-
-internal fun staticHighlightTileShader(
+/** Shades one nearest-contour response from a prefiltered environment image. */
+internal fun environmentHighlightTileShader(
     boundary: HighlightBoundaryGeometry,
-    style: HighlightStyle,
-    exclusionCount: Int,
-    colorTransform: HighlightColorTransform? = null,
     segmentCapacity: Int = boundary.segmentCount,
-    falloff: BackdropCurve = BackdropCurve.Default,
-    sharedDirectionCurve: Boolean = false,
-    interactionCapacity: Int = 0,
-    angularCapacity: Int = 0,
     segmentGroupSize: Int = 0,
     certifiedNormalsOnly: Boolean = false,
-): String =
-    if (boundary.isAnalytic) {
-        nearestBandShader(
-            boundary.shaderFunctions(segmentCapacity),
-            style,
-            exclusionCount,
-            colorTransform,
-            falloff,
-            sharedDirectionCurve,
-            interactionCapacity,
-            angularCapacity,
-        )
-    } else {
-        staticHighlightTileShader(
-            boundary.cpuGeometry(),
-            style,
-            exclusionCount,
-            colorTransform,
-            segmentCapacity,
-            falloff,
-            sharedDirectionCurve,
-            interactionCapacity,
-            angularCapacity,
-            segmentGroupSize,
-            certifiedNormalsOnly,
-        )
-    }
-
-private fun nearestBandShader(
-    geometry: String,
-    style: HighlightStyle,
-    exclusionCount: Int,
-    colorTransform: HighlightColorTransform?,
-    falloff: BackdropCurve,
-    sharedDirectionCurve: Boolean,
-    interactionCapacity: Int,
-    angularCapacity: Int,
-    boundedSearch: Boolean = false,
+    sharedDirectionCurve: Boolean = false,
+    hasEnvironment: Boolean = false,
+    angularCapacity: Int = 0,
+    exclusionCapacity: Int = 0,
 ): String {
-    val colorResponseShader =
-        if (colorTransform == null) ""
-        else {
-            """
-            uniform shader content;
-            uniform float colorResponseAmount;
-            ${colorTransform.shaderSource}
-            bool backdropHighlightFinite3(float3 value) {
-              return abs(value.x) <= 3.402823466e+38 && abs(value.y) <= 3.402823466e+38 && abs(value.z) <= 3.402823466e+38;
-            }
-            bool backdropHighlightFinite4(float4 value) {
-              return abs(value.x) <= 3.402823466e+38 && abs(value.y) <= 3.402823466e+38 && abs(value.z) <= 3.402823466e+38 && abs(value.w) <= 3.402823466e+38;
-            }
-            float3 applyBackdropColorResponse(float2 p, float3 baseColor) {
-              float4 sample = content.eval(p);
-              if (!backdropHighlightFinite4(sample) || !(sample.a > 0.000001) || sample.a > 1.0) return baseColor;
-              float3 sampledColor = sample.rgb / sample.a;
-              if (!backdropHighlightFinite3(sampledColor) || !backdropHighlightFinite3(baseColor)) return baseColor;
-              float3 linearSample = toLinearSrgb(sampledColor);
-              if (!backdropHighlightFinite3(linearSample)) return baseColor;
-              float3 transformed = transformHighlightColor(baseColor, linearSample);
-              if (!backdropHighlightFinite3(transformed)) return baseColor;
-              return mix(baseColor, transformed, clamp(colorResponseAmount * sample.a, 0.0, 1.0));
-            }
-            """
-        }
-    val colorResponseCall =
-        if (colorTransform == null) ""
-        else "linearColor = applyBackdropColorResponse(p + origin, linearColor);"
-    val interactionUniforms =
-        if (interactionCapacity == 0) ""
-        else
-            "${interactionFieldShader(interactionCapacity, includeCurveShader = false)}\nuniform float interactionContourOpacity;"
-    val outputComposite =
-        if (interactionCapacity == 0) {
-            """
-            if (q <= 0.0) return half4(0.0);
-            float3 linearColor = toLinearSrgb(float3(shaded.rgb));
-            $colorResponseCall
-            float alpha = min(q, 1.0);
-            return half4(fromLinearSrgb(linearColor * (q / max(alpha, 0.000001))) * alpha, alpha);
-            """
+    val geometry =
+        if (boundary.isAnalytic) {
+            boundary.shaderFunctions(segmentCapacity)
         } else {
-            """
-            float baseAlpha = min(q, 1.0);
-            float3 linearColor = float3(0.0);
-            if (q > 0.0) {
-              linearColor = toLinearSrgb(float3(shaded.rgb));
-              $colorResponseCall
-            }
-            float4 interaction = interactionField(p);
-            float interactionAlpha = interactionContourOpacity * interaction.a *
-              fixedBandProfile(nearest.x, bandWidth, falloffCurve) * exclusionWeight(normal);
-            float alpha = interactionAlpha + baseAlpha * (1.0 - interactionAlpha);
-            if (alpha <= 0.0) return half4(0.0);
-            float3 premultiplied = interaction.rgb * interactionAlpha +
-              linearColor * q * (1.0 - interactionAlpha);
-            return half4(fromLinearSrgb(premultiplied / alpha) * alpha, alpha);
-            """
+            genericBoundaryShaderFunctions(
+                boundary.segmentCount,
+                segmentCapacity,
+                segmentGroupSize,
+                certifiedNormalsOnly,
+            )
         }
     val directionWidthCurveUniform =
         if (sharedDirectionCurve) "" else "uniform float4 directionWidthCurve;"
     val directionCurveValues =
-        if (angularCapacity > 0)
-            "float2 angularValues = angularResponse(normal); float widthScale = angularValues.x; float strengthByDirection = angularValues.y;"
-        else if (sharedDirectionCurve) {
+        if (angularCapacity > 0) {
+            """
+            float2 angularValues = angularResponse(normal);
+            float widthScale = angularValues.x;
+            float strengthByDirection = angularValues.y;
+            """
+                .trimIndent()
+        } else if (sharedDirectionCurve) {
             """
             float sharedDirectionLevel = backdropCurve(magnitude, directionStrengthCurve);
             float strengthByDirection = directionEnabled > 0.5
-              ? directionStrengthRange.x + (directionStrengthRange.y - directionStrengthRange.x) * sharedDirectionLevel : 1.0;
+              ? directionStrengthRange.x +
+                (directionStrengthRange.y - directionStrengthRange.x) * sharedDirectionLevel
+              : 1.0;
             float widthScale = directionEnabled > 0.5
-              ? directionWidthRange.x + (directionWidthRange.y - directionWidthRange.x) * sharedDirectionLevel : 1.0;
+              ? directionWidthRange.x +
+                (directionWidthRange.y - directionWidthRange.x) * sharedDirectionLevel
+              : 1.0;
             """
                 .trimIndent()
         } else {
@@ -176,71 +62,101 @@ private fun nearestBandShader(
     val directionUniforms =
         if (angularCapacity > 0) {
             "uniform float angularMaximumWidthScale;\n" + angularDirectionShader(angularCapacity)
-        } else
+        } else {
             """
-        uniform float directionEnabled;
-        uniform float directionMode;
-        uniform float2 directionStrengthRange;
-        uniform float4 directionStrengthCurve;
-        uniform float2 directionWidthRange;
-        $directionWidthCurveUniform
-    """
+            uniform float directionEnabled;
+            uniform float directionMode;
+            uniform float2 directionStrengthRange;
+            uniform float4 directionStrengthCurve;
+            uniform float2 directionWidthRange;
+            $directionWidthCurveUniform
+            """
+                .trimIndent()
+        }
     val maximumWidth =
         if (angularCapacity > 0) "angularMaximumWidthScale"
         else "max(directionWidthRange.x, directionWidthRange.y)"
-    val falloffCurveShader =
-        highlightCurveShader(falloff).replace("backdropCurve", "backdropFalloffCurve")
+    val nearestQuery =
+        if (boundary.isAnalytic) "nearestBoundaryWithPosition(p, nearestPosition)"
+        else "nearestBoundaryWithPosition(p, conservativeUpper, nearestPosition)"
+    val environmentDeclaration = if (hasEnvironment) "uniform shader environment;" else ""
+    val environmentContribution =
+        if (hasEnvironment) {
+            """
+            half4 environmentSample = environment.eval(coord);
+            float environmentAlpha = max(0.0, float(environmentSample.a));
+            if (environmentAlpha > 0.000001) {
+              float3 environmentColor =
+                float3(environmentSample.rgb) / environmentAlpha;
+              light += toLinearSrgb(environmentColor) * environmentGain * environmentAlpha;
+            }
+            """
+                .trimIndent()
+        } else ""
+    val magnitudeInitialization =
+        if (angularCapacity == 0) {
+            "magnitude = directionMode < 0.5 ? max(0.0, projection) : abs(projection);"
+        } else ""
     return """
 $geometry
 $HighlightCurveShader
-$falloffCurveShader
+uniform float4 tileBounds;
 uniform float width;
+uniform float baseBrightness;
+uniform float environmentGain;
 uniform float2 directionVector;
 $directionUniforms
-uniform float4 falloffCurve;
-uniform float4 tileBounds;
-layout(color) uniform half4 color;
-${style.shaderSource}
-$colorResponseShader
-$interactionUniforms
-${exclusionShader(exclusionCount)}
+$environmentDeclaration
+${exclusionShader(exclusionCapacity)}
 
 float response(float value, float2 range, float4 controls) {
   return range.x + (range.y - range.x) * backdropCurve(value, controls);
 }
-float fixedBandProfile(float distance, float bandWidth, float4 curve) {
-  if (bandWidth <= 0.0) return 0.0;
-  float low = max(0.0, distance - 0.5);
-  float high = min(bandWidth, distance + 0.5);
-  float coverage = max(0.0, high - low);
-  if (coverage <= 0.0) return 0.0;
-  float progress = clamp(1.0 - (low + high) * 0.5 / bandWidth, 0.0, 1.0);
-  return coverage * backdropFalloffCurve(progress, curve);
-}
+
 half4 shadeAt(float2 coord) {
   float2 p = coord - origin;
   if (width <= 0.0) return half4(0.0);
-  float maxBandWidth = width * $maximumWidth;
-  float conservativeUpper = maxBandWidth + max(0.0001, abs(maxBandWidth) * 0.000001) + 0.5;
+  float maximumBandWidth = width * $maximumWidth;
+  float conservativeUpper =
+    maximumBandWidth + max(0.0001, abs(maximumBandWidth) * 0.000001) + 0.5;
   float2 nearestPosition;
-  float3 nearest = ${if (boundedSearch) "nearestBoundaryWithPosition(p, conservativeUpper + geometryScale * 0.000004, nearestPosition)" else "nearestBoundaryWithPosition(p, nearestPosition)"};
+  float3 nearest = $nearestQuery;
   if (nearest.x >= conservativeUpper) return half4(0.0);
   float2 normal = nearest.yz;
   float projection = dot(normal, directionVector);
-  ${if (angularCapacity == 0) "float magnitude = directionMode < 0.5 ? max(0.0, projection) : abs(projection);" else ""}
+  float magnitude = 0.0;
+  $magnitudeInitialization
   $directionCurveValues
   float bandWidth = width * widthScale;
-  if (nearest.x >= bandWidth + 0.5) return half4(0.0);
-  half4 shaded = shadeHighlight(nearestPosition, normal, projection, color);
-  float baseStrength = max(0.0, highlightStrength(nearestPosition, normal, projection));
-  float light = max(0.0, float(shaded.a)) * baseStrength * strengthByDirection;
-  float q = light * fixedBandProfile(nearest.x, bandWidth, falloffCurve) * exclusionWeight(normal);
-  $outputComposite
+  if (bandWidth <= 0.0 || nearest.x >= bandWidth + 0.5) return half4(0.0);
+  float fade = 1.0 - smoothstep(0.0, max(bandWidth, 0.0001), nearest.x);
+  float exclusion = exclusionWeight(normal);
+  if (fade <= 0.0 || exclusion <= 0.0) return half4(0.0);
+
+  float3 light = float3(baseBrightness);
+  $environmentContribution
+  light *= fade * strengthByDirection * exclusion;
+  float peak = max(light.r, max(light.g, light.b));
+  if (!(peak > 0.0)) return half4(0.0);
+  float alpha = clamp(peak, 0.0, 1.0);
+  return half4(fromLinearSrgb(light / max(alpha, 0.000001)) * alpha, half(alpha));
 }
+
 half4 main(float2 coord) {
   float2 p = coord - origin;
-  if (p.x < tileBounds.x || p.y < tileBounds.y || p.x >= tileBounds.z || p.y >= tileBounds.w) return half4(0.0);
+  if (
+    p.x < tileBounds.x ||
+    p.y < tileBounds.y ||
+    p.x >= tileBounds.z ||
+    p.y >= tileBounds.w
+  ) return half4(0.0);
   return shadeAt(coord);
 }
 """
+        .trimIndent()
+}
+
+internal fun highlightDirectionUsesSharedCurve(direction: HighlightDirection): Boolean {
+    val incidence = direction as? HighlightDirection.Incidence ?: return false
+    return incidence.strength.curve == incidence.widthScale.curve
 }

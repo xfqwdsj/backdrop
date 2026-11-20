@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.packInts
 import androidx.compose.ui.util.unpackInt1
 import androidx.compose.ui.util.unpackInt2
@@ -36,11 +38,23 @@ import top.ltfan.backdrop.internal.pixelAligned
  * The caller owns snapshot observation, frame invalidation and the graphics context. Use this
  * renderer on the context's drawing thread, and close it before replacing that context. Resolve a
  * declaration and call [beginFrame] before drawing. Begin another frame when source or drawing
- * inputs change. Each image is recorded once per frame. [close] releases native resources; a later
- * [resolve] can reuse the renderer. Modifier-based rendering supplies window coordinates and
- * interaction lighting.
+ * inputs change. Shared images record at most once per frame. [close] releases native resources; a
+ * later [resolve] can reuse the renderer. Modifier-based rendering supplies window coordinates and
+ * interaction lighting and can retain unaffected recordings across frames.
  */
-public class BackdropRenderer(private val context: () -> GraphicsContext) : AutoCloseable {
+public class BackdropRenderer
+internal constructor(
+    private val context: () -> GraphicsContext,
+    private val observeNode: NodeObserver,
+) : AutoCloseable {
+    @Deprecated(StandaloneBackdropDeprecation, level = DeprecationLevel.WARNING)
+    public constructor(
+        context: () -> GraphicsContext,
+    ) : this(
+        context,
+        NodeObserver { _, block -> block() },
+    )
+
     private var resolved = false
     private var frameReady = false
     private val outlinePath = SurfaceClipPath()
@@ -63,7 +77,12 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     private var graph: List<RenderImageNode> = emptyList()
     private val domains = mutableListOf<Rect>()
     private var requests = arrayOfNulls<Rect>(0)
-    private var recorded = BooleanArray(0)
+    private var outputKeys = arrayOfNulls<OutputKey>(0)
+    private var outputVersions = LongArray(0)
+    private var inputVersions = arrayOfNulls<LongArray>(0)
+    private var dirtyNodes = BooleanArray(0)
+    private var nextOutputVersion = 1L
+    private var recordingCounts = LongArray(0)
     private var inverseTransforms = arrayOfNulls<Matrix>(0)
     private var aliases = IntArray(0)
     private var reachable = BooleanArray(0)
@@ -78,6 +97,24 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     private var inlineDrawing = BooleanArray(0)
     private var fused = BooleanArray(0)
     private var resolvedScope: BackdropRenderScope? = null
+
+    private data class GeometryKey(
+        val size: Size,
+        val shape: Shape,
+        val density: Float,
+        val fontScale: Float,
+        val layoutDirection: LayoutDirection,
+    )
+
+    private data class OutputKey(
+        val node: RenderImageNode,
+        val request: Rect,
+        val origin: Long,
+        val size: Long,
+        val geometry: GeometryKey,
+        val effects: List<RenderEffect>,
+    )
+
     private val scope: BackdropRenderScope
         get() = checkNotNull(resolvedScope) { "Resolve a declaration before accessing its images" }
 
@@ -113,8 +150,12 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         scope.finishDeclaration()
         this.resolvedScope = scope
         graph = scope.graph
-        if (recorded.size != graph.size) {
-            recorded = BooleanArray(graph.size)
+        if (outputKeys.size != graph.size) {
+            outputKeys = outputKeys.copyOf(graph.size)
+            outputVersions = outputVersions.copyOf(graph.size)
+            inputVersions = inputVersions.copyOf(graph.size)
+            dirtyNodes = dirtyNodes.copyOf(graph.size)
+            recordingCounts = recordingCounts.copyOf(graph.size)
             inverseTransforms = inverseTransforms.copyOf(graph.size)
             reachable = BooleanArray(graph.size)
             aliases = IntArray(graph.size)
@@ -374,6 +415,7 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             aliases[index] = aliases[input]
         }
         resolveFilterRecordings()
+        markIncompatibleOutputs()
         val layerIterator = layers.iterator()
         while (layerIterator.hasNext()) {
             val entry = layerIterator.next()
@@ -560,6 +602,84 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         }
     }
 
+    private fun markIncompatibleOutputs() {
+        val geometry = geometryKey()
+        for (index in graph.indices) {
+            val request = requests[index] ?: continue
+            val key = outputKey(index, request, geometry)
+            if (outputVersions[index] == 0L || outputKeys[index] != key) {
+                dirtyNodes[index] = true
+            }
+        }
+    }
+
+    private fun geometryKey(): GeometryKey =
+        GeometryKey(
+            scope.size,
+            scope.shape,
+            scope.density.density,
+            scope.density.fontScale,
+            scope.layoutDirection,
+        )
+
+    private fun effectiveRequest(index: Int): Rect =
+        if (graph[index] is RenderImageNode.Process) checkNotNull(filterRequests[index])
+        else checkNotNull(requests[index])
+
+    private fun outputKey(index: Int, request: Rect, geometry: GeometryKey): OutputKey =
+        OutputKey(
+            node = graph[index],
+            request = request,
+            origin = storageOrigins[index],
+            size = storageSizes[index],
+            geometry = geometry,
+            effects = filterPlans[index]?.passes?.map { it.effect }.orEmpty(),
+        )
+
+    private fun directInputs(index: Int): List<Int> =
+        when (val node = graph[index]) {
+            is RenderImageNode.Isolation -> listOf(node.input)
+            is RenderImageNode.DrawWithContent -> listOf(node.input)
+            is RenderImageNode.SurfaceClip -> listOf(node.input)
+            is RenderImageNode.ShapeClip -> listOf(node.input)
+            is RenderImageNode.Paint -> listOfNotNull(node.input)
+            is RenderImageNode.Process -> listOf(filterInputs[index])
+            is RenderImageNode.Composite -> listOf(node.destination, node.source)
+            is RenderImageNode.Mask -> listOf(node.input, node.mask)
+            is RenderImageNode.Clip -> listOf(node.input)
+            is RenderImageNode.Transform -> listOf(node.input)
+            is RenderImageNode.Primitive<*> -> node.inputs.map { it.image.index }
+            else -> emptyList()
+        }
+
+    private fun collectInputVersions(index: Int, versions: MutableList<Long>) {
+        for (input in directInputs(index)) {
+            val selected = aliases[input]
+            if (inlineDrawing[selected]) collectInputVersions(selected, versions)
+            else versions.add(outputVersions[selected])
+        }
+    }
+
+    private fun inputSnapshot(index: Int): LongArray =
+        mutableListOf<Long>().also { collectInputVersions(index, it) }.toLongArray()
+
+    private fun inputsMatch(index: Int): Boolean {
+        val previous = inputVersions[index] ?: return false
+        return previous.contentEquals(inputSnapshot(index))
+    }
+
+    private fun currentOutputKey(index: Int): OutputKey =
+        outputKey(index, effectiveRequest(index), geometryKey())
+
+    internal fun isReachableNode(index: Int, node: RenderImageNode): Boolean =
+        resolved && index in graph.indices && requests[index] != null && graph[index] === node
+
+    internal fun nodeAt(index: Int): RenderImageNode? =
+        if (index in graph.indices) graph[index] else null
+
+    internal fun recordingCount(index: Int): Long =
+        if (index in recordingCounts.indices) recordingCounts[index] else 0L
+
     private fun preparePrimitive(
         index: Int,
         node: RenderImageNode.Primitive<*>,
@@ -660,7 +780,16 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     /** Invalidates recorded images while retaining geometry, effects and reusable resources. */
     public fun beginFrame() {
         check(resolved) { "Resolve a declaration before beginning a frame" }
-        recorded.fill(false)
+        dirtyNodes.fill(true)
+        recordingCounts.fill(0L)
+        frameReady = true
+    }
+
+    internal fun beginFrame(indices: Set<Int>) {
+        check(resolved) { "Resolve a declaration before beginning a frame" }
+        for (index in indices) {
+            if (index in graph.indices) dirtyNodes[index] = true
+        }
         frameReady = true
     }
 
@@ -694,13 +823,14 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
     ): GraphicsLayer {
         val selected = aliases[index]
         if (selected != index) return render(selected, target, source)
-        if (recorded[index]) return layers.getValue(index)
         val node = graph[index]
         prepareInputs(index, target, source)
-        val layer =
-            layers.getOrPut(index) {
-                context().createGraphicsLayer()
-            }
+        val key = currentOutputKey(index)
+        val layer = layers[index]
+        if (!dirtyNodes[index] && layer != null && outputKeys[index] == key && inputsMatch(index)) {
+            return layer
+        }
+        val outputLayer = layer ?: context().createGraphicsLayer().also { layers[index] = it }
         val strategy =
             when (node) {
                 is RenderImageNode.SurfaceClip,
@@ -716,47 +846,62 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             }
         // Geometry wrappers and associative SrcOver composition preserve their children's
         // isolation and recorded clipping commands.
-        layer.compositingStrategy = strategy
-        layer.clip = false
+        outputLayer.compositingStrategy = strategy
+        outputLayer.clip = false
         val request =
             if (node is RenderImageNode.Process) checkNotNull(filterRequests[index])
             else requests[index]!!
         val placement = storageOrigins[index]
-        layer.topLeft = IntOffset(unpackInt1(placement), unpackInt2(placement))
-        layer.alpha = 1f
-        layer.blendMode = BlendMode.SrcOver
+        outputLayer.topLeft = IntOffset(unpackInt1(placement), unpackInt2(placement))
+        outputLayer.alpha = 1f
+        outputLayer.blendMode = BlendMode.SrcOver
         val dimensions = storageSizes[index]
         val storage = IntSize(unpackInt1(dimensions), unpackInt2(dimensions))
         val passes = filterPlans[index]?.passes.orEmpty()
-        if (passes.isEmpty()) {
-            layer.renderEffect = null
-            recordImage(index, layer, storage, request, null, source)
-        } else {
-            val owned =
-                if (passes.size > 1) effectLayers.getOrPut(index) { mutableListOf() } else null
-            var input: GraphicsLayer? = null
-            passes.forEachIndexed { passIndex, pass ->
-                val output =
-                    if (passIndex == passes.lastIndex) layer
-                    else {
-                        checkNotNull(owned)
-                        (owned.getOrNull(passIndex)
-                                ?: context().createGraphicsLayer().also { owned += it })
-                            .apply {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                                clip = false
-                                topLeft = layer.topLeft
-                            }
-                    }
-                output.renderEffect = pass.effect
-                // Source storage and each sampled intermediate retain complete texels. Visible
-                // output clipping and finite source policies are applied independently.
-                recordImage(index, output, storage, pass.inputBounds.pixelAligned(), input, source)
-                input = output
+        observeNode.observe(index) {
+            if (passes.isEmpty()) {
+                outputLayer.renderEffect = null
+                recordImage(index, outputLayer, storage, request, null, source)
+            } else {
+                val owned =
+                    if (passes.size > 1) {
+                        effectLayers.getOrPut(index) { mutableListOf() }
+                    } else null
+                var input: GraphicsLayer? = null
+                passes.forEachIndexed { passIndex, pass ->
+                    val output =
+                        if (passIndex == passes.lastIndex) outputLayer
+                        else {
+                            checkNotNull(owned)
+                            (owned.getOrNull(passIndex)
+                                    ?: context().createGraphicsLayer().also { owned += it })
+                                .apply {
+                                    compositingStrategy = CompositingStrategy.Offscreen
+                                    clip = false
+                                    topLeft = outputLayer.topLeft
+                                }
+                        }
+                    output.renderEffect = pass.effect
+                    // Source storage and each sampled intermediate retain complete texels. Visible
+                    // output clipping and finite source policies are applied independently.
+                    recordImage(
+                        index,
+                        output,
+                        storage,
+                        pass.inputBounds.pixelAligned(),
+                        input,
+                        source,
+                    )
+                    input = output
+                }
             }
         }
-        recorded[index] = true
-        return layer
+        outputKeys[index] = key
+        inputVersions[index] = inputSnapshot(index)
+        outputVersions[index] = nextOutputVersion++
+        recordingCounts[index]++
+        dirtyNodes[index] = false
+        return outputLayer
     }
 
     private fun recordImage(
@@ -980,7 +1125,10 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
             owned.forEach { context().releaseGraphicsLayer(it) }
         }
         effectLayers.clear()
-        recorded.fill(false)
+        dirtyNodes.fill(true)
+        outputKeys.fill(null)
+        outputVersions.fill(0L)
+        inputVersions.fill(null)
         primitives.forEach { (index, instance) ->
             instance.refresh()
             primitiveNeedsPrepare += index
@@ -1018,7 +1166,11 @@ public class BackdropRenderer(private val context: () -> GraphicsContext) : Auto
         filterPlans.fill(null)
         filterRequests.fill(null)
         inverseTransforms.fill(null)
-        recorded.fill(false)
+        dirtyNodes.fill(false)
+        recordingCounts.fill(0L)
+        outputKeys.fill(null)
+        outputVersions.fill(0L)
+        inputVersions.fill(null)
         resolvedScope = null
         graph = emptyList()
         interactionFrame.clear()
@@ -1073,4 +1225,8 @@ private fun intersection(a: Rect, b: Rect): Rect {
         maxOf(left, minOf(a.right, b.right)),
         maxOf(top, minOf(a.bottom, b.bottom)),
     )
+}
+
+internal fun interface NodeObserver {
+    fun observe(index: Int, block: () -> Unit)
 }

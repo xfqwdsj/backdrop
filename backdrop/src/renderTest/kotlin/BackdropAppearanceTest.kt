@@ -21,10 +21,7 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.rememberCanvasBackdrop
 import top.ltfan.backdrop.highlight.Highlight
 import top.ltfan.backdrop.highlight.HighlightAngleDomain
-import top.ltfan.backdrop.highlight.HighlightColorResponse
-import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.angles
-import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
@@ -65,9 +62,8 @@ class BackdropAppearanceTest {
                     surface {
                         highlight {
                             width = 10.dp
-                            style = HighlightStyle.Solid(Color.White)
-                            falloff = BackdropCurve.Linear
-                            colorResponse = HighlightColorResponse(amount = 0f)
+                            baseBrightness = 1f
+                            environmentGain = 0f
                             angles(angle = 90f, domain = HighlightAngleDomain.Directed) {
                                 widthScale(0f, 360f, 1f)
                                 brightness(0f, 360f, 1f)

@@ -36,7 +36,7 @@ internal fun genericBoundaryShaderFunctions(
           if (group * $segmentGroupSize >= activeSegmentCount) break;
           float4 bounds = segmentGroupBounds[group];
           float2 groupLower = max(bounds.xy - p, p - bounds.zw);
-          if (max(groupLower.x, groupLower.y) <= min(selectedDistance, maximumDistance) + tolerance * 2.0) {
+          if (max(groupLower.x, groupLower.y) <= min(selectedDistance, searchDistance) + tolerance * 2.0) {
             for (int member = 0; member < $segmentGroupSize; ++member) {
               if (group * $segmentGroupSize + member >= activeSegmentCount) break;
         """
@@ -93,12 +93,14 @@ float3 nearestBoundaryWithPosition(float2 p, float maximumDistance, out float2 c
   bool hasBest = false;
   float coordinateScale = max(geometryScale, max(abs(p.x), abs(p.y)));
   float tolerance = 9.5367432e-7 * coordinateScale;
+  // Successive near-ties can carry an earlier choice through the ordered scan.
+  float searchDistance = maximumDistance + tolerance * float(activeSegmentCount);
   $searchStart
     float4 segment = segments[$segmentIndex];
     float2 a = segment.xy;
     float2 b = segment.zw;
     float2 lower = max(min(a, b) - p, p - max(a, b));
-    if (max(lower.x, lower.y) <= min(selectedDistance, maximumDistance) + tolerance * 2.0) {
+    if (max(lower.x, lower.y) <= min(selectedDistance, searchDistance) + tolerance * 2.0) {
       float2 ab = b - a;
       float denominator = dot(ab, ab);
       if (denominator > 0.0) {

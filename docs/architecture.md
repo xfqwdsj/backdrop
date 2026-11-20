@@ -46,6 +46,8 @@ refresh and release clear their retained configuration.
 Contour shader variants are retained by structural signature. Geometry and visual uniforms update
 with each recording and each selection of a retained variant.
 Contour primitives retain snapshot-observed outlines by shape, size, layout direction and density.
+The experimental `ContourShape` contract supplies ordered lines, arcs and cubic Béziers. The
+bundled G2 capsule uses the same segments for its Compose outline and the Backdrop renderer.
 Optical parameter changes retain the flattened contour; shape snapshot reads still invalidate it.
 Curve subdivision accumulates coordinates in primitive float storage, preserving segment order
 and the pixel flatness tolerance while avoiding per-coordinate boxing during resizing.
@@ -57,7 +59,7 @@ lifetime and refresh when padded uniform capacity changes.
 
 Angular highlight profiles store ordered interval channels and precomputed uniform arrays.
 Both domains are relative to the configured direction: shortest unsigned separation or a directed
-clockwise turn. CPU and shaders share closed-endpoint tolerance; the shader corrects native atan
+clockwise turn. Profiles share closed-endpoint tolerance; the shader corrects native atan
 approximation before testing intervals. Hard cuts use relative signed-angle evaluation
 to retain precision near parallel normals. Each response uses the nearest-contour geometry.
 
@@ -117,7 +119,11 @@ An exclusively consumed source records directly into that filtered layer. Indepe
 export and primitive readers retain their own shared images; fusion preserves every declared
 sampling request and effect observation.
 Within a graph recording, each shared image records once; presentation and export share it.
-Recordings remain valid while their observed drawing inputs and resolved geometry stay unchanged.
+Each reachable node retains its latest successful output key and version. A reusable node compares
+its own declaration, resolved request/storage, native pass identities, direct dependency versions and
+observed drawing inputs. Dirty versions propagate only through consuming nodes. A managed
+`LayerBackdrop` publishes a source revision after successful recording, replacement, clearing and
+detachment, so equal bounds or object identity never imply equal pixels.
 Background, foreground and export retain independent snapshot observations in their drawing order,
 so reused recordings keep their dependencies when opacity or child content changes. Position,
 geometry, interaction membership and resource refreshes also invalidate recording. A visibility
@@ -136,11 +142,10 @@ clipping. Paint defaults to offscreen isolation and exposes a compositing strate
 whose drawing can compose directly into its consumer. Custom drawing, masks and primitives retain
 offscreen isolation for destination blending; native effects also require offscreen rendering.
 
-[ProcessedBackdropFrame](../backdrop/src/commonMain/kotlin/ProcessedBackdropFrame.kt) passes an
-explicit graph image to highlight color response within the same draw, together with interaction
-entries. It is invalidated before replacing its underlying resources. The declaration chooses
-whether that image includes earlier paint or composites. Every intermediate uses the native
-rendering path, keeping intermediate pixels in graphics resources.
+[ProcessedBackdropFrame](../backdrop/src/commonMain/kotlin/ProcessedBackdropFrame.kt) carries
+same-draw graph and interaction information for primitives. It is invalidated before replacing its
+underlying resources. Every intermediate uses the native rendering path, keeping intermediate pixels
+in graphics resources.
 
 Effect packages declare graph primitives through scope extensions. Public primitive registration
 validates graph ownership and delegates execution to the receiver. Each primitive declares a
@@ -187,19 +192,26 @@ Other outlines use cached flattened boundary geometry, while the original fill-r
 clip preserves holes, concavities, and disconnected regions. Elliptical or unsuitable rounded
 outlines keep the generic path.
 
-Generic contour geometry also certifies a central rectangle containing no boundary segments.
-The renderer shrinks this rectangle by the maximum band width and antialiasing room, rounds the
-remaining transparent interior inward to pixel boundaries, and records disjoint output tiles
-around it. Holes, concavities and independent contours contribute to the same certificate.
-Shapes without a usable empty region retain one complete output tile.
+Contour geometry can certify a central rectangle containing no boundary. Generic paths use
+the bounds of their flattened segments, including holes and disconnected contours. Analytic
+rectangles and circular rounded rectangles use the diagonal inset of the largest corner when
+the platform merges environment-lit tiles. The renderer shrinks the certificate by the maximum
+band width and antialiasing room and rounds inward to pixel boundaries. Shapes without a usable
+interior retain one complete output tile.
 
-Internal tile edges retain one pixel of neighboring storage for presentation interpolation;
-disjoint output clips partition those edges while the original outline owns outer-edge antialiasing.
-Shader origins translate tile coordinates into surface coordinates; processed-color lookup uses
-the corresponding tile-local input coordinates. Color response samples the same pixel, so each
-filtered tile owns its complete recorded input domain. Receiver-owned tile layers are reused
-across frames, and unused layers are released when the layout contracts. Shader signatures and
-geometry storage remain independent of tile layout.
+Independently recorded tiles retain one pixel of neighboring storage for presentation interpolation.
+Disjoint output clips partition those edges while the original outline owns outer-edge antialiasing.
+Shader origins translate tile coordinates into surface coordinates. For multiple environment-lit
+tiles, Skiko records one live environment input layer and merges cropped native filter outputs
+before presentation. The crops share the source pixels at replay time, after the source has
+recorded its content.
+HWUI binds the environment through each tile's RenderEffect. Receivers reuse compatible layers and
+release unused ones when the layout contracts. Shader signatures and geometry storage remain
+independent of tile layout.
+
+Basic highlights use a clipped white stroke. When the platform supports environment-lit contours,
+resolution observes the highlight type and blur radius to select the environment input. Stroke
+brightness, width and opacity remain drawing parameters.
 
 Generic shaders retain power-of-two segment storage and pass the active segment count as a
 uniform. Segment, group and containment traversal stop at that count, including partially filled
@@ -208,8 +220,9 @@ stays unchanged.
 Highlight passes bound the search by the maximum directional band width plus antialiasing and
 coordinate-tolerance margins. Segment and
 group bounds reject candidates beyond that limit before a nearest candidate exists; pixels
-outside the limit skip containment probes. Unbounded geometry queries retain the complete
-search. Once a nearest candidate exists, a segment's axis-aligned distance lower bound can reject
+outside the limit skip containment probes. The search retains enough extra distance room for
+a chain of near-ties in declaration order. Unbounded geometry queries retain the complete search.
+Once a nearest candidate exists, a segment's axis-aligned distance lower bound can reject
 candidates beyond that distance plus a float guard.
 Remaining candidates retain declaration order and the nearest-boundary tie tolerance. Storage
 padding stays outside active traversal; degenerate active segments are skipped, preserving
@@ -233,11 +246,11 @@ Small contours use direct scans; the resulting certificate persists with geometr
 construction index is released.
 
 Each covered pixel uses its nearest boundary position and outward normal to evaluate one shading
-response. Direction strength and direction-scaled width are independent. The falloff curve has its own
-specialization. Two-tone black retains emission strength. Exclusions mask that nearest
-normal. The output uses one retained contour layer, with processed-backdrop color response changing
-RGB and interaction contour lighting joining the same output. Custom CPU and shader functions must
-agree on straight-alpha shading before the shared profile and premultiplication.
+response. Direction strength and direction-scaled width are independent. The visible band uses a
+fixed inner-distance smoothstep. Exclusions mask that nearest normal. The environment image is
+blurred once by a native Gaussian and sampled in place; fixed white brightness and the environment
+contribution are combined in linear extended-sRGB before premultiplied output. Platforms without
+runtime shaders use a fixed native inner stroke with base width and brightness.
 
 Follow [HighlightRenderer](../backdrop/src/commonMain/kotlin/highlight/HighlightRenderer.kt),
 [HighlightBoundaryGeometry](../backdrop/src/commonMain/kotlin/highlight/HighlightBoundaryGeometry.kt),

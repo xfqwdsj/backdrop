@@ -23,10 +23,10 @@ ProvideInteractionLighting {
                 render = {
                     val lighting = InteractionLighting.Config()
                     source()
-                    clipSurface()
-                    val material = current
                     interactionLight(lighting)
-                    highlight(Highlight(), colorSource = material, interactionLighting = lighting)
+                    val environment = current
+                    clipSurface()
+                    highlight(Highlight(), environment = environment)
                 },
             )
         )
@@ -40,9 +40,9 @@ appropriate to your component; the source can be independent of the receiver. Pu
 Receiver defaults can share the same declaration through `ProvideBackdropRenderStyle(render = { ... })`.
 
 `InteractionLight.Config` controls color, radius, radial falloff, and release duration.
-`InteractionLighting.Config` controls interior and contour opacity independently. Return
+`InteractionLighting.Config` controls interior opacity. Return
 `InteractionLight.None` to disable a source, or `InteractionLighting.None` to disable a receiver.
-Radius and release duration must be finite and non-negative; receiver opacities are in `0..1`.
+Radius and release duration must be finite and non-negative. Receiver opacity is in `0..1`.
 
 ## Set sharing boundaries
 
@@ -76,8 +76,9 @@ interaction source, disabling, or detaching clears the corresponding active entr
 ## Choose the visual response
 
 Interior lighting produces an image clipped to the original surface shape. Draw it with native
-Plus blending at the desired point in the declaration. Contour lighting joins the highlight image
-when passed as `interactionLighting` to `highlight`; its external blend belongs to the graph draw.
+Plus blending at the desired point in the declaration. The one-click surface pipeline places it
+before the environment Gaussian, so nearby lights participate in the contour response. Explicit
+graphs can include it in the image passed as `environment` to `highlight`.
 `interactionLight` omits its image and blend operation while the receiving window has no registered
 sources. Source appearance and final removal update the declaration. Registered sources retain the
 operation throughout release, including zero intensity. Moving a source updates drawing only.

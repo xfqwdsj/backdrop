@@ -6,13 +6,47 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.unit.IntSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.highlight.HighlightBoundaryGeometry
+import top.ltfan.backdrop.highlight.HighlightTiles
 
 class AnalyticHighlightGeometryTest : PlatformGraphicsTest() {
+    @Test
+    fun asymmetricCircularCornersLeaveRoomForTheWholeBandAroundTheExcludedInterior() {
+        val geometry =
+            HighlightBoundaryGeometry(
+                Outline.Rounded(
+                    RoundRect(
+                        0f,
+                        0f,
+                        100f,
+                        100f,
+                        CornerRadius(90f),
+                        CornerRadius.Zero,
+                        CornerRadius(90f),
+                        CornerRadius.Zero,
+                    ),
+                ),
+            )
+        val width = 6f
+        val tiles = HighlightTiles()
+        tiles.prepare(IntSize(100, 100), geometry.contourFreeBounds, width)
+        assertEquals(4, tiles.count)
+        for (y in tiles[0].bottom until tiles[1].top) {
+            for (x in tiles[2].right until tiles[3].left) {
+                val distance = geometry.nearestBoundary(Offset(x + .5f, y + .5f)).signedDistance
+                assertTrue(
+                    distance <= -width,
+                    "Excluded pixel ($x, $y) is only $distance from the contour",
+                )
+            }
+        }
+    }
+
     @Test
     fun rectangleAndCircularRoundedQueriesMatchGpuForInteriorExteriorAndTies() {
         val outlines =

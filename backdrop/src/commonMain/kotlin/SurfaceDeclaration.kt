@@ -2,9 +2,10 @@ package top.ltfan.backdrop
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.layer.CompositingStrategy
-import top.ltfan.backdrop.highlight.highlight
+import top.ltfan.backdrop.highlight.highlightWithConfig
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.interaction.interactionLight
 import top.ltfan.backdrop.shadow.innerShadow
@@ -22,7 +23,7 @@ public fun BackdropImageScope.surface(block: BackdropSurfaceScope.() -> Unit = {
         surfaceDeclared = true
     }
     val style = BackdropStyleResolver(null, resolveStyle)
-    val contour = config.contour ?: style.highlight()
+    val contour = config.contour ?: style::highlight
     val outer = config.outer ?: style.shadow()
     val inner = config.inner ?: style.innerShadow()
     val lighting = config.lighting ?: style.interactionLighting()
@@ -31,13 +32,20 @@ public fun BackdropImageScope.surface(block: BackdropSurfaceScope.() -> Unit = {
     if (this is BackdropRenderScope) styleInsets = style::insets
     config.finishDeclaration()
     val original = current
-    val material = image {
+    val optics = image {
         replace(original)
         if (config.explicitEffects) {
             effects { config.effectBlocks.forEach { it(this) } }
             if (inheritedFill != null) fillCoverage(inheritedFill)
         } else styleEffects(style, inheritedFill)
+    }
+    val material = image {
+        replace(optics)
         clipSurface()
+    }
+    val environment = image {
+        replace(optics)
+        if (lighting is InteractionLighting.Config) interactionLight(lighting)
     }
     group {
         config.behindDrawings.forEach { decoration(it.value, material) }
@@ -59,9 +67,9 @@ public fun BackdropImageScope.surface(block: BackdropSurfaceScope.() -> Unit = {
         }
         config.surfaceDrawings.forEach { decoration(it.value, material) }
         if (lighting is InteractionLighting.Config) interactionLight(lighting)
+        highlightWithConfig(contour, environment, 1f, BlendMode.Plus)
     }
     val front: BackdropImageScope.() -> Unit = {
-        highlight(contour, colorSource = material, interactionLighting = lighting)
         innerShadow(inner)
         config.foregroundDrawings.forEach { decoration(it.value, material) }
         if (config.foregroundPaints.isNotEmpty())

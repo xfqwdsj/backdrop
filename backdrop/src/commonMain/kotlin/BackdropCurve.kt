@@ -69,17 +69,6 @@ internal fun BackdropCurve.shaderControls(): FloatArray =
         is BackdropCurve.CubicBezier -> floatArrayOf(x1, y1, x2, y2)
     }
 
-/** Pixel-footprint integrated falloff from a boundary to the inner edge of a band. */
-internal fun highlightBandProfile(distance: Float, width: Float, curve: BackdropCurve): Float {
-    if (width <= 0f) return 0f
-    val low = maxOf(0f, distance - 0.5f)
-    val high = minOf(width, distance + 0.5f)
-    val coverage = maxOf(0f, high - low)
-    if (coverage == 0f) return 0f
-    val progress = (1f - (low + high) / (2f * width)).coerceIn(0f, 1f)
-    return coverage * curve.transform(progress)
-}
-
 /** Shared inversion used by shaders that evaluate [BackdropCurve] controls. */
 internal const val BackdropCurveShader: String =
     """
@@ -103,13 +92,4 @@ float backdropCurve(float x, float4 controls) {
   return backdropCurveAxis(t, controls.y, controls.w);
 }
 
-float highlightBandProfile(float distance, float width, float4 depthCurve) {
-  if (width <= 0.0) return 0.0;
-  float low = max(0.0, distance - 0.5);
-  float high = min(width, distance + 0.5);
-  float coverage = max(0.0, high - low);
-  if (coverage <= 0.0) return 0.0;
-  float progress = clamp(1.0 - (low + high) / (2.0 * width), 0.0, 1.0);
-  return coverage * backdropCurve(progress, depthCurve);
-}
 """

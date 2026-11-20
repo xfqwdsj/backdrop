@@ -8,9 +8,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -21,11 +21,11 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
+import top.ltfan.backdrop.highlight.HighlightAngleDomain
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.HighlightResponse
-import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.highlight
+import top.ltfan.backdrop.highlight.highlightAngles
 
 class HighlightDirectionRenderingTest {
     @Test
@@ -55,12 +55,11 @@ class HighlightDirectionRenderingTest {
                                     highlight(
                                         Highlight(
                                             width = 6.dp,
-                                            style = HighlightStyle.Solid(Color.White),
                                             direction = HighlightDirection.Uniform,
-                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                            baseBrightness = 1f,
+                                            environmentGain = 0f,
                                             disabledAngles = exclusions.value,
                                         ),
-                                        colorSource = material,
                                     )
                                 }
                             },
@@ -102,20 +101,73 @@ class HighlightDirectionRenderingTest {
             captureCorner(
                 Highlight(
                     width = 6.dp,
-                    style = HighlightStyle.Solid(Color.White),
                     direction =
                         HighlightDirection(
                             angle = 270f,
                             mode = HighlightDirection.Mode.Single,
                             strength = HighlightResponse(0f, 1f),
                         ),
-                    colorResponse = HighlightColorResponse(amount = 0f),
+                    baseBrightness = 1f,
+                    environmentGain = 0f,
                 ),
             )
         assertTrue(top[80, 41].alpha > top[80, 118].alpha + 0.1f)
     }
 
+    @Test
+    fun angularWidthChangesTheActualBandAndZeroWidthDisablesASide() {
+        val narrow =
+            captureRectangle(
+                Highlight(
+                    width = 6.dp,
+                    direction =
+                        HighlightDirection.Angular(
+                            highlightAngles(HighlightAngleDomain.Directed) {
+                                widthScale(180f, 270f, 1f)
+                                brightness(0f, 360f, 1f)
+                            },
+                        ),
+                    baseBrightness = 1f,
+                    environmentGain = 0f,
+                ),
+            )
+        val wide =
+            captureRectangle(
+                Highlight(
+                    width = 6.dp,
+                    direction =
+                        HighlightDirection.Angular(
+                            highlightAngles(HighlightAngleDomain.Directed) {
+                                widthScale(180f, 270f, 4f)
+                                brightness(0f, 360f, 1f)
+                            },
+                        ),
+                    baseBrightness = 1f,
+                    environmentGain = 0f,
+                ),
+            )
+
+        assertTrue(
+            wide[80, 52].alpha > .2f,
+            "four-times width must extend twelve pixels into the top band: ${wide[80, 52]}",
+        )
+        assertTrue(
+            narrow[80, 52].alpha < .02f,
+            "base width must end before twelve pixels: ${narrow[80, 52]}",
+        )
+        assertTrue(
+            wide[80, 110].alpha < .02f,
+            "the undefined bottom width must disable its band: ${wide[80, 110]}",
+        )
+    }
+
     private fun captureCorner(config: Highlight): PixelMap {
+        return captureShape(config, RoundedCornerShape(20.dp))
+    }
+
+    private fun captureRectangle(config: Highlight): PixelMap = captureShape(config, RectangleShape)
+
+    private fun captureShape(config: Highlight, shape: Shape): PixelMap {
         lateinit var pixels: PixelMap
         runRenderTest {
             setContent {
@@ -127,7 +179,7 @@ class HighlightDirectionRenderingTest {
                             .size(80.dp)
                             .drawBackdrop(
                                 backdrop = backdrop,
-                                shape = { RoundedCornerShape(20.dp) },
+                                shape = { shape },
                                 render = {
                                     val material = image {
                                         source()
@@ -136,9 +188,7 @@ class HighlightDirectionRenderingTest {
                                     group {
                                         draw(material)
                                     }
-                                    foreground {
-                                        highlight(config, colorSource = material)
-                                    }
+                                    highlight(config)
                                 },
                             ),
                     )

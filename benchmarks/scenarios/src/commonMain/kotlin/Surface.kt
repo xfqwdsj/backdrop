@@ -15,12 +15,11 @@ import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.effects.lens
 import top.ltfan.backdrop.effects.vibrancy
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.shadow.Shadow
 import top.ltfan.backdrop.shadow.shadow
 
-private val contour = Highlight(colorResponse = HighlightColorResponse(amount = .15f))
+private val contour = Highlight()
 
 /** Draws shared optics and contour lighting with independent background opacity. */
 internal fun Modifier.benchmarkSurface(
@@ -30,17 +29,21 @@ internal fun Modifier.benchmarkSurface(
     backgroundAlpha: () -> Float = { 1f },
 ): Modifier =
     drawBackdrop(source, shape, backgroundAlpha = backgroundAlpha) {
-        val material = image {
+        val optics = image {
             source()
             effects { scenarioOptics(phase) }
+        }
+        val material = image {
+            replace(optics)
             clipSurface()
         }
+        val environment = image { replace(optics) }
         group {
             shadow(Shadow.Default)
             draw(material)
             paintSurface(CompositingStrategy.Auto) { room -> scenarioTint(room) }
+            highlight(contour, environment = environment)
         }
-        foreground { highlight(contour, colorSource = material) }
     }
 
 private fun BackdropEffectScope.scenarioOptics(

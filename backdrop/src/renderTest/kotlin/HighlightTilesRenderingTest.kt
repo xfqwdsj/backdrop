@@ -29,9 +29,7 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.highlight
 
 class HighlightTilesRenderingTest {
@@ -39,7 +37,7 @@ class HighlightTilesRenderingTest {
     fun genericTilesMatchTheAnalyticSurfaceAcrossWidthAndColorSourceUpdates() = runRenderTest {
         val generic = mutableStateOf(false)
         val width = mutableFloatStateOf(5f)
-        val amount = mutableFloatStateOf(0f)
+        val gain = mutableFloatStateOf(.5f)
         val genericRectangle =
             object : Shape {
                 override fun createOutline(
@@ -67,25 +65,22 @@ class HighlightTilesRenderingTest {
                             backdrop = backdrop,
                             shape = { if (generic.value) genericRectangle else RectangleShape },
                             render = {
+                                val environment = image { source() }
                                 val material = image {
-                                    source()
+                                    replace(environment)
                                     clipSurface()
                                 }
                                 draw(material)
-                                foreground {
-                                    highlight(
-                                        Highlight(
-                                            width = width.floatValue.dp,
-                                            falloff = BackdropCurve.Linear,
-                                            direction = HighlightDirection.Uniform,
-                                            style =
-                                                HighlightStyle.Solid(Color.White.copy(alpha = .7f)),
-                                            colorResponse =
-                                                HighlightColorResponse(amount.floatValue),
-                                        ),
-                                        colorSource = material,
-                                    )
-                                }
+                                highlight(
+                                    Highlight(
+                                        width = width.floatValue.dp,
+                                        blurRadius = 6.dp,
+                                        baseBrightness = .1f,
+                                        environmentGain = gain.floatValue,
+                                        direction = HighlightDirection.Uniform,
+                                    ),
+                                    environment = environment,
+                                )
                             },
                         ),
                 )
@@ -93,7 +88,7 @@ class HighlightTilesRenderingTest {
         }
         for (response in listOf(0f, 1f)) for (band in listOf(.25f, 5f, 40f, 3f)) {
             runOnIdle {
-                amount.floatValue = response
+                gain.floatValue = response
                 width.floatValue = band
                 generic.value = false
             }
@@ -112,7 +107,7 @@ class HighlightTilesRenderingTest {
                     )
                 assertTrue(
                     error <= .02f,
-                    "width=$band, response=$response, pixel=($x,$y), expected=$e, actual=$a",
+                    "width=$band, gain=$response, pixel=($x,$y), expected=$e, actual=$a",
                 )
             }
         }

@@ -6,6 +6,7 @@ import android.graphics.ColorSpace
 import android.graphics.HardwareBufferRenderer
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RecordingCanvas
 import android.graphics.RenderNode
 import android.hardware.HardwareBuffer
 import android.os.Build
@@ -17,9 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -27,7 +30,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.toSize
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
@@ -50,21 +56,8 @@ internal actual fun renderTestShader(
     height: Int,
     premultiplied: Boolean,
     tiles: List<IntRect>?,
-): FloatArray {
-    val buffer =
-        HardwareBuffer.create(
-            width,
-            height,
-            HardwareBuffer.RGBA_FP16,
-            1,
-            HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
-        )
-    val node = RenderNode("BackdropShaderContract")
-    val renderer = HardwareBufferRenderer(buffer)
-    try {
-        node.setPosition(0, 0, width, height)
-        val canvas = node.beginRecording(width, height)
-        canvas.drawColor(0, BlendMode.SRC)
+): FloatArray =
+    renderAndroidF16(width, height, premultiplied) {
         val paint =
             Paint().apply {
                 this.shader = shader.asAndroidRuntimeShader()
@@ -81,9 +74,44 @@ internal actual fun renderTestShader(
                         Path.Direction.CW,
                     )
                 }
-            canvas.clipPath(clip)
+            clipPath(clip)
         }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+    }
+
+@RequiresApi(34)
+internal fun captureRenderTestContentF16(): FloatArray {
+    val layer = checkNotNull(captureLayer) { "Test content has not been recorded" }
+    val size = layer.size
+    return renderAndroidF16(size.width, size.height, premultiplied = true) {
+        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(this), size.toSize()) {
+            drawLayer(layer)
+        }
+    }
+}
+
+@RequiresApi(34)
+private fun renderAndroidF16(
+    width: Int,
+    height: Int,
+    premultiplied: Boolean,
+    draw: RecordingCanvas.() -> Unit,
+): FloatArray {
+    val buffer =
+        HardwareBuffer.create(
+            width,
+            height,
+            HardwareBuffer.RGBA_FP16,
+            1,
+            HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
+        )
+    val node = RenderNode("BackdropF16Contract")
+    val renderer = HardwareBufferRenderer(buffer)
+    try {
+        node.setPosition(0, 0, width, height)
+        val canvas = node.beginRecording(width, height)
+        canvas.drawColor(0, BlendMode.SRC)
+        canvas.draw()
         node.endRecording()
         renderer.setContentRoot(node)
         val complete = CountDownLatch(1)

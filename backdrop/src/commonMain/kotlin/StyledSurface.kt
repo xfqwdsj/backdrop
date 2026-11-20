@@ -4,6 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.CompositingStrategy
@@ -11,7 +12,8 @@ import top.ltfan.backdrop.effects.colorControls
 import top.ltfan.backdrop.effects.lens
 import top.ltfan.backdrop.effects.progressiveBlurGeometry
 import top.ltfan.backdrop.effects.vibrancy
-import top.ltfan.backdrop.highlight.highlight
+import top.ltfan.backdrop.highlight.Highlight
+import top.ltfan.backdrop.highlight.highlightWithConfig
 import top.ltfan.backdrop.interaction.InteractionLighting
 import top.ltfan.backdrop.interaction.interactionLight
 import top.ltfan.backdrop.shadow.innerShadow
@@ -20,8 +22,9 @@ import top.ltfan.backdrop.shadow.shadow
 /**
  * Applies one fixed-order appearance to [input]. Unspecified fields inherit at this receiver. Color
  * controls, blur, vibrancy and lens precede surface clipping. Background contains shadow, processed
- * input, fill and interior light. Foreground contains highlight and inner shadow. Highlight samples
- * the processed input before fill. Child content stays between the two outputs.
+ * input, fill, interior light and highlight. The highlight environment uses the processed input and
+ * interior light before fill. Child content draws between the background and the foreground inner
+ * shadow.
  *
  * A root may declare this once, without another surface or foreground owner. Use graph operations
  * for additional background drawing and [BackdropRenderScope.appendForeground] for later foreground
@@ -36,24 +39,31 @@ public fun BackdropRenderScope.styledSurface(
     }
     checkImage(input)
     val appearance = BackdropStyleResolver(style, resolveStyle)
-    val material = image {
+    val optics = image {
         replace(input)
         styleEffects(appearance)
+    }
+    val material = image {
+        replace(optics)
         clipSurface()
     }
-    val contour = appearance.highlight()
+    val contour: () -> Highlight = appearance::highlight
     val outer = appearance.shadow()
     val inner = appearance.innerShadow()
     val lighting = appearance.interactionLighting()
+    val environment = image {
+        replace(optics)
+        if (lighting is InteractionLighting.Config) interactionLight(lighting)
+    }
     styleInsets = appearance::insets
     group {
         shadow(outer)
         draw(material)
         paintFill(appearance::fill)
         if (lighting is InteractionLighting.Config) interactionLight(lighting)
+        highlightWithConfig(contour, environment, 1f, BlendMode.Plus)
     }
     styledForeground {
-        highlight(contour, colorSource = material, interactionLighting = lighting)
         innerShadow(inner)
     }
 }

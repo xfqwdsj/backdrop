@@ -27,6 +27,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import top.ltfan.backdrop.effects.blur
 
 class BackdropRendererTest {
     private fun declaration() =
@@ -174,5 +175,46 @@ class BackdropRendererTest {
             assertFailsWith<IllegalStateException> { renderer.outputBounds() }
         }
         assertTrue(active.isEmpty())
+    }
+
+    @Test
+    fun independentNodeDirtyFramesRetainUpstreamAndUnrelatedOutputs() = runRenderTest {
+        setContent {
+            val graphics = LocalGraphicsContext.current
+            val renderer = remember(graphics) { BackdropRenderer { graphics } }
+            DisposableEffect(renderer) { onDispose { renderer.close() } }
+            Canvas(Modifier.size(40.dp).testTag("node-cache")) {
+                val graph = declaration()
+                graph.source()
+                graph.effects { blur(4f) }
+                graph.foreground { paint { drawRect(Color.Red) } }
+                val processIndex = graph.current.index
+                val foregroundIndex = checkNotNull(graph.foregroundImage).index
+                renderer.resolve(graph, Rect(0f, 0f, 40f, 40f))
+                fun frame(dirty: Set<Int>) {
+                    renderer.beginFrame(dirty)
+                    renderer.draw(this) { bounds ->
+                        drawRect(Color.Blue, bounds.topLeft, bounds.size)
+                    }
+                    renderer.draw(this, foregroundIndex) { bounds ->
+                        drawRect(Color.Blue, bounds.topLeft, bounds.size)
+                    }
+                }
+
+                frame(emptySet())
+                val processAfterFull = renderer.recordingCount(processIndex)
+                val foregroundAfterFull = renderer.recordingCount(foregroundIndex)
+                assertTrue(processAfterFull > 0L)
+                assertTrue(foregroundAfterFull > 0L)
+
+                frame(setOf(foregroundIndex))
+                assertEquals(processAfterFull, renderer.recordingCount(processIndex))
+                assertEquals(foregroundAfterFull + 1L, renderer.recordingCount(foregroundIndex))
+
+                frame(setOf(processIndex))
+                assertEquals(processAfterFull + 1L, renderer.recordingCount(processIndex))
+                assertEquals(foregroundAfterFull + 1L, renderer.recordingCount(foregroundIndex))
+            }
+        }
     }
 }

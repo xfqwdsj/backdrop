@@ -44,24 +44,18 @@ public sealed interface InteractionLighting {
     @Immutable
     public data class Config(
         public val interiorOpacity: Float = 0.15f,
-        public val contourOpacity: Float = 0.5f,
     ) : InteractionLighting {
         init {
             require(interiorOpacity.isFinite() && interiorOpacity in 0f..1f) {
                 "Interior opacity must be finite and within 0..1"
-            }
-            require(contourOpacity.isFinite() && contourOpacity in 0f..1f) {
-                "Contour opacity must be finite and within 0..1"
             }
         }
     }
 }
 
 /** Creates receiver settings for shared interaction light. */
-public fun InteractionLighting(
-    interiorOpacity: Float = 0.15f,
-    contourOpacity: Float = 0.5f,
-): InteractionLighting = InteractionLighting.Config(interiorOpacity, contourOpacity)
+public fun InteractionLighting(interiorOpacity: Float = 0.15f): InteractionLighting =
+    InteractionLighting.Config(interiorOpacity)
 
 /** Provides a window-local registry for shared interaction lights. */
 @Composable

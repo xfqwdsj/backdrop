@@ -34,14 +34,4 @@ class BackdropCurveTest {
             BackdropCurve.CubicBezier(Float.NaN, 0f, 1f, 1f)
         }
     }
-
-    @Test
-    fun highlightDepthProfileFadesInwardAndKeepsSubpixelCoverage() {
-        val smooth = BackdropCurve.CubicBezier(1f / 3f, 0f, 2f / 3f, 1f)
-        val linear = BackdropCurve.Linear
-        assertEquals(0.125f, highlightBandProfile(0f, 0.25f, smooth), 0.0001f)
-        assertEquals(0.125f, highlightBandProfile(0f, 0.25f, linear), 0.0001f)
-        assertEquals(0.5f, highlightBandProfile(2f, 4f, smooth), 0.0001f)
-        assertEquals(0.04296875f, highlightBandProfile(3.5f, 4f, smooth), 0.0001f)
-    }
 }

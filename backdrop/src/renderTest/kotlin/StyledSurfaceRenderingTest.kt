@@ -28,7 +28,6 @@ import top.ltfan.backdrop.effects.layeredProgressiveBlur
 import top.ltfan.backdrop.effects.lens
 import top.ltfan.backdrop.effects.progressiveBlur
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
 import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.shadow.InnerShadow
@@ -44,7 +43,6 @@ class StyledSurfaceRenderingTest {
             Highlight(
                 width = 4.dp,
                 direction = HighlightDirection.Uniform,
-                colorResponse = HighlightColorResponse(.7f),
             )
         val inner = InnerShadow(radius = 3.dp, color = Color.Blue.copy(alpha = .4f))
         val outer = Shadow(radius = 2.dp)
@@ -74,7 +72,7 @@ class StyledSurfaceRenderingTest {
                 }
                 Box(
                     Modifier.size(80.dp).testTag("native").drawBackdrop(source, { shape }) {
-                        val material = image {
+                        val optics = image {
                             source()
                             effects { colorControls(brightness = .08f, contrast = .8f) }
                             when (val value = algorithm.value) {
@@ -97,15 +95,19 @@ class StyledSurfaceRenderingTest {
                                 colorControls(saturation = 1.5f)
                                 lens(5.dp.toPx(), 7.dp.toPx(), chromaticAberration = true)
                             }
+                        }
+                        val material = image {
+                            replace(optics)
                             clipSurface()
                         }
+                        val environment = image { replace(optics) }
                         group {
                             shadow(outer)
                             draw(material)
                             fill(Color.Green.copy(alpha = .35f))
+                            highlight(contour, environment = environment)
                         }
                         foreground {
-                            highlight(contour, colorSource = material)
                             innerShadow(inner)
                         }
                     },

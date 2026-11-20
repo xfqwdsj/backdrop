@@ -24,8 +24,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
-import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.highlight
 
 class CertifiedHighlightRenderingTest {
@@ -71,9 +69,9 @@ class CertifiedHighlightRenderingTest {
                 graph.foreground {
                     highlight(
                         Highlight(
-                            style = HighlightStyle.Solid(Color.White),
                             width = 5.dp,
-                            colorResponse = HighlightColorResponse(amount = 0f),
+                            baseBrightness = 1f,
+                            environmentGain = 0f,
                         ),
                     )
                 }

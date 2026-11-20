@@ -36,6 +36,10 @@ Formatting uses ktfmt's Kotlin language style; review formatting changes for unr
 See [performance verification](performance.md) for workloads and interpretation.
 
 Shared rendering tests live in `renderTest`, which both `jvmTest` and `androidDeviceTest` consume.
+Environment highlights cover an exterior color strip, transparent and finite sources, direction and
+angular width/strength, holes and disconnected paths, and the bundled structured Capsule. Graph
+retention checks distinguish node recording from GPU filter execution and verify that parameter-only
+updates do not re-record unaffected source or environment stages.
 The Compose Multiplatform UI-test entry point and one-pixel-per-dp test density are shared.
 Platform initialization, alpha-preserving capture and F16 shader readback use expect/actual
 helpers. Android captures the test host GraphicsLayer before opaque window blending; native
@@ -117,7 +121,7 @@ retain the other declaration's unaliased name when clear.
 Type-name factories copy the name of the type they construct. The IDE accepts an exact match
 between the function name and the declared return type name without a naming suppression.
 When those names differ, verify that the returned type is compatible with the named type before
-locally suppressing `FunctionName`. For example, `Highlight(...)` returns `Highlight.Config`,
+locally suppressing `FunctionName`. For example, `Highlight(...)` returns `Highlight.Contour`,
 which implements `Highlight`. Functions without a corresponding constructed type use ordinary
 lower-camel-case names, such as `createRuntimeShaderEffect(...)`.
 

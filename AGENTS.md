@@ -84,12 +84,14 @@ duplicated documentation inventories.
   to implement graph operations.
 - Configure surface isolation during placement from measured geometry. Layer-property and render
   epoch observations invalidate placement.
-- Highlights evaluate one nearest-contour response with independent width and strength curves.
-  Color response changes RGB, preserving emission; custom CPU and AGSL implementations must match.
-  Preserve the analytic and generic geometry contracts in [architecture](docs/architecture.md).
+- Contour highlights evaluate one nearest-contour response with independent width and strength
+  curves. An environment-lit contour uses one standard Gaussian and adds the environment color to
+  fixed brightness in linear extended-sRGB. Preserve the analytic, generic and structured
+  `ContourShape` geometry contracts in [architecture](docs/architecture.md).
 - Interaction lighting is opt-in within a provider registry and Compose window identity. Preserve
-  window-pixel geometry, input ownership, additive interior blending, and contour integration.
-  Keep finite sources and active shader-capacity variants; release renderer resources on disable or detach.
+  window-pixel geometry, input ownership and additive interior blending. Styled surfaces include
+  interior light in the highlight environment. Keep finite sources and active shader-capacity
+  variants; release renderer resources on disable or detach.
 - Display headroom is a refresh signal, never an automatic RGB multiplier or limit. HDR window
   setup belongs to the app. Preserve the platform boundaries in [Platforms and HDR](docs/platforms-and-hdr.md),
   including platform matrix filters and caller-owned layers.

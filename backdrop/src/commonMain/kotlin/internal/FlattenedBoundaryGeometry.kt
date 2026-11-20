@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalBackdropShapeApi::class)
+
 package top.ltfan.backdrop.internal
 
 import androidx.compose.ui.geometry.Offset
@@ -6,9 +8,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathIterator
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.PathSegment
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.sin
 import kotlin.math.sqrt
+import top.ltfan.backdrop.shape.Contour
+import top.ltfan.backdrop.shape.ContourSegment
+import top.ltfan.backdrop.shape.ExperimentalBackdropShapeApi
 
 private const val CERTIFICATE_GROUP_SIZE = 8
 private const val CERTIFICATE_INDEX_MINIMUM_SEGMENTS = 32
@@ -18,19 +28,29 @@ private const val CERTIFICATE_INDEX_MINIMUM_SEGMENTS = 32
  * are within 0.05 px of the finite chord. Keep this value in pixel units: these segments are
  * consumed in the same local pixel coordinates as the contour shader.
  */
-internal class FlattenedBoundaryGeometry(path: Path) {
+@Suppress("CanBeVal")
+internal class FlattenedBoundaryGeometry
+private constructor(
+    path: Path?,
+    contour: Contour?,
+) {
+    internal constructor(path: Path) : this(path, null)
+
+    internal constructor(contour: Contour) : this(null, contour)
+
     /** Four floats per segment: start x/y followed by end x/y. */
     internal val segments: FloatArray
 
     internal val segmentCount: Int
         get() = segments.size / 4
 
-    private val flattenedPath: Path =
+    private val flattenedPath: Path? = path?.let {
         Path().let { result ->
-            if (result.op(path, Path(), PathOperation.Union)) result else path
+            if (result.op(it, Path(), PathOperation.Union)) result else it
         }
+    }
 
-    internal val bounds: Rect = flattenedPath.getBounds()
+    internal val bounds: Rect = contour?.bounds() ?: requireNotNull(flattenedPath).getBounds()
 
     internal val coordinateScale: Float =
         maxOf(1f, abs(bounds.left), abs(bounds.top), abs(bounds.right), abs(bounds.bottom))
@@ -82,37 +102,37 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                 val minY = minOf(shiftedAy, shiftedBy) - distanceLimit
                 val maxX = maxOf(shiftedAx, shiftedBx) + distanceLimit
                 val maxY = maxOf(shiftedAy, shiftedBy) + distanceLimit
-                var touchesBoundary = false
                 val groupCount = if (groups == null) 1 else groups.size / 4
-                for (group in 0 until groupCount) {
-                    val bound = group * 4
-                    if (
-                        groups != null &&
-                            (groups[bound].toDouble() > maxX ||
-                                groups[bound + 2].toDouble() < minX ||
-                                groups[bound + 1].toDouble() > maxY ||
-                                groups[bound + 3].toDouble() < minY)
-                    )
-                        continue
-                    val first = if (groups == null) 0 else group * CERTIFICATE_GROUP_SIZE
-                    val last =
-                        if (groups == null) segmentCount
-                        else minOf(first + CERTIFICATE_GROUP_SIZE, segmentCount)
-                    for (otherIndex in first until last) {
-                        val otherOffset = otherIndex * 4
-                        val cx = segments[otherOffset].toDouble()
-                        val cy = segments[otherOffset + 1].toDouble()
-                        val ex = segments[otherOffset + 2].toDouble()
-                        val ey = segments[otherOffset + 3].toDouble()
+                val touchesBoundary =
+                    (0 until groupCount).any { group ->
+                        val bound = group * 4
                         if (
-                            minOf(cx, ex) > maxX ||
-                                maxOf(cx, ex) < minX ||
-                                minOf(cy, ey) > maxY ||
-                                maxOf(cy, ey) < minY
+                            groups != null &&
+                                (groups[bound].toDouble() > maxX ||
+                                    groups[bound + 2].toDouble() < minX ||
+                                    groups[bound + 1].toDouble() > maxY ||
+                                    groups[bound + 3].toDouble() < minY)
                         ) {
-                            continue
+                            return@any false
                         }
-                        if (
+                        val first = if (groups == null) 0 else group * CERTIFICATE_GROUP_SIZE
+                        val last =
+                            if (groups == null) segmentCount
+                            else minOf(first + CERTIFICATE_GROUP_SIZE, segmentCount)
+                        (first until last).any { otherIndex ->
+                            val otherOffset = otherIndex * 4
+                            val cx = segments[otherOffset].toDouble()
+                            val cy = segments[otherOffset + 1].toDouble()
+                            val ex = segments[otherOffset + 2].toDouble()
+                            val ey = segments[otherOffset + 3].toDouble()
+                            if (
+                                minOf(cx, ex) > maxX ||
+                                    maxOf(cx, ex) < minX ||
+                                    minOf(cy, ey) > maxY ||
+                                    maxOf(cy, ey) < minY
+                            ) {
+                                return@any false
+                            }
                             distanceSquaredBetweenSegments(
                                 shiftedAx,
                                 shiftedAy,
@@ -123,13 +143,8 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                                 ex,
                                 ey,
                             ) <= distanceLimitSquared
-                        ) {
-                            touchesBoundary = true
-                            break
                         }
                     }
-                    if (touchesBoundary) break
-                }
                 if (!touchesBoundary) {
                     val midpointX = (shiftedAx + shiftedBx) * 0.5
                     val midpointY = (shiftedAy + shiftedBy) * 0.5
@@ -242,14 +257,6 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                 bounds.right.isFinite() &&
                 bounds.bottom.isFinite(),
         )
-        val iterator = PathIterator(flattenedPath, PathIterator.ConicEvaluation.AsConic)
-        val points = FloatArray(8)
-        var contourX = 0f
-        var contourY = 0f
-        var currentX = 0f
-        var currentY = 0f
-        var hasContour = false
-
         fun add(x0: Float, y0: Float, x1: Float, y1: Float) {
             require(x0.isFinite() && y0.isFinite() && x1.isFinite() && y1.isFinite())
             if (x0 != x1 || y0 != y1) {
@@ -264,110 +271,156 @@ internal class FlattenedBoundaryGeometry(path: Path) {
             }
         }
 
-        fun closeContour() {
-            if (hasContour) add(currentX, currentY, contourX, contourY)
-            hasContour = false
-        }
+        val path = flattenedPath
+        if (path != null) {
+            val iterator = PathIterator(path, PathIterator.ConicEvaluation.AsConic)
+            val points = FloatArray(8)
+            var contourX = 0f
+            var contourY = 0f
+            var currentX = 0f
+            var currentY = 0f
+            var hasContour = false
 
-        while (iterator.hasNext()) {
-            when (iterator.next(points)) {
-                PathSegment.Type.Move -> {
-                    closeContour()
-                    contourX = points[0]
-                    contourY = points[1]
-                    currentX = contourX
-                    currentY = contourY
-                    hasContour = true
-                }
-                PathSegment.Type.Line -> {
-                    if (!hasContour) {
+            fun closeContour() {
+                if (hasContour) add(currentX, currentY, contourX, contourY)
+                hasContour = false
+            }
+
+            while (iterator.hasNext()) {
+                when (iterator.next(points)) {
+                    PathSegment.Type.Move -> {
+                        closeContour()
                         contourX = points[0]
                         contourY = points[1]
                         currentX = contourX
                         currentY = contourY
                         hasContour = true
                     }
-                    add(points[0], points[1], points[2], points[3])
-                    currentX = points[2]
-                    currentY = points[3]
-                }
-                PathSegment.Type.Quadratic -> {
-                    if (!hasContour) {
-                        contourX = points[0]
-                        contourY = points[1]
+                    PathSegment.Type.Line -> {
+                        if (!hasContour) {
+                            contourX = points[0]
+                            contourY = points[1]
+                            currentX = contourX
+                            currentY = contourY
+                            hasContour = true
+                        }
+                        add(points[0], points[1], points[2], points[3])
+                        currentX = points[2]
+                        currentY = points[3]
+                    }
+                    PathSegment.Type.Quadratic -> {
+                        if (!hasContour) {
+                            contourX = points[0]
+                            contourY = points[1]
+                            currentX = contourX
+                            currentY = contourY
+                            hasContour = true
+                        }
+                        flattenQuadratic(
+                            points[0],
+                            points[1],
+                            points[2],
+                            points[3],
+                            points[4],
+                            points[5],
+                            ::add,
+                        )
+                        currentX = points[4]
+                        currentY = points[5]
+                    }
+                    PathSegment.Type.Cubic -> {
+                        if (!hasContour) {
+                            contourX = points[0]
+                            contourY = points[1]
+                            currentX = contourX
+                            currentY = contourY
+                            hasContour = true
+                        }
+                        flattenCubic(
+                            points[0],
+                            points[1],
+                            points[2],
+                            points[3],
+                            points[4],
+                            points[5],
+                            points[6],
+                            points[7],
+                            ::add,
+                        )
+                        currentX = points[6]
+                        currentY = points[7]
+                    }
+                    PathSegment.Type.Close -> {
+                        closeContour()
                         currentX = contourX
                         currentY = contourY
-                        hasContour = true
                     }
-                    flattenQuadratic(
-                        points[0],
-                        points[1],
-                        points[2],
-                        points[3],
-                        points[4],
-                        points[5],
-                        ::add,
-                    )
-                    currentX = points[4]
-                    currentY = points[5]
-                }
-                PathSegment.Type.Cubic -> {
-                    if (!hasContour) {
-                        contourX = points[0]
-                        contourY = points[1]
-                        currentX = contourX
-                        currentY = contourY
-                        hasContour = true
+                    PathSegment.Type.Conic -> {
+                        if (!hasContour) {
+                            contourX = points[0]
+                            contourY = points[1]
+                            currentX = contourX
+                            currentY = contourY
+                            hasContour = true
+                        }
+                        flattenConic(
+                            points[0],
+                            points[1],
+                            points[2],
+                            points[3],
+                            points[4],
+                            points[5],
+                            points[6],
+                            ::add,
+                        )
+                        currentX = points[4]
+                        currentY = points[5]
                     }
-                    flattenCubic(
-                        points[0],
-                        points[1],
-                        points[2],
-                        points[3],
-                        points[4],
-                        points[5],
-                        points[6],
-                        points[7],
-                        ::add,
-                    )
-                    currentX = points[6]
-                    currentY = points[7]
+                    PathSegment.Type.Done -> break
                 }
-                PathSegment.Type.Close -> {
-                    closeContour()
-                    currentX = contourX
-                    currentY = contourY
-                }
-                PathSegment.Type.Conic -> {
-                    if (!hasContour) {
-                        contourX = points[0]
-                        contourY = points[1]
-                        currentX = contourX
-                        currentY = contourY
-                        hasContour = true
+            }
+            closeContour()
+        } else {
+            for (loop in requireNotNull(contour).loops) {
+                for (segment in loop.segments) {
+                    when (segment) {
+                        is ContourSegment.Line ->
+                            add(segment.start.x, segment.start.y, segment.end.x, segment.end.y)
+                        is ContourSegment.Arc ->
+                            flattenArc(
+                                segment.center.x,
+                                segment.center.y,
+                                segment.radius,
+                                segment.startAngleDegrees,
+                                segment.sweepAngleDegrees,
+                                ::add,
+                            )
+                        is ContourSegment.Cubic ->
+                            flattenCubic(
+                                segment.start.x,
+                                segment.start.y,
+                                segment.control1.x,
+                                segment.control1.y,
+                                segment.control2.x,
+                                segment.control2.y,
+                                segment.end.x,
+                                segment.end.y,
+                                ::add,
+                                flatness = CONTOUR_FLATNESS,
+                            )
                     }
-                    flattenConic(
-                        points[0],
-                        points[1],
-                        points[2],
-                        points[3],
-                        points[4],
-                        points[5],
-                        points[6],
-                        ::add,
-                    )
-                    currentX = points[4]
-                    currentY = points[5]
                 }
-                PathSegment.Type.Done -> break
+                val first = loop.segments.first().start
+                val last = loop.segments.last().end
+                add(last.x, last.y, first.x, first.y)
             }
         }
-        closeContour()
         segments = coordinates.copyOf(coordinateCount)
     }
 
     private companion object {
         const val FLATNESS = 0.05f
+        const val CONTOUR_FLATNESS = 0.01f
 
         fun flattenQuadratic(
             x0: Float,
@@ -413,6 +466,7 @@ internal class FlattenedBoundaryGeometry(path: Path) {
             x1: Float,
             y1: Float,
             add: (Float, Float, Float, Float) -> Unit,
+            flatness: Float = FLATNESS,
         ) {
             val stack = ArrayList<FloatArray>()
             stack.add(floatArrayOf(x0, y0, c1x, c1y, c2x, c2y, x1, y1))
@@ -422,7 +476,7 @@ internal class FlattenedBoundaryGeometry(path: Path) {
                     maxOf(
                         distanceToLine(c[2], c[3], c[0], c[1], c[6], c[7]),
                         distanceToLine(c[4], c[5], c[0], c[1], c[6], c[7]),
-                    ) <= FLATNESS
+                    ) <= flatness
                 ) {
                     add(c[0], c[1], c[6], c[7])
                 } else {
@@ -506,6 +560,43 @@ internal class FlattenedBoundaryGeometry(path: Path) {
             }
         }
 
+        fun flattenArc(
+            centerX: Float,
+            centerY: Float,
+            radius: Float,
+            startAngleDegrees: Float,
+            sweepAngleDegrees: Float,
+            add: (Float, Float, Float, Float) -> Unit,
+        ) {
+            if (radius <= 0f || sweepAngleDegrees == 0f) return
+            val radians = sweepAngleDegrees.toDouble() * DegreesToRadians
+            val maximumStep =
+                if (radius <= CONTOUR_FLATNESS) {
+                    PI * .5
+                } else {
+                    2.0 *
+                        acos(
+                            (1.0 - CONTOUR_FLATNESS.toDouble() / radius.toDouble()).coerceIn(
+                                -1.0,
+                                1.0,
+                            ),
+                        )
+                }
+            val count = ceil(abs(radians) / maximumStep).toInt().coerceAtLeast(1)
+            val start = startAngleDegrees.toDouble() * DegreesToRadians
+            var previous = start
+            for (index in 1..count) {
+                val next = start + radians * index / count
+                add(
+                    centerX + (cos(previous) * radius).toFloat(),
+                    centerY + (sin(previous) * radius).toFloat(),
+                    centerX + (cos(next) * radius).toFloat(),
+                    centerY + (sin(next) * radius).toFloat(),
+                )
+                previous = next
+            }
+        }
+
         fun distanceToLine(
             px: Float,
             py: Float,
@@ -523,6 +614,69 @@ internal class FlattenedBoundaryGeometry(path: Path) {
         }
     }
 }
+
+private fun Contour.bounds(): Rect {
+    var left = Float.POSITIVE_INFINITY
+    var top = Float.POSITIVE_INFINITY
+    var right = Float.NEGATIVE_INFINITY
+    var bottom = Float.NEGATIVE_INFINITY
+
+    fun include(point: Offset) {
+        left = minOf(left, point.x)
+        top = minOf(top, point.y)
+        right = maxOf(right, point.x)
+        bottom = maxOf(bottom, point.y)
+    }
+
+    for (loop in loops) {
+        for (segment in loop.segments) {
+            when (segment) {
+                is ContourSegment.Line -> {
+                    include(segment.start)
+                    include(segment.end)
+                }
+                is ContourSegment.Arc -> {
+                    include(segment.start)
+                    include(segment.end)
+                    for (angle in ArcCardinalAngles) {
+                        if (segment.containsAngle(angle)) {
+                            val radians = angle.toDouble() * DegreesToRadians
+                            include(
+                                Offset(
+                                    segment.center.x + (cos(radians) * segment.radius).toFloat(),
+                                    segment.center.y + (sin(radians) * segment.radius).toFloat(),
+                                ),
+                            )
+                        }
+                    }
+                }
+                is ContourSegment.Cubic -> {
+                    include(segment.start)
+                    include(segment.control1)
+                    include(segment.control2)
+                    include(segment.end)
+                }
+            }
+        }
+    }
+    return if (left.isFinite()) Rect(left, top, right, bottom) else Rect.Zero
+}
+
+private fun ContourSegment.Arc.containsAngle(angle: Float): Boolean {
+    if (abs(sweepAngleDegrees) >= 360f) return true
+    val offset =
+        if (sweepAngleDegrees >= 0f) {
+            positiveRemainder(angle - startAngleDegrees)
+        } else {
+            positiveRemainder(startAngleDegrees - angle)
+        }
+    return offset <= abs(sweepAngleDegrees) + .001f
+}
+
+private fun positiveRemainder(value: Float): Float = ((value % 360f) + 360f) % 360f
+
+private val ArcCardinalAngles = floatArrayOf(0f, 90f, 180f, 270f)
+private const val DegreesToRadians = PI / 180.0
 
 private fun distanceSquaredBetweenSegments(
     ax: Double,

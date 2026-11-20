@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
@@ -23,9 +22,7 @@ import kotlin.test.assertTrue
 import top.ltfan.backdrop.backdrops.layerBackdrop
 import top.ltfan.backdrop.backdrops.rememberLayerBackdrop
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.highlight
 
 class DisconnectedHighlightGeometryTest {
@@ -48,16 +45,13 @@ class DisconnectedHighlightGeometryTest {
                                 }
                                 group {
                                     draw(material)
-                                }
-                                foreground {
                                     highlight(
                                         Highlight(
                                             width = 8.dp,
                                             direction = HighlightDirection.Uniform,
-                                            style = HighlightStyle.Solid(Color.White),
-                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                            baseBrightness = 1f,
+                                            environmentGain = 0f,
                                         ),
-                                        colorSource = material,
                                     )
                                 }
                             },
@@ -94,16 +88,13 @@ class DisconnectedHighlightGeometryTest {
                                 }
                                 group {
                                     draw(material)
-                                }
-                                foreground {
                                     highlight(
                                         Highlight(
                                             width = 4.dp,
                                             direction = HighlightDirection.Uniform,
-                                            style = HighlightStyle.Solid(Color.White),
-                                            colorResponse = HighlightColorResponse(amount = 0f),
+                                            baseBrightness = 1f,
+                                            environmentGain = 0f,
                                         ),
-                                        colorSource = material,
                                     )
                                 }
                             },

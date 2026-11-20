@@ -7,12 +7,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.RectangleShape
@@ -30,11 +26,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import top.ltfan.backdrop.effects.blur
 import top.ltfan.backdrop.highlight.Highlight
-import top.ltfan.backdrop.highlight.HighlightColorResponse
 import top.ltfan.backdrop.highlight.HighlightDirection
-import top.ltfan.backdrop.highlight.HighlightEmission
-import top.ltfan.backdrop.highlight.HighlightSample
-import top.ltfan.backdrop.highlight.HighlightStyle
 import top.ltfan.backdrop.highlight.highlight
 import top.ltfan.backdrop.shadow.InnerShadow
 import top.ltfan.backdrop.shadow.Shadow
@@ -67,14 +59,14 @@ class BackdropRenderStyleTest {
     }
 
     @Test
-    fun sharedModifierReadsStyleAtItsUsePositionAndPlainIgnoresDecorations() = runRenderTest {
+    fun sharedModifierReadsStyleAtItsUsePositionAndNoEffectsSkipsDecorations() = runRenderTest {
         val shared = Modifier.drawBackdrop(TestBackdrop, { RectangleShape })
         setContent {
             Column {
-                ProvideBackdropRenderStyle(render = { highlight(solidHighlight(Color.Red)) }) {
+                ProvideBackdropRenderStyle(render = { highlight(solidHighlight()) }) {
                     Panel("red", shared)
                 }
-                ProvideBackdropRenderStyle(render = { highlight(solidHighlight(Color.Green)) }) {
+                ProvideBackdropRenderStyle(render = { highlight(Highlight.None) }) {
                     Panel("green", shared)
                     Panel(
                         "plain",
@@ -88,8 +80,8 @@ class BackdropRenderStyleTest {
             }
         }
         waitForIdle()
-        assertColor(Color.Red, onNodeWithTag("red").captureToImage().toPixelMap()[0, 20])
-        assertColor(Color.Green, onNodeWithTag("green").captureToImage().toPixelMap()[0, 20])
+        assertColor(Color.White, onNodeWithTag("red").captureToImage().toPixelMap()[0, 20])
+        assertColor(Color.Blue, onNodeWithTag("green").captureToImage().toPixelMap()[0, 20])
         assertColor(Color.Blue, onNodeWithTag("plain").captureToImage().toPixelMap()[0, 20])
     }
 
@@ -126,13 +118,12 @@ class BackdropRenderStyleTest {
         waitForIdle()
         val baseline = compositions
         assertColor(Color.Blue, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
-        for (color in listOf(Color.Red, Color.Green, Color.Red)) {
-            highlight.value = solidHighlight(color)
+        for (enabled in listOf(true, false, true)) {
+            highlight.value = if (enabled) solidHighlight() else Highlight.None
             waitForIdle()
-            assertColor(color, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
-            highlight.value = null
-            waitForIdle()
-            assertColor(Color.Blue, onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20])
+            val edge = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
+            if (enabled) assertTrue(edge.red > .9f && edge.blue > .9f)
+            else assertColor(Color.Blue, edge)
         }
         assertEquals(baseline, compositions)
     }
@@ -165,36 +156,30 @@ class BackdropRenderStyleTest {
     }
 
     @Test
-    fun twoToneColorAlphaAndLayerBlendModeReachTheDrawingLayer() = runRenderTest {
-        val blend = mutableStateOf(BlendMode.SrcOver)
-        val style = MutableTwoToneStyle(Color.White.copy(alpha = 0.2f))
+    fun highlightBrightnessUpdatesReachTheDrawingLayer() = runRenderTest {
         val highlight =
             mutableStateOf(
                 Highlight(
-                    style = style,
+                    width = 20.dp,
+                    baseBrightness = .2f,
+                    environmentGain = 0f,
                     direction = HighlightDirection(angle = 0f),
-                    colorResponse = HighlightColorResponse(amount = 0f),
                 ),
             )
         setContent {
             ProvideBackdropRenderStyle(
-                render = { highlight(highlight.value, blendMode = blend.value) },
+                render = { highlight(highlight.value) },
             ) {
                 Panel("panel")
             }
         }
         waitForIdle()
-        val faint = onNodeWithTag("panel").captureToImage().toPixelMap()[39, 20]
-        assertEquals(0.2f * 0.84375f, faint.red, 0.03f)
-        style.setColor(Color.White.copy(alpha = 0.8f))
+        val faint = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
+        assertEquals(.2f, faint.red, .03f)
+        highlight.value = highlight.value.copy(baseBrightness = .8f)
         waitForIdle()
-        val bright = onNodeWithTag("panel").captureToImage().toPixelMap()[39, 20]
-        assertEquals(0.8f * 0.84375f, bright.red, 0.03f)
-        val srcOver = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
-        blend.value = BlendMode.Plus
-        waitForIdle()
-        val plus = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
-        assertTrue(plus.blue > srcOver.blue + 0.5f)
+        val bright = onNodeWithTag("panel").captureToImage().toPixelMap()[0, 20]
+        assertEquals(.8f, bright.red, .03f)
     }
 
     @Test
@@ -333,34 +318,12 @@ class BackdropRenderStyleTest {
         )
     }
 
-    private fun solidHighlight(color: Color): Highlight =
+    private fun solidHighlight(): Highlight =
         Highlight(
             width = 20.dp,
             direction = HighlightDirection.Uniform,
-            style = HighlightStyle.Solid(color),
-            colorResponse = HighlightColorResponse(amount = 0f),
-        )
-}
-
-@Stable
-private class MutableTwoToneStyle(initialColor: Color) : HighlightStyle {
-    private var currentColor by mutableStateOf(initialColor)
-
-    override val color: Color
-        get() = currentColor
-
-    override val shaderSource: String =
-        "half4 shadeHighlight(float2 position, float2 outwardNormal, float projection, half4 color) { return half4(color.rgb * step(0.0, projection), color.a); }\n" +
-            "float highlightStrength(float2 position, float2 outwardNormal, float projection) { return 1.0; }"
-
-    fun setColor(value: Color) {
-        currentColor = value
-    }
-
-    override fun shade(sample: HighlightSample): HighlightEmission =
-        HighlightEmission(
-            if (sample.projection >= 0f) color
-            else Color(0f, 0f, 0f, color.alpha, color.colorSpace),
+            baseBrightness = 1f,
+            environmentGain = 0f,
         )
 }
 

@@ -125,7 +125,14 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     GlobalPositionAwareModifierNode,
     ObserverModifierNode,
     CompositionLocalConsumerModifierNode {
-    private val renderer = BackdropRenderer { requireGraphicsContext() }
+    private val nodeReads = mutableMapOf<Int, GraphReads>()
+    private val dirtyNodeIndices = mutableSetOf<Int>()
+    private var dirtyAllNodes = true
+    private val renderer =
+        BackdropRenderer(
+            { requireGraphicsContext() },
+            NodeObserver(::observeNode),
+        )
     private val sourceRenderer = BackdropSourceRenderer { requireGraphicsContext() }
     private var coordinates: LayoutCoordinates? = null
     private var renderScope: BackdropRenderScope? = null
@@ -138,10 +145,6 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     private var graphDirty = true
     private var graphFrame = 0L
     private var backgroundVisible = false
-    private val backgroundReads = delegate(GraphReads())
-    private val foregroundReads = delegate(GraphReads())
-    private val exportReads = delegate(GraphReads())
-
     private val resolutionReads = delegate(ResolutionReads())
 
     private inner class ResolutionReads : Modifier.Node(), ObserverModifierNode {
@@ -156,15 +159,20 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
         }
     }
 
-    private inner class GraphReads : Modifier.Node(), ObserverModifierNode {
+    private inner class GraphReads(private val index: Int) : Modifier.Node(), ObserverModifierNode {
         private var observing = false
+        private var expectedNode: RenderImageNode? = null
 
         override fun onObservedReadsChanged() {
+            val node = expectedNode ?: return
+            if (!renderer.isReachableNode(index, node)) return
+            dirtyNodeIndices += index
             graphDirty = true
             this@RenderBackdropNode.invalidateDraw()
         }
 
-        fun observe(block: () -> Unit) {
+        fun observe(node: RenderImageNode, block: () -> Unit) {
+            expectedNode = node
             observing = true
             observeReads(block)
         }
@@ -173,6 +181,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
             if (!observing) return
             observeReads {}
             observing = false
+            expectedNode = null
         }
     }
 
@@ -193,9 +202,29 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
         if (this.parameters.exported !== parameters.exported)
             this.parameters.exported?.layerCoordinates = null
         this.parameters = parameters
-        graphDirty = true
+        markAllNodesDirty()
         geometry?.let(::resolve)
         invalidateDraw()
+    }
+
+    private fun markAllNodesDirty() {
+        dirtyAllNodes = true
+        dirtyNodeIndices.clear()
+        graphDirty = true
+    }
+
+    private fun observeNode(index: Int, block: () -> Unit) {
+        val node = renderer.nodeAt(index)
+        if (node == null) {
+            block()
+            return
+        }
+        val reads = nodeReads.getOrPut(index) { delegate(GraphReads(index)) }
+        reads.observe(node, block)
+    }
+
+    private fun clearNodeObservations() {
+        nodeReads.values.forEach(GraphReads::clear)
     }
 
     override fun MeasureScope.measure(
@@ -221,11 +250,12 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
 
     override fun onAttach() {
         epoch = currentValueOf(LocalBackdropRenderEpoch)
-        graphDirty = true
+        markAllNodesDirty()
     }
 
     override fun onObservedReadsChanged() {
         declarationDirty = true
+        markAllNodesDirty()
         invalidatePlacement()
         invalidateDraw()
     }
@@ -238,7 +268,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         this.coordinates = coordinates
-        graphDirty = true
+        markAllNodesDirty()
         val density = requireDensity()
         val next =
             Geometry(
@@ -276,7 +306,8 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
     private fun resolve(draw: Geometry) {
         declarationDirty = false
         renderScope = null
-        graphDirty = true
+        markAllNodesDirty()
+        clearNodeObservations()
         observeReads {
             val scope =
                 BackdropRenderScope(
@@ -314,6 +345,9 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
                     )
                 }
             renderer.resolve(scope, request)
+            dirtyAllNodes = false
+            dirtyNodeIndices.clear()
+            graphDirty = true
             val selected = setOf(scope.current.index, scope.exportedImage?.index)
             presentationLayers.keys
                 .toList()
@@ -382,7 +416,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
         if (recordGraph) {
             graphDirty = false
             graphFrame++
-            renderer.beginFrame()
+            if (dirtyAllNodes) renderer.beginFrame() else renderer.beginFrame(dirtyNodeIndices)
             sourceRenderer.beginFrame()
         }
         try {
@@ -430,9 +464,7 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
 
             // Record selected graph images before entering presentation or export recording.
             if (recordGraph) {
-                if (alpha > 0f)
-                    backgroundReads.observe { renderer.prepare(this, source = drawSource) }
-                else backgroundReads.clear()
+                if (alpha > 0f) renderer.prepare(this, source = drawSource)
             }
             prepareBackground()
             drawBackground()
@@ -444,21 +476,16 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
             canvas.restore()
             if (recordGraph) {
                 val foreground = scope.foregroundImage
-                if (foreground != null)
-                    foregroundReads.observe { renderer.prepare(this, foreground.index, drawSource) }
-                else foregroundReads.clear()
+                if (foreground != null) renderer.prepare(this, foreground.index, drawSource)
             }
             scope.foregroundImage?.let { renderer.draw(this, it.index, drawSource) }
             if (recordGraph) {
                 if (parameters.exported != null && alpha > 0f)
-                    exportReads.observe {
-                        renderer.prepare(
-                            this,
-                            scope.exportedImage?.index ?: scope.current.index,
-                            drawSource,
-                        )
-                    }
-                else exportReads.clear()
+                    renderer.prepare(
+                        this,
+                        scope.exportedImage?.index ?: scope.current.index,
+                        drawSource,
+                    )
             }
             parameters.exported?.let { exported ->
                 val image = scope.exportedImage?.index ?: scope.current.index
@@ -493,10 +520,14 @@ private class RenderBackdropNode(var parameters: RenderBackdropElement) :
                 }
             }
         } catch (failure: Throwable) {
-            graphDirty = true
+            markAllNodesDirty()
             throw failure
         } finally {
             if (recordGraph) sourceRenderer.endFrame()
+            if (recordGraph && !graphDirty) {
+                dirtyAllNodes = false
+                dirtyNodeIndices.clear()
+            }
         }
     }
 

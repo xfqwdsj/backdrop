@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalBackdropShapeApi::class)
+
 package top.ltfan.backdrop.highlight
 
 import androidx.compose.ui.geometry.Offset
@@ -10,15 +12,28 @@ import kotlin.math.sqrt
 import top.ltfan.backdrop.RuntimeShader
 import top.ltfan.backdrop.internal.FlattenedBoundaryGeometry
 import top.ltfan.backdrop.internal.genericBoundaryShaderFunctions
+import top.ltfan.backdrop.shape.Contour
+import top.ltfan.backdrop.shape.ExperimentalBackdropShapeApi
 
 /** Cached analytic or flattened representation shared by contour rendering and exclusions. */
-internal class HighlightBoundaryGeometry(private val outline: Outline) {
-    internal val bounds: Rect = outline.bounds
+internal class HighlightBoundaryGeometry
+private constructor(
+    private val outline: Outline?,
+    contour: Contour?,
+) {
+    internal constructor(outline: Outline) : this(outline, null)
+
+    internal constructor(contour: Contour) : this(null, contour)
+
+    private val usesContour = contour != null
+    private val directGeometry = contour?.let { FlattenedBoundaryGeometry(it) }
+    internal val bounds: Rect = outline?.bounds ?: requireNotNull(directGeometry).bounds
     private val analyticRadii: FloatArray? =
         when (outline) {
             is Outline.Rectangle -> FloatArray(4)
             is Outline.Rounded -> circularRadii(outline)?.takeIf { validRadii(bounds, it) }
-            is Outline.Generic -> null
+            is Outline.Generic,
+            null -> null
         }
     private var flattened: FlattenedBoundaryGeometry? = null
     private var cachedSegmentCapacity: Int = 0
@@ -30,21 +45,22 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
     /** An open rectangle containing no contour segments, independent of fill topology. */
     internal val contourFreeBounds: Rect by
         lazy(LazyThreadSafetyMode.NONE) {
-            if (isAnalytic) Rect.Zero
-            else {
-                val segments = cpuGeometry().segments
-                // Each segment must lie entirely beyond at least one rectangle edge.
-                // Taking the largest per-segment inset certifies the shared empty region.
-                var inset = 0f
-                var i = 0
-                while (i < segments.size) {
-                    val minX = minOf(segments[i], segments[i + 2])
-                    val maxX = maxOf(segments[i], segments[i + 2])
-                    val minY = minOf(segments[i + 1], segments[i + 3])
-                    val maxY = maxOf(segments[i + 1], segments[i + 3])
-                    inset =
+            val radii = analyticRadii
+            val inset =
+                if (radii != null) {
+                    // At 45 degrees a circular corner is deepest along the diagonal of its square.
+                    radii.max() * (1f - .70710677f)
+                } else {
+                    val segments = cpuGeometry().segments
+                    // Each segment must lie entirely beyond at least one rectangle edge.
+                    // Taking the largest per-segment inset certifies the shared empty region.
+                    segments.indices.step(4).fold(0f) { currentInset, i ->
+                        val minX = minOf(segments[i], segments[i + 2])
+                        val maxX = maxOf(segments[i], segments[i + 2])
+                        val minY = minOf(segments[i + 1], segments[i + 3])
+                        val maxY = maxOf(segments[i + 1], segments[i + 3])
                         maxOf(
-                            inset,
+                            currentInset,
                             minOf(
                                 maxX - bounds.left,
                                 bounds.right - minX,
@@ -52,12 +68,11 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
                                 bounds.bottom - minY,
                             ),
                         )
-                    i += 4
+                    }
                 }
-                // Keep the certificate conservative under shader float rounding.
-                val result = bounds.deflate(inset + coordinateScale * 0.000002f)
-                if (result.isEmpty) Rect.Zero else result
-            }
+            // Keep the certificate conservative under shader float rounding.
+            val result = bounds.deflate(inset + coordinateScale * .000002f)
+            if (result.isEmpty) Rect.Zero else result
         }
 
     private val allNormalsCertified: Boolean by
@@ -95,7 +110,12 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
             }
 
     internal val shaderKey: String
-        get() = if (isAnalytic) "analytic" else "path"
+        get() =
+            when {
+                isAnalytic -> "analytic"
+                usesContour -> "contour"
+                else -> "path"
+            }
 
     internal fun paddedSegments(capacity: Int): FloatArray {
         cacheUniformArrays(capacity)
@@ -143,7 +163,11 @@ internal class HighlightBoundaryGeometry(private val outline: Outline) {
     }
 
     internal fun cpuGeometry(): FlattenedBoundaryGeometry =
-        flattened ?: FlattenedBoundaryGeometry(outlinePath(outline)).also { flattened = it }
+        directGeometry
+            ?: flattened
+            ?: FlattenedBoundaryGeometry(outlinePath(requireNotNull(outline))).also {
+                flattened = it
+            }
 
     internal fun contains(point: Offset): Boolean {
         val radii = analyticRadii ?: return cpuGeometry().contains(point)

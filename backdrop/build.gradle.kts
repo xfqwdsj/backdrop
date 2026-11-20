@@ -86,6 +86,7 @@ kotlin {
                 api(libs.compose.ui.graphics)
                 implementation(libs.annotations)
                 api(libs.dslUtilities)
+                implementation(libs.capsule)
             }
         }
 

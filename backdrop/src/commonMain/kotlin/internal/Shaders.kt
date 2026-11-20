@@ -66,14 +66,14 @@ float circleMap(float x) {
     return 1.0 - sqrt(1.0 - x * x);
 }
 
-half4 main(float2 coord) {
+float2 refractionOffset(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
     float radius = radiusAt(centeredCoord, cornerRadii);
     
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {
-        return content.eval(coord);
+        return float2(0.0);
     }
     sd = min(sd, 0.0);
     
@@ -83,11 +83,14 @@ half4 main(float2 coord) {
     float2 depthDirection = centerLength > 0.0 ? centeredCoord / centerLength : float2(0.0);
     float2 gradVector = gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * depthDirection;
     float gradLength = length(gradVector);
-    if (!(gradLength > 0.0)) return content.eval(coord);
+    if (!(gradLength > 0.0)) return float2(0.0);
     float2 grad = gradVector / gradLength;
     
-    float2 refractedCoord = coord + d * grad;
-    return content.eval(refractedCoord);
+    return d * grad;
+}
+
+half4 main(float2 coord) {
+    return content.eval(coord + refractionOffset(coord));
 }"""
 
 @Language("AGSL")

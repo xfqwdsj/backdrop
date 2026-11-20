@@ -60,6 +60,36 @@ class BoundaryShaderGeometryCapacityTest : PlatformGraphicsTest() {
         assertContentEquals(first, renderTestShader(shader, points.size, 1))
     }
 
+    @Test
+    fun boundedQueriesKeepTheFullSearchResultNearConcaveEdges() {
+        val geometry =
+            FlattenedBoundaryGeometry(
+                Path().apply {
+                    moveTo(2f, 2f)
+                    lineTo(14f, 2f)
+                    lineTo(14f, 6f)
+                    lineTo(6f, 6f)
+                    lineTo(6f, 14f)
+                    lineTo(2f, 14f)
+                    close()
+                },
+            )
+        val points =
+            listOf(
+                Offset(2f, 2f),
+                Offset(3f, 3f),
+                Offset(5.75f, 6.25f),
+                Offset(6.25f, 6.25f),
+                Offset(7f, 7f),
+            )
+        val full = queryShader(geometry, geometry.segments, geometry.segmentCount, points)
+        val bounded = queryShader(geometry, geometry.segments, geometry.segmentCount, points, 1.5f)
+        assertContentEquals(
+            renderTestShader(full, points.size, 1),
+            renderTestShader(bounded, points.size, 1),
+        )
+    }
+
     private fun renderQueries(
         geometry: FlattenedBoundaryGeometry,
         segments: FloatArray,
@@ -73,7 +103,10 @@ class BoundaryShaderGeometryCapacityTest : PlatformGraphicsTest() {
         segments: FloatArray,
         segmentCapacity: Int,
         points: List<Offset>,
+        maximumDistance: Float? = null,
     ): RuntimeShader {
+        val queryArguments =
+            if (maximumDistance == null) "point, closest" else "point, $maximumDistance, closest"
         val pointUniform = FloatArray(points.size * 2)
         points.forEachIndexed { index, point ->
             pointUniform[index * 2] = point.x
@@ -92,7 +125,7 @@ class BoundaryShaderGeometryCapacityTest : PlatformGraphicsTest() {
                     : x < 4.0 ? testPoints[3]
                     : testPoints[4];
                   float2 closest;
-                  float3 nearest = nearestBoundaryWithPosition(point, closest);
+                  float3 nearest = nearestBoundaryWithPosition($queryArguments);
                   float contained = containsPoint(point) ? 1.0 : 0.0;
                   return half4(closest.x, closest.y, nearest.x, contained);
                 }

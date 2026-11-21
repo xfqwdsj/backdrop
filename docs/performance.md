@@ -166,12 +166,12 @@ the platform test adapters. These assertions detect visual regressions independe
 ## Release reporting contract
 
 The [release workflow](../.github/workflows/publish.yml) calls the benchmark workflow after Maven
-Central publication succeeds. JMH discovers workload names and parameter domains; the report
-validator checks their complete Cartesian matrix before generating the performance table. The
-[release contract](releases.md) defines the managed section and artifact links. Manual workflow
-runs produce reports without editing a release.
+Central publication succeeds. The changelog comparison selects the baseline for the same-runner
+pair. JMH discovers workload names and parameter domains, and the report validator checks each
+complete Cartesian matrix before matching comparable rows. The [release contract](releases.md)
+defines the folded report, artifact links, skip marker and manual workflow inputs.
 
-Each release records its own measurements. A comparative performance report includes:
+A detailed comparative performance report includes:
 
 - The compared release tags and exact commit IDs, built from clean working trees. Benchmark
   harnesses and workload changes are committed and identified alongside the measured library

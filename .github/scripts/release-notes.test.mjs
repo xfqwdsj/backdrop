@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { START, END, performanceNotes, workloadKeys, benchmarkTable, validateResults, checkVersion, updatePerformance, prepareDraft } from './release-notes.mjs';
+import { START, END, SKIP_BENCHMARKS, performanceNotes, releaseBaseline, skipsBenchmarks, workloadKeys, benchmarkTable, benchmarkReports, validateResults, checkVersion, updatePerformance, prepareDraft } from './release-notes.mjs';
 
 const listing = 'Benchmarks:\nexample.Dynamic.frame\n  param "size" = {small, large}\n';
 const results = ['small', 'large'].map(size => ({
@@ -19,6 +19,7 @@ test('inserts before generated changelog, preserves edits and is idempotent', ()
   const complete = performanceNotes(pending, 'Measured results');
   assert.ok(complete.includes('Owner edits.'));
   assert.ok(complete.includes('Measured results'));
+  assert.match(complete, /<details>\n<summary>JVM benchmark results<\/summary>\n\nMeasured results\n\n<\/details>/);
   assert.equal(complete.split(START).length, 2);
 });
 
@@ -63,6 +64,23 @@ test('release tags match the publication version', () => {
   assert.throws(() => checkVersion('v1.2.4', 'version=1.2.3'));
 });
 
+test('release comparison uses the Full Changelog range for this release and repository', () => {
+  const repo = 'https://github.com/owner/repo';
+  const tag = 'v1.2.3';
+  const commit = 'c'.repeat(40);
+  const footer = link => `Changes\n\n**Full Changelog**: ${link}\n`;
+  assert.equal(releaseBaseline(footer(`${repo}/compare/v0.8.0...${tag}`), repo, tag, commit), 'v0.8.0');
+  assert.equal(releaseBaseline(footer(`[Compare](${repo}/compare/release%2Fold...${commit})`), repo, tag, commit), 'release/old');
+  for (const body of [
+    null, `${repo}/compare/v0.8.0...${tag}`,
+    footer(`${repo}/releases/tag/${tag}`), footer(`${repo}/compare/v0.8.0...v1.2.4`),
+    footer(`${repo}/compare/${tag}...${tag}`),
+    footer(`${repo}/compare/v0.8.0....${tag}`), footer(`https://github.com/owner/other/compare/v0.8.0...${tag}`),
+  ]) {
+    assert.equal(releaseBaseline(body, repo, tag, commit), null);
+  }
+});
+
 test('updates use the latest remote body, including an independently deleted slot', async () => {
   const writes = [];
   const github = { rest: { repos: {
@@ -73,6 +91,19 @@ test('updates use the latest remote body, including an independently deleted slo
   assert.equal(writes[0].release_id, 7);
   assert.ok(writes[0].body.includes('Fresh owner edit'));
   assert.ok(writes[0].body.includes('Results'));
+});
+
+test('an explicit skip preserves the entire release body, including on late completion', async () => {
+  const body = `## Changes\r\n\r\n  ${SKIP_BENCHMARKS}\r\n\r\n${START}\r\nPrevious measurement\r\n${END}\r\n`;
+  assert.equal(skipsBenchmarks(body), true);
+  assert.equal(skipsBenchmarks(`Mention ${SKIP_BENCHMARKS} inline`), false);
+  assert.equal(performanceNotes(body), body);
+  assert.equal(performanceNotes(body, 'New measurement'), body);
+  const github = { rest: { repos: {
+    getRelease: async () => ({ data: { body, tag_name: 'v2' } }),
+    updateRelease: async () => assert.fail('The release body must remain untouched.'),
+  } } };
+  await updatePerformance(github, {}, 1, 'New measurement', 'v2');
 });
 
 test('draft creation uses generated notes and resumptions preserve manual edits', async () => {
@@ -138,20 +169,54 @@ test('workflow JavaScript blocks compile without expression interpolation', asyn
   assert.ok(count > 0);
 });
 
-test('complete reports require measurement metadata and retain exact provenance', async () => {
-  const { benchmarkReport } = await import('./release-notes.mjs');
-  const rows = results.map(row => ({ ...row, jdkVersion: 'test-jdk', forks: 2, warmupIterations: 5, measurementIterations: 8, warmupTime: '1 s', measurementTime: '1 s', jvmArgs: ['-Ddiagnostic.path=private', '-Xms2g', '-Xmx2g'] }));
+function measuredRows(rows) {
+  return rows.map(row => ({ ...row, jdkVersion: 'test-jdk', forks: 2, warmupIterations: 5, measurementIterations: 8, warmupTime: '1 s', measurementTime: '1 s', jvmArgs: ['-Ddiagnostic.path=private', '-Xms2g', '-Xmx2g'] }));
+}
+
+test('complete reports require measurement metadata and retain exact provenance', () => {
+  const rows = measuredRows(results);
   const provenance = { commit: 'a'.repeat(40), runUrl: 'https://github.com/owner/repo/actions/runs/1' };
-  assert.ok(benchmarkReport(rows, listing, provenance).includes(provenance.commit));
-  assert.ok(benchmarkReport(rows, listing, provenance).includes('2 forks'));
-  assert.ok(benchmarkReport(rows, listing, provenance).includes('-Xms2g -Xmx2g'));
-  assert.ok(!benchmarkReport(rows, listing, provenance).includes('diagnostic.path'));
+  const { summary, release } = benchmarkReports(rows, listing, provenance);
+  assert.ok(summary.includes(provenance.commit));
+  assert.ok(summary.includes('2 forks'));
+  assert.ok(summary.includes('-Xms2g -Xmx2g'));
+  assert.ok(summary.includes('2.500'));
+  assert.ok(release.includes('No baseline was requested.'));
+  assert.ok(!release.includes('2.500'));
+  assert.ok(!summary.includes('diagnostic.path'));
   const mixed = structuredClone(rows); mixed[1].jvmArgs = ['-Xms512m', '-Xmx512m'];
-  assert.throws(() => benchmarkReport(mixed, listing, provenance), /heaps differ/);
+  assert.throws(() => benchmarkReports(mixed, listing, provenance), /heaps differ/);
   const missing = structuredClone(rows); missing[0].jvmArgs = ['-Xmx2g'];
-  assert.throws(() => benchmarkReport(missing, listing, provenance), /heap metadata/);
-  assert.throws(() => benchmarkReport(results, listing, provenance));
-  assert.throws(() => benchmarkReport(rows, listing, { ...provenance, commit: 'unknown' }));
+  assert.throws(() => benchmarkReports(missing, listing, provenance), /heap metadata/);
+  assert.throws(() => benchmarkReports(results, listing, provenance));
+  assert.throws(() => benchmarkReports(rows, listing, { ...provenance, commit: 'unknown' }));
+});
+
+test('release shows relative changes only for matched workloads and marks uncertainty', () => {
+  const rows = structuredClone(measuredRows(results));
+  rows[0].primaryMetric.score = 5;
+  rows[0].secondaryMetrics['gc.alloc.rate.norm'].score = 32;
+  rows[0].secondaryMetrics['gc.alloc.rate.norm'].scoreError = 1;
+  const baseline = {
+    ref: 'v0.1.2',
+    commit: 'b'.repeat(40),
+    listing: listing.replace('large', 'medium'),
+    results: structuredClone(measuredRows(results)),
+  };
+  baseline.results[1].params.size = 'medium';
+  baseline.results[0].secondaryMetrics['gc.alloc.rate.norm'].scoreError = 1;
+  const options = { commit: 'a'.repeat(40), runUrl: 'https://github.com/owner/repo/actions/runs/1', baseline, harnessChanged: true };
+  const { summary, release } = benchmarkReports(rows, listing, options);
+  assert.match(release, /1 matched workloads, 1 candidate only, 1 baseline only/);
+  assert.match(release, /\| frame \| size=small \| \+100\.0% \| -50\.0% \|/);
+  assert.equal(release.split('Compare measurements only within the same CI run.').length, 2);
+  assert.ok(release.includes('*Benchmark or scene sources differ'));
+  assert.ok(summary.includes('5.000'));
+  assert.ok(!release.includes('5.000'));
+  rows[0].primaryMetric.scoreError = 10;
+  assert.ok(benchmarkReports(rows, listing, options).release.includes('+100.0% †'));
+  for (const row of baseline.results) row.jdkVersion = 'other';
+  assert.ok(benchmarkReports(rows, listing, options).release.includes('measurement settings differ'));
 });
 
 test('draft preparation cannot create a missing tag or duplicate an artifact version', async () => {

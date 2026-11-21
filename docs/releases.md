@@ -45,21 +45,24 @@ uploads even when Gradle runs with `--continue`.
 
 ## Run and retain benchmarks
 
-After successful Maven Central publication, the reusable benchmark workflow runs on the published
-commit. It records environment and commit provenance, asks JMH for the workload matrix and runs
-full JVM time/allocation measurements. The report validates every discovered parameter combination,
-finite metrics, units and unique rows. Benchmark names, parameter values and table rows come from
-JMH output; adding a benchmark updates discovery without a separate scenario inventory.
+After successful Maven Central publication, the benchmark workflow takes the base ref from the
+release body's **Full Changelog** link. The link must compare revisions in this repository and
+target the release tag or commit. A missing or unusable link, or a baseline without the JVM
+benchmark harness, skips measurement. With a usable baseline, both revisions run sequentially in
+one job on the same runner. The workflow validates each revision's discovered workload matrix
+before computing deltas for matching benchmark names and parameters with matching JMH settings.
 
-The managed table reports warmed time, JMH error and managed allocation. Motion workloads use
-unpaced CPU raster rendering. Shared CI runner conditions vary; these values establish release
-observations. Performance comparisons require matched workloads and measurement environments.
-See [Performance verification](performance.md) for metric boundaries and comparison requirements.
+The folded performance section reports relative changes in warmed time and managed allocation.
+One note limits comparison to measurements collected within the same CI run and describes the
+measurement scope. The report marks overlapping or unavailable JMH uncertainty intervals and flags
+differences in benchmark or scene sources. See [Performance verification](performance.md) for
+metric boundaries and comparison requirements.
 
 Raw JSON, the discovered matrix, environment metadata and generated Markdown are retained as
 workflow artifacts for 90 days. Release notes link to that run. Attach selected artifacts to the
-release when longer retention is required. A manual benchmark run generates artifacts and a job
-summary while leaving release notes unchanged.
+release when longer retention is required. In a manual run, set `baseline-ref` to measure two
+revisions in one job or leave it blank for a standalone measurement. Manual runs publish artifacts
+and a job summary.
 
 Include local comparative results when establishing a harness baseline or when a specific change
 warrants a separate investigation. Keep that comparison in an author-owned section outside the
@@ -68,13 +71,24 @@ details and measurement limits. Routine release measurements belong to the manag
 
 ## Manage the performance section
 
+To opt the release out of benchmark CI, put `<!-- backdrop:benchmark:skip -->` on its own line
+outside the managed block before publishing. While the marker is present, automation preserves the
+release body as written. The benchmark job checks the marker before measuring and honors the opt-out
+for that run. A marker added during a run also protects the body when the workflow attempts to
+write the results.
+
 The release body contains one managed block:
 
 ```markdown
 <!-- backdrop:performance:start -->
 ## Performance
 
+<details>
+<summary>JVM benchmark results</summary>
+
 Publication and benchmark results are pending.
+
+</details>
 <!-- backdrop:performance:end -->
 ```
 

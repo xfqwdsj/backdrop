@@ -6,7 +6,32 @@ import { pathToFileURL } from 'node:url';
 
 export const START = '<!-- backdrop:performance:start -->';
 export const END = '<!-- backdrop:performance:end -->';
+export const SKIP_BENCHMARKS = '<!-- backdrop:benchmark:skip -->';
 export const PENDING = 'Publication and benchmark results are pending.';
+const FULL_CHANGELOG = /^\*\*Full Changelog\*\*:[ \t]*(.*)$/m;
+
+export function skipsBenchmarks(body) {
+  return (body ?? '').split(/\r?\n/).some(line => line.trim() === SKIP_BENCHMARKS);
+}
+
+export function releaseBaseline(body, repoUrl, releaseTag, commit) {
+  const footer = FULL_CHANGELOG.exec(body ?? '')?.[1];
+  const link = footer?.match(/https?:\/\/[^\s<>)]+/)?.[0];
+  if (!link) return null;
+  try {
+    const repo = new URL(repoUrl);
+    const comparison = new URL(link);
+    const prefix = `${repo.pathname}/compare/`;
+    if (comparison.origin !== repo.origin || !comparison.pathname.startsWith(prefix)) return null;
+    const range = comparison.pathname.slice(prefix.length).split('...');
+    if (range.length !== 2) return null;
+    const [baseline, target] = range.map(decodeURIComponent);
+    if (baseline === releaseTag || baseline === commit) return null;
+    return baseline && (target === releaseTag || target === commit) ? baseline : null;
+  } catch {
+    return null;
+  }
+}
 
 function managedBlock(body) {
   const starts = body.split(START).length - 1;
@@ -23,12 +48,13 @@ function managedBlock(body) {
 /** Keeps the managed section last, with GitHub's changelog footer after it. */
 export function performanceNotes(body = '', content) {
   body ??= '';
+  if (skipsBenchmarks(body)) return body;
   const existing = managedBlock(body);
   const block = content === undefined && existing
     ? existing.text
-    : `${START}\n## Performance\n\n${content ?? PENDING}\n${END}`;
+    : `${START}\n## Performance\n\n<details>\n<summary>JVM benchmark results</summary>\n\n${content ?? PENDING}\n\n</details>\n${END}`;
   const prose = existing ? body.slice(0, existing.start) + body.slice(existing.end) : body;
-  const footer = /^\*\*Full Changelog\*\*:.*$/m.exec(prose);
+  const footer = FULL_CHANGELOG.exec(prose);
   if (footer && /^##\s/m.test(prose.slice(footer.index + footer[0].length))) {
     throw new Error('Keep the generated Full Changelog footer after all release sections.');
   }
@@ -104,6 +130,11 @@ function cell(value) {
     .replaceAll('|', '&#124;').replaceAll('`', '&#96;').replace(/[\r\n]+/g, ' ');
 }
 
+function parameters(row) {
+  return Object.entries(row.params ?? {}).sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${cell(name)}=${cell(value)}`).join(', ') || '—';
+}
+
 export function benchmarkTable(results, listing) {
   validateResults(results, listing);
   const rows = [...results].sort((a, b) => resultKey(a).localeCompare(resultKey(b)));
@@ -112,17 +143,18 @@ export function benchmarkTable(results, listing) {
     '| --- | --- | ---: | ---: | ---: |',
   ];
   for (const row of rows) {
-    const params = Object.entries(row.params ?? {}).sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, value]) => `${cell(name)}=${cell(value)}`).join(', ') || '—';
     const error = Number.isFinite(row.primaryMetric.scoreError) ? row.primaryMetric.scoreError.toFixed(3) : 'n/a';
-    table.push(`| ${cell(row.benchmark)} | ${params} | ${row.primaryMetric.score.toFixed(3)} | ${error} | ${row.secondaryMetrics['gc.alloc.rate.norm'].score.toFixed(3)} |`);
+    table.push(`| ${cell(row.benchmark)} | ${parameters(row)} | ${row.primaryMetric.score.toFixed(3)} | ${error} | ${row.secondaryMetrics['gc.alloc.rate.norm'].score.toFixed(3)} |`);
   }
   return table.join('\n');
 }
 
-export function benchmarkReport(results, listing, { commit, runUrl }) {
-  const table = benchmarkTable(results, listing);
+function benchmarkCommit(commit) {
   if (!/^[a-f0-9]{40,64}$/.test(commit)) throw new Error('A benchmark report needs its exact commit.');
+  return `\`${commit}\``;
+}
+
+function measurementSettings(results) {
   const sample = results[0];
   for (const name of ['forks', 'warmupIterations', 'measurementIterations']) {
     if (!Number.isInteger(sample[name]) || sample[name] < 1) throw new Error('Benchmark execution metadata is incomplete.');
@@ -139,15 +171,72 @@ export function benchmarkReport(results, listing, { commit, runUrl }) {
   };
   const heap = heapArguments(sample);
   if (results.some(row => heapArguments(row) !== heap)) throw new Error('Benchmark fork heaps differ between workloads.');
-  const markdown = [
-    `Commit: \`${commit}\`. [Raw results and environment](${runUrl}).`,
-    'Warmed JVM throughput and managed allocation on a shared Linux runner. Motion workloads use unpaced CPU raster rendering.',
-    `JDK ${cell(sample.jdkVersion)}; ${sample.forks} forks; ${sample.warmupIterations} warm-ups (${cell(sample.warmupTime)}); ${sample.measurementIterations} measurements (${cell(sample.measurementTime)}).`,
-    `Fork heap: \`${heap}\`.`,
-    table,
-  ].join('\n\n');
-  if (Buffer.byteLength(markdown, 'utf8') > 50000) throw new Error('The performance table exceeds the release-note budget; retain the full artifact and revise the reporting layout.');
-  return markdown;
+  const fields = ['jdkVersion', 'vmName', 'vmVersion', 'threads', 'forks', 'warmupIterations',
+    'warmupTime', 'warmupBatchSize', 'measurementIterations', 'measurementTime', 'measurementBatchSize'];
+  if (results.some(row => fields.some(field => row[field] !== sample[field]))) {
+    throw new Error('Benchmark measurement settings differ between workloads.');
+  }
+  return {
+    key: JSON.stringify([heap, ...fields.map(field => sample[field])]),
+    description: `JDK ${cell(sample.jdkVersion)}, ${sample.forks} forks, ${sample.warmupIterations} warm-ups (${cell(sample.warmupTime)}), ${sample.measurementIterations} measurements (${cell(sample.measurementTime)}). Fork heap \`${heap}\`.`,
+  };
+}
+
+function change(before, after) {
+  if (before.score === 0) return after.score === 0 ? '0.0%' : 'From zero';
+  const delta = (after.score - before.score) / before.score * 100;
+  const uncertain = !Number.isFinite(before.scoreError) || !Number.isFinite(after.scoreError)
+    || Math.abs(after.score - before.score) <= before.scoreError + after.scoreError;
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%${uncertain ? ' †' : ''}`;
+}
+
+function compareBenchmarks(results, baseline, settings, harnessChanged) {
+  validateResults(baseline.results, baseline.listing);
+  const heading = `Baseline \`${cell(baseline.ref)}\` at ${benchmarkCommit(baseline.commit)}.`;
+  if (settings.key !== measurementSettings(baseline.results).key) {
+    return `${heading}\n\n*Comparison unavailable because JMH measurement settings differ.*`;
+  }
+  const previous = new Map(baseline.results.map(row => [resultKey(row), row]));
+  const groups = new Map();
+  let matched = 0;
+  for (const row of [...results].sort((a, b) => resultKey(a).localeCompare(resultKey(b)))) {
+    const old = previous.get(resultKey(row));
+    if (!old) continue;
+    matched++;
+    const parts = row.benchmark.split('.');
+    const method = parts.pop();
+    const group = parts.join('.');
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(`| ${cell(method)} | ${parameters(row)} | ${change(old.primaryMetric, row.primaryMetric)} | ${change(old.secondaryMetrics['gc.alloc.rate.norm'], row.secondaryMetrics['gc.alloc.rate.norm'])} |`);
+  }
+  const sections = [heading,
+    `${matched} matched workloads, ${results.length - matched} candidate only, ${previous.size - matched} baseline only.`,
+  ];
+  if (harnessChanged) sections.push('*Benchmark or scene sources differ between revisions. Matching names and parameters can still describe changed workloads.*');
+  if (matched) sections.push('*Positive changes mean more time or allocation. † marks overlapping or unavailable JMH uncertainty intervals.*');
+  for (const [group, rows] of groups) {
+    const name = group.split('.').at(-1);
+    sections.push(`**${cell(name)}**`,
+      ['| Benchmark | Parameters | Time change | Managed allocation change |', '| --- | --- | ---: | ---: |', ...rows].join('\n'));
+  }
+  return sections.join('\n\n');
+}
+
+export function benchmarkReports(results, listing, { commit, runUrl, baseline, harnessChanged = false }) {
+  const table = benchmarkTable(results, listing);
+  const settings = measurementSettings(results);
+  const intro = [
+    `Candidate ${benchmarkCommit(commit)}. [Raw results and environment](${runUrl}).`,
+    '*Compare measurements only within the same CI run. Each pair runs sequentially on one shared Linux VM. Motion workloads measure unpaced JVM CPU rasterization, and allocation counts managed memory only.*',
+    settings.description,
+  ];
+  const comparison = baseline
+    ? compareBenchmarks(results, baseline, settings, harnessChanged)
+    : '*No baseline was requested.*';
+  const summary = [...intro, comparison, table].join('\n\n');
+  const release = [...intro, comparison].join('\n\n');
+  if (Buffer.byteLength(release, 'utf8') > 50000) throw new Error('The performance table exceeds the release-note budget; retain the full artifact and revise the reporting layout.');
+  return { summary, release };
 }
 
 /** Reads the current body immediately before replacing only the managed section. */
